@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Child {
+  id         Int       @id @default(autoincrement())
+  name       String
+  birthDate  DateTime  @map("birth_date")
+  gender     String?
+  otherInfo  String?   @map("other_info")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  assessments SensoryAssessment[]
+
+  @@map("children")
+}
+
+model Examiner {
+  id         Int       @id @default(autoincrement())
+  name       String
+  profession String
+  contact    String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  assessments SensoryAssessment[]
+
+  @@map("examiners")
+}
+
+model Caregiver {
+  id           Int       @id @default(autoincrement())
+  name         String
+  relationship String
+  contact      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  assessments  SensoryAssessment[]
+
+  @@map("caregivers")
+}
+
+model SensoryAssessment {
+  id                             Int       @id @default(autoincrement())
+  childId                        Int       @map("child_id")
+  examinerId                     Int?      @map("examiner_id")
+  caregiverId                    Int?      @map("caregiver_id")
+  assessmentDate                 DateTime  @default(now()) @map("assessment_date")
+  auditoryProcessingRawScore     Int?      @map("auditory_processing_raw_score")
+  visualProcessingRawScore       Int?      @map("visual_processing_raw_score")
+  tactileProcessingRawScore      Int?      @map("tactile_processing_raw_score")
+  movementProcessingRawScore     Int?      @map("movement_processing_raw_score")
+  bodyPositionProcessingRawScore Int?      @map("body_position_processing_raw_score")
+  oralSensitivityRawScore        Int?      @map("oral_sensitivity_processing_raw_score")
+  socialEmotionalRawScore        Int?      @map("social_emotional_responses_raw_score")
+  attentionRawScore              Int?      @map("attention_responses_raw_score")
+  createdAt                      DateTime  @default(now()) @map("created_at")
+  updatedAt                      DateTime  @updatedAt @map("updated_at")
+  
+  child      Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  examiner   Examiner?  @relation(fields: [examinerId], references: [id], onDelete: SetNull)
+  caregiver  Caregiver? @relation(fields: [caregiverId], references: [id], onDelete: SetNull)
+  
+  responses  SensoryResponse[]
+  comments   SectionComment[]
+
+  @@map("sensory_assessments")
+}
+
+model SectionComment {
+  id           Int       @id @default(autoincrement())
+  assessmentId Int       @map("assessment_id")
+  sectionName  String    @map("section_name")
+  comments     String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  assessment   SensoryAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, sectionName])
+  @@map("section_comments")
+}
+
+model SensoryItem {
+  id          Int       @id
+  quadrant    String?
+  description String
+  section     String
+  responses   SensoryResponse[]
+
+  @@map("sensory_items")
+}
+
+model SensoryResponse {
+  id           Int       @id @default(autoincrement())
+  assessmentId Int       @map("assessment_id")
+  itemId       Int       @map("item_id")
+  response     String
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  assessment   SensoryAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  item         SensoryItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, itemId])
+  @@map("sensory_responses")
+}
