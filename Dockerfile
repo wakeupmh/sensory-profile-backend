@@ -1,44 +1,23 @@
-FROM node:18-alpine AS builder
+FROM node:22-alpine
 
 WORKDIR /app
 
-# Copiar arquivos de dependências
 COPY package*.json ./
-COPY prisma ./prisma/
 
-# Instalar dependências
-RUN npm ci
+RUN npm install
 
-# Copiar o restante dos arquivos
 COPY . .
 
-# Gerar cliente Prisma
-RUN npx prisma generate
-
-# Compilar TypeScript
 RUN npm run build
 
-# Imagem de produção
-FROM node:18-alpine AS production
+RUN npm prune --production
 
-WORKDIR /app
-
-# Definir variáveis de ambiente
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-# Copiar arquivos de dependências
-COPY package*.json ./
-COPY prisma ./prisma/
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:3000/health || exit 1
 
-# Instalar apenas dependências de produção
-RUN npm ci --only=production
-
-# Copiar arquivos compilados da etapa de build
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-
-# Expor porta
 EXPOSE 3000
 
-# Comando para iniciar a aplicação
-CMD ["node", "dist/app.js"]
+CMD ["node", "dist/index.js"]

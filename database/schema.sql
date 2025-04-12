@@ -3,10 +3,12 @@
 
 -- Tabela para dados da criança
 CREATE TABLE children (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     birth_date DATE NOT NULL,
     gender VARCHAR(50),
+    national_identity varchar(50),
+    user_id uuid,
     other_info TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -14,7 +16,7 @@ CREATE TABLE children (
 
 -- Tabela para dados do examinador
 CREATE TABLE examiners (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     profession VARCHAR(255) NOT NULL,
     contact VARCHAR(255),
@@ -24,7 +26,7 @@ CREATE TABLE examiners (
 
 -- Tabela para dados do cuidador
 CREATE TABLE caregivers (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     relationship VARCHAR(100) NOT NULL,
     contact VARCHAR(255),
@@ -34,10 +36,10 @@ CREATE TABLE caregivers (
 
 -- Tabela para armazenar avaliações completas
 CREATE TABLE sensory_assessments (
-    id SERIAL PRIMARY KEY,
-    child_id INTEGER REFERENCES children(id) ON DELETE CASCADE,
-    examiner_id INTEGER REFERENCES examiners(id) ON DELETE SET NULL,
-    caregiver_id INTEGER REFERENCES caregivers(id) ON DELETE SET NULL,
+    id UUID PRIMARY KEY,
+    child_id UUID REFERENCES children(id) ON DELETE CASCADE,
+    examiner_id UUID REFERENCES examiners(id) ON DELETE SET NULL,
+    caregiver_id UUID REFERENCES caregivers(id) ON DELETE SET NULL,
     assessment_date DATE NOT NULL DEFAULT CURRENT_DATE,
     auditory_processing_raw_score INTEGER,
     visual_processing_raw_score INTEGER,
@@ -47,14 +49,15 @@ CREATE TABLE sensory_assessments (
     oral_sensitivity_processing_raw_score INTEGER,
     social_emotional_responses_raw_score INTEGER,
     attention_responses_raw_score INTEGER,
+    user_id VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabela para armazenar comentários por seção
 CREATE TABLE section_comments (
-    id SERIAL PRIMARY KEY,
-    assessment_id INTEGER REFERENCES sensory_assessments(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    assessment_id UUID REFERENCES sensory_assessments(id) ON DELETE CASCADE,
     section_name VARCHAR(100) NOT NULL,
     comments TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -72,8 +75,8 @@ CREATE TABLE sensory_items (
 
 -- Tabela para armazenar as respostas aos itens
 CREATE TABLE sensory_responses (
-    id SERIAL PRIMARY KEY,
-    assessment_id INTEGER REFERENCES sensory_assessments(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    assessment_id UUID REFERENCES sensory_assessments(id) ON DELETE CASCADE,
     item_id INTEGER REFERENCES sensory_items(id) ON DELETE CASCADE,
     response VARCHAR(20) NOT NULL, -- 'always', 'frequently', 'occasionally', 'rarely', 'never'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -198,6 +201,7 @@ INSERT INTO sensory_items (id, quadrant, description, section) VALUES
 (92, 'BS', 'parece ausente.', 'attentionResponses');
 
 -- Criar índices para melhorar a performance de consultas
+CREATE INDEX idx_user_id_child_id on children(user_id);
 CREATE INDEX idx_sensory_responses_assessment_id ON sensory_responses(assessment_id);
 CREATE INDEX idx_sensory_responses_item_id ON sensory_responses(item_id);
 CREATE INDEX idx_sensory_assessments_child_id ON sensory_assessments(child_id);
