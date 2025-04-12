@@ -5,19 +5,65 @@ import { v7 as uuidv7 } from 'uuid';
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string): Promise<Assessment[]> {
-    const result = await pool.query(
-      'SELECT * FROM sensory_assessments WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
-    );
+    const query = `
+      SELECT 
+        sa.*,
+        c.name as child_name, 
+        c.birth_date as child_birth_date,
+        c.gender as child_gender,
+        c.other_info as child_other_info,
+        e.name as examiner_name,
+        e.profession as examiner_profession,
+        e.contact as examiner_contact,
+        cg.name as caregiver_name,
+        cg.relationship as caregiver_relationship,
+        cg.contact as caregiver_contact
+      FROM 
+        sensory_assessments sa
+      LEFT JOIN 
+        children c ON sa.child_id = c.id
+      LEFT JOIN 
+        examiners e ON sa.examiner_id = e.id
+      LEFT JOIN 
+        caregivers cg ON sa.caregiver_id = cg.id
+      WHERE 
+        sa.user_id = $1 
+      ORDER BY 
+        sa.created_at DESC
+    `;
+
+    const result = await pool.query(query, [userId]);
 
     return result.rows.map(row => this.mapRowToAssessment(row));
   }
 
   async findById(id: string, userId: string): Promise<Assessment | null> {
-    const result = await pool.query(
-      'SELECT * FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
+    const query = `
+      SELECT 
+        sa.*,
+        c.name as child_name, 
+        c.birth_date as child_birth_date,
+        c.gender as child_gender,
+        c.other_info as child_other_info,
+        e.name as examiner_name,
+        e.profession as examiner_profession,
+        e.contact as examiner_contact,
+        cg.name as caregiver_name,
+        cg.relationship as caregiver_relationship,
+        cg.contact as caregiver_contact
+      FROM 
+        sensory_assessments sa
+      LEFT JOIN 
+        children c ON sa.child_id = c.id
+      LEFT JOIN 
+        examiners e ON sa.examiner_id = e.id
+      LEFT JOIN 
+        caregivers cg ON sa.caregiver_id = cg.id
+      WHERE 
+        sa.id = $1 AND sa.user_id = $2
+    `;
+
+    const result = await pool.query(query, [id, userId]);
 
     if (result.rows.length === 0) {
       return null;
@@ -106,16 +152,40 @@ export class PgAssessmentRepository implements AssessmentRepository {
   }
 
   async findByChildId(childId: string, userId: string): Promise<Assessment[]> {
-    const result = await pool.query(
-      'SELECT * FROM sensory_assessments WHERE child_id = $1 AND user_id = $2 ORDER BY assessment_date DESC',
-      [childId, userId]
-    );
+    const query = `
+      SELECT 
+        sa.*,
+        c.name as child_name, 
+        c.birth_date as child_birth_date,
+        c.gender as child_gender,
+        c.other_info as child_other_info,
+        e.name as examiner_name,
+        e.profession as examiner_profession,
+        e.contact as examiner_contact,
+        cg.name as caregiver_name,
+        cg.relationship as caregiver_relationship,
+        cg.contact as caregiver_contact
+      FROM 
+        sensory_assessments sa
+      LEFT JOIN 
+        children c ON sa.child_id = c.id
+      LEFT JOIN 
+        examiners e ON sa.examiner_id = e.id
+      LEFT JOIN 
+        caregivers cg ON sa.caregiver_id = cg.id
+      WHERE 
+        sa.child_id = $1 AND sa.user_id = $2
+      ORDER BY 
+        sa.assessment_date DESC
+    `;
+
+    const result = await pool.query(query, [childId, userId]);
 
     return result.rows.map(row => this.mapRowToAssessment(row));
   }
 
   private mapRowToAssessment(row: any): Assessment {
-    return new Assessment(
+    const assessment = new Assessment(
       row.child_id,
       row.examiner_id,
       row.caregiver_id,
@@ -132,5 +202,45 @@ export class PgAssessmentRepository implements AssessmentRepository {
       row.created_at,
       row.updated_at
     );
+    
+    // Add additional properties for the frontend
+    if (row.child_name) {
+      (assessment as any).childName = row.child_name;
+      (assessment as any).childBirthDate = row.child_birth_date;
+      (assessment as any).childGender = row.child_gender;
+      (assessment as any).childOtherInfo = row.child_other_info;
+      (assessment as any).childAge = this.calculateAge(row.child_birth_date);
+    }
+    
+    if (row.examiner_name) {
+      (assessment as any).examinerName = row.examiner_name;
+      (assessment as any).examinerProfession = row.examiner_profession;
+      (assessment as any).examinerContact = row.examiner_contact;
+    }
+    
+    if (row.caregiver_name) {
+      (assessment as any).caregiverName = row.caregiver_name;
+      (assessment as any).caregiverRelationship = row.caregiver_relationship;
+      (assessment as any).caregiverContact = row.caregiver_contact;
+    }
+    
+    return assessment;
+  }
+
+  private calculateAge(birthDate: Date): number {
+    if (!birthDate) return 0;
+    
+    const today = new Date();
+    const birth = new Date(birthDate);
+    
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDifference = today.getMonth() - birth.getMonth();
+    
+    // If birthday hasn't occurred yet this year, subtract one year
+    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
   }
 }
