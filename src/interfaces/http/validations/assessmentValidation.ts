@@ -25,7 +25,7 @@ const caregiverSchema = z.object({
 
 const itemSchema = z.object({
   id: z.number().int().positive(),
-  quadrant: z.enum(['RA', 'BS', 'SS']),
+  quadrant: z.enum(['OB', 'SN', 'EV', 'EX']),
   description: z.string(),
   response: responseEnum
 });
