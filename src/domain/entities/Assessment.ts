@@ -10,6 +10,7 @@ export class Assessment {
     private movementProcessingRawScore?: number,
     private bodyPositionProcessingRawScore?: number,
     private oralSensitivityProcessingRawScore?: number,
+    private behavioralResponsesRawScore?: number,
     private socialEmotionalResponsesRawScore?: number,
     private attentionResponsesRawScore?: number,
     private id?: string,
@@ -61,6 +62,10 @@ export class Assessment {
     return this.oralSensitivityProcessingRawScore;
   }
 
+  getBehavioralResponsesRawScore(): number | undefined {
+    return this.behavioralResponsesRawScore;
+  }
+
   getSocialEmotionalResponsesRawScore(): number | undefined {
     return this.socialEmotionalResponsesRawScore;
   }
@@ -105,6 +110,11 @@ export class Assessment {
 
   setOralSensitivityProcessingRawScore(score: number): void {
     this.oralSensitivityProcessingRawScore = score;
+    this.updatedAt = new Date();
+  }
+
+  setBehavioralResponsesRawScore(score: number): void {
+    this.behavioralResponsesRawScore = score;
     this.updatedAt = new Date();
   }
 

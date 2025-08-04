@@ -2,63 +2,131 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import morgan from 'morgan';
 import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { clerkMiddleware } from '@clerk/express';
 
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
+import { 
+  errorHandler, 
+  notFoundHandler, 
+  setupGracefulShutdown,
+  requestIdMiddleware,
+  requestLogger
+} from './infrastructure/utils/errors/ErrorHandler';
+import logger from './infrastructure/utils/logger';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
+
+// Request ID and logging middleware (before everything else)
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+
+// Authentication middleware
 app.use(clerkMiddleware());
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors());
-app.use(helmet());
-app.use(compression());
-app.use(morgan('dev'));
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Security middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
+}));
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  crossOriginEmbedderPolicy: false
+}));
+app.use(compression());
+
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      type: 'RateLimitError',
+      message: 'Too many requests from this IP, please try again later.',
+      statusCode: 429,
+      timestamp: new Date().toISOString()
+    }
+  },
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  }
 });
 app.use(limiter);
 
-app.use('/api/assessments', assessmentRoutes);
-
+// Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date() });
+  const healthInfo = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    version: process.env.npm_package_version || '1.0.0',
+    memory: process.memoryUsage(),
+    requestId: req.headers['x-request-id']
+  };
+  
+  res.status(200).json(healthInfo);
 });
 
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
-    message: err.message || 'Erro interno do servidor',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+// API routes
+app.use('/api/assessments', assessmentRoutes);
+
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
+// Setup graceful shutdown handlers
+setupGracefulShutdown();
+
+// Start server
+const server = app.listen(PORT, () => {
+  logger.info(`🚀 Server started successfully`, {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    uptime: process.uptime()
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+// Handle server startup errors
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
 
-process.on('uncaughtException', (error) => {
-  console.error(`uncaught exception: ${error.message}${error.stack ? ', stack: ' + error.stack : ''}`);
-  setTimeout(() => process.exit(1), 1000);
-});
+  const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
 
-process.on('unhandledRejection', (reason) => {
-  if (reason instanceof Error) {
-    console.error(`unhandled rejection: ${reason.message}${reason.stack ? ', stack: ' + reason.stack : ''}`);
-  } else {
-    console.error(`unhandled rejection: ${String(reason)}`);
+  switch (error.code) {
+    case 'EACCES':
+      logger.error(`${bind} requires elevated privileges`);
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      logger.error(`${bind} is already in use`);
+      process.exit(1);
+      break;
+    default:
+      throw error;
   }
 });
+
+export default app;

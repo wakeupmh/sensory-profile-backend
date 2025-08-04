@@ -3,6 +3,13 @@ import { Response } from '../../domain/entities/Response';
 import { AssessmentRepository } from '../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
 import { calculateScores } from '../../infrastructure/utils/scoring/scoringService';
+import { DataConsistencyValidator } from '../../infrastructure/utils/validation/DataConsistencyValidator';
+import { 
+  NotFoundError, 
+  ValidationError, 
+  DataConsistencyError,
+  AssessmentNotFoundError 
+} from '../../infrastructure/utils/errors/CustomErrors';
 import { v7 as uuidv7 } from 'uuid';
 import { ChildService } from './ChildService';
 import { ExaminerService } from './ExaminerService';
@@ -34,18 +41,26 @@ export class AssessmentService {
 
   async getAssessmentById(id: string, userId: string): Promise<Assessment | null> {
     logger.info(`[AssessmentService] Getting assessment with id ${id} for user ${userId}`);
-    try {
-      const assessment = await this.assessmentRepository.findById(id, userId);
-      if (!assessment) {
-        logger.warn(`[AssessmentService] Assessment with id ${id} not found for user ${userId}`);
-      } else {
-        logger.info(`[AssessmentService] Retrieved assessment with id ${id} for user ${userId}`);
-      }
-      return assessment;
-    } catch (error: any) {
-      logger.error(`[AssessmentService] Error retrieving assessment with id ${id} for user ${userId}: ${error.message}`, { error });
-      throw error;
+    
+    const assessment = await this.assessmentRepository.findById(id, userId);
+    if (!assessment) {
+      logger.warn(`[AssessmentService] Assessment with id ${id} not found for user ${userId}`);
+      return null;
     }
+
+    // Validate data consistency for retrieved assessment
+    const responses = await this.responseRepository.findByAssessmentId(id, userId);
+    const validationResult = DataConsistencyValidator.validateAssessmentScoreConsistency(assessment, responses);
+    
+    if (!validationResult.isValid) {
+      logger.warn(`[AssessmentService] Data consistency issues found for assessment ${id}`, {
+        errors: validationResult.errors,
+        warnings: validationResult.warnings
+      });
+    }
+
+    logger.info(`[AssessmentService] Retrieved assessment with id ${id} for user ${userId}`);
+    return assessment;
   }
 
   async getAssessmentWithResponses(id: string, userId: string): Promise<{ assessment: Assessment | null, responses: Response[] }> {
@@ -95,6 +110,7 @@ export class AssessmentService {
       movementProcessing: number;
       bodyPositionProcessing: number;
       oralSensitivityProcessing: number;
+      behavioralResponses: number;
       socialEmotionalResponses: number;
       attentionResponses: number;
     };
@@ -135,6 +151,7 @@ export class AssessmentService {
         assessmentData.rawScores.movementProcessing,
         assessmentData.rawScores.bodyPositionProcessing,
         assessmentData.rawScores.oralSensitivityProcessing,
+        assessmentData.rawScores.behavioralResponses,
         assessmentData.rawScores.socialEmotionalResponses,
         assessmentData.rawScores.attentionResponses,
         assessmentId
@@ -198,6 +215,7 @@ export class AssessmentService {
       movementProcessing?: number;
       bodyPositionProcessing?: number;
       oralSensitivityProcessing?: number;
+      behavioralResponses?: number;
       socialEmotionalResponses?: number;
       attentionResponses?: number;
     };
@@ -251,6 +269,7 @@ export class AssessmentService {
         existingAssessment.getMovementProcessingRawScore(),
         existingAssessment.getBodyPositionProcessingRawScore(),
         existingAssessment.getOralSensitivityProcessingRawScore(),
+        existingAssessment.getBehavioralResponsesRawScore(),
         existingAssessment.getSocialEmotionalResponsesRawScore(),
         existingAssessment.getAttentionResponsesRawScore(),
         existingAssessment.getId(),
@@ -278,6 +297,9 @@ export class AssessmentService {
         }
         if (assessmentData.rawScores.oralSensitivityProcessing !== undefined) {
           updatedAssessment.setOralSensitivityProcessingRawScore(assessmentData.rawScores.oralSensitivityProcessing);
+        }
+        if (assessmentData.rawScores.behavioralResponses !== undefined) {
+          updatedAssessment.setBehavioralResponsesRawScore(assessmentData.rawScores.behavioralResponses);
         }
         if (assessmentData.rawScores.socialEmotionalResponses !== undefined) {
           updatedAssessment.setSocialEmotionalResponsesRawScore(assessmentData.rawScores.socialEmotionalResponses);
@@ -373,6 +395,7 @@ export class AssessmentService {
           movementProcessing: assessment.getMovementProcessingRawScore(),
           bodyPositionProcessing: assessment.getBodyPositionProcessingRawScore(),
           oralSensitivityProcessing: assessment.getOralSensitivityProcessingRawScore(),
+          behavioralResponses: assessment.getBehavioralResponsesRawScore(),
           socialEmotionalResponses: assessment.getSocialEmotionalResponsesRawScore(),
           attentionResponses: assessment.getAttentionResponsesRawScore()
         },
