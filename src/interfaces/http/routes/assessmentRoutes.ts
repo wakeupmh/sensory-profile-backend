@@ -88,7 +88,7 @@ router.get('/examiners', async (req: Request, res: Response) => {
       return;
     }
     
-    const examiners = await examinerService.getAllExaminers();
+    const examiners = await examinerService.getAllExaminers(userId);
     res.status(200).json(examiners);
   } catch (error: any) {
     res.status(500).json({ 
@@ -133,7 +133,7 @@ router.get('/caregivers', async (req: Request, res: Response) => {
       return;
     }
     
-    const caregivers = await caregiverService.getAllCaregivers();
+    const caregivers = await caregiverService.getAllCaregivers(userId);
     res.status(200).json(caregivers);
   } catch (error: any) {
     res.status(500).json({ 

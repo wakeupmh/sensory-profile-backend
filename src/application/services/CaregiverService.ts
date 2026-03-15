@@ -10,45 +10,19 @@ export interface CaregiverData {
 export class CaregiverService {
   async createCaregiver(caregiverData: CaregiverData): Promise<string | null> {
     if (!caregiverData) return null;
-    
-    // Check if a caregiver with the same name and relationship already exists
-    const existingCaregiver = await pool.query(
-      'SELECT id FROM caregivers WHERE name = $1 AND relationship = $2',
-      [caregiverData.name, caregiverData.relationship]
-    );
-    
-    if (existingCaregiver.rows.length > 0) {
-      const caregiverId = existingCaregiver.rows[0].id;
-      
-      // Update the existing caregiver with new contact info if provided
-      if (caregiverData.contact) {
-        await pool.query(
-          `UPDATE caregivers SET 
-            contact = $1,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $2`,
-          [caregiverData.contact, caregiverId]
-        );
-      }
-      
-      return caregiverId;
-    }
-    
-    // Create a new caregiver
+
     const caregiverId = uuidv7();
-    await pool.query(
-      `INSERT INTO caregivers (
-        id, name, relationship, contact
-      ) VALUES ($1, $2, $3, $4)`,
-      [
-        caregiverId,
-        caregiverData.name,
-        caregiverData.relationship,
-        caregiverData.contact || null
-      ]
+    const result = await pool.query(
+      `INSERT INTO caregivers (id, name, relationship, contact)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (name, relationship) DO UPDATE SET
+         contact = COALESCE(EXCLUDED.contact, caregivers.contact),
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id`,
+      [caregiverId, caregiverData.name, caregiverData.relationship, caregiverData.contact || null]
     );
-    
-    return caregiverId;
+
+    return result.rows[0].id;
   }
   
   async getCaregiverById(caregiverId: string): Promise<CaregiverData | null> {
@@ -69,11 +43,14 @@ export class CaregiverService {
     };
   }
   
-  async getAllCaregivers(): Promise<Array<CaregiverData & { id: string }>> {
+  async getAllCaregivers(userId: string): Promise<Array<CaregiverData & { id: string }>> {
     const result = await pool.query(
-      'SELECT * FROM caregivers ORDER BY name'
+      `SELECT * FROM caregivers
+       WHERE id IN (SELECT caregiver_id FROM sensory_assessments WHERE user_id = $1)
+       ORDER BY name`,
+      [userId]
     );
-    
+
     return result.rows.map(caregiver => ({
       id: caregiver.id,
       name: caregiver.name,

@@ -171,6 +171,45 @@ export class PgResponseRepository implements ResponseRepository {
     await pool.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
   }
 
+  async replaceByAssessmentId(assessmentId: string, responses: Response[], userId: string): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const assessmentCheck = await client.query(
+        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
+        [assessmentId, userId]
+      );
+      if (assessmentCheck.rows.length === 0) {
+        throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+      }
+
+      await client.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
+
+      if (responses.length > 0) {
+        const values: string[] = [];
+        const params: (string | number)[] = [];
+        let idx = 1;
+        for (const r of responses) {
+          values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
+          params.push(r.getId() || uuidv7(), r.getAssessmentId(), r.getItemId(), r.getResponse());
+          idx += 4;
+        }
+        await client.query(
+          `INSERT INTO sensory_responses (id, assessment_id, item_id, response) VALUES ${values.join(', ')}`,
+          params
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private mapRowToResponse(row: any): Response {
     return new Response(
       row.assessment_id,

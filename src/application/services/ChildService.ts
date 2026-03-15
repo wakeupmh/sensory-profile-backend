@@ -11,39 +11,34 @@ export interface ChildData {
 
 export class ChildService {
   async findOrCreateChild(childData: ChildData, userId: string): Promise<string> {
-    // If nationalIdentity is provided, try to find the child by it
+    // If nationalIdentity is provided, use upsert to avoid race conditions
     if (childData.nationalIdentity) {
-      const existingChild = await pool.query(
-        'SELECT id FROM children WHERE national_identity = $1 AND user_id = $2',
-        [childData.nationalIdentity, userId]
+      const childId = uuidv7();
+      const result = await pool.query(
+        `INSERT INTO children (id, name, birth_date, gender, national_identity, user_id, other_info)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (national_identity, user_id) DO UPDATE SET
+           name = EXCLUDED.name,
+           birth_date = EXCLUDED.birth_date,
+           gender = EXCLUDED.gender,
+           other_info = EXCLUDED.other_info,
+           updated_at = CURRENT_TIMESTAMP
+         RETURNING id`,
+        [
+          childId,
+          childData.name,
+          childData.birthDate,
+          childData.gender || null,
+          childData.nationalIdentity,
+          userId,
+          childData.otherInfo || null
+        ]
       );
-      
-      if (existingChild.rows.length > 0) {
-        const childId = existingChild.rows[0].id;
-        
-        // Update the existing child with new data
-        await pool.query(
-          `UPDATE children SET 
-            name = $1, 
-            birth_date = $2, 
-            gender = $3, 
-            other_info = $4,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $5`,
-          [
-            childData.name,
-            childData.birthDate,
-            childData.gender || null,
-            childData.otherInfo || null,
-            childId
-          ]
-        );
-        
-        return childId;
-      }
+
+      return result.rows[0].id;
     }
-    
-    // Create a new child
+
+    // No nationalIdentity — always create a new child
     const childId = uuidv7();
     await pool.query(
       `INSERT INTO children (
@@ -54,12 +49,12 @@ export class ChildService {
         childData.name,
         childData.birthDate,
         childData.gender || null,
-        childData.nationalIdentity || null,
+        null,
         userId,
         childData.otherInfo || null
       ]
     );
-    
+
     return childId;
   }
   

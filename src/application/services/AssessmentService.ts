@@ -1,6 +1,6 @@
 import { Assessment } from '../../domain/entities/Assessment';
 import { Response } from '../../domain/entities/Response';
-import { AssessmentRepository } from '../../domain/repositories/AssessmentRepository';
+import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
 import { calculateScores } from '../../infrastructure/utils/scoring/scoringService';
 import { DataConsistencyValidator } from '../../infrastructure/utils/validation/DataConsistencyValidator';
@@ -27,12 +27,12 @@ export class AssessmentService {
     private sectionCommentService: SectionCommentService
   ) {}
 
-  async getAllAssessments(userId: string): Promise<Assessment[]> {
+  async getAllAssessments(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
     logger.info(`[AssessmentService] Getting all assessments for user ${userId}`);
     try {
-      const assessments = await this.assessmentRepository.findAll(userId);
-      logger.info(`[AssessmentService] Retrieved ${assessments.length} assessments for user ${userId}`);
-      return assessments;
+      const result = await this.assessmentRepository.findAll(userId, options);
+      logger.info(`[AssessmentService] Retrieved ${result.data.length} of ${result.total} assessments for user ${userId}`);
+      return result;
     } catch (error: any) {
       logger.error(`[AssessmentService] Error retrieving assessments for user ${userId}: ${error.message}`, { error });
       throw error;
@@ -309,27 +309,20 @@ export class AssessmentService {
         }
       }
       
-      // If responses are provided, update them
+      // If responses are provided, atomically replace them via the repository
       if (assessmentData.responses && assessmentData.responses.length > 0) {
-        logger.debug(`[AssessmentService] Updating ${assessmentData.responses.length} responses for assessment ${id}`);
-        // Delete existing responses
-        await this.responseRepository.deleteByAssessmentId(id, userId);
-        logger.debug(`[AssessmentService] Deleted existing responses for assessment ${id}`);
-        
-        // Create and save new responses
+        logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
         const responseEntities = assessmentData.responses.map(
           r => new Response(id, r.itemId, r.response, uuidv7())
         );
-        
-        await this.responseRepository.saveMany(responseEntities, userId);
-        logger.debug(`[AssessmentService] Saved new responses for assessment ${id}`);
+        await this.responseRepository.replaceByAssessmentId(id, responseEntities, userId);
+        logger.debug(`[AssessmentService] Replaced responses for assessment ${id}`);
       }
-      
-      // If section comments are provided, update them
+
+      // If section comments are provided, delete existing and insert new
       if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
         logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
-        // We would need to implement a method to delete existing comments first
-        // For now, we'll just add new ones
+        await this.sectionCommentService.deleteByAssessmentId(id);
         await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments);
         logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
       }

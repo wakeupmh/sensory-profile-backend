@@ -1,14 +1,57 @@
 import { Assessment } from '../../domain/entities/Assessment';
-import { AssessmentRepository } from '../../domain/repositories/AssessmentRepository';
+import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import pool from '../database/connection';
 import { v7 as uuidv7 } from 'uuid';
 
+export interface AssessmentWithRelations extends Assessment {
+  childName?: string;
+  childBirthDate?: Date;
+  childGender?: string;
+  childOtherInfo?: string;
+  childAge?: number;
+  examinerName?: string;
+  examinerProfession?: string;
+  examinerContact?: string;
+  caregiverName?: string;
+  caregiverRelationship?: string;
+  caregiverContact?: string;
+}
+
 export class PgAssessmentRepository implements AssessmentRepository {
-  async findAll(userId: string): Promise<Assessment[]> {
+  async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 50;
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = ['sa.user_id = $1'];
+    const params: (string | number)[] = [userId];
+    let paramIndex = 2;
+
+    if (options?.childId) {
+      conditions.push(`sa.child_id = $${paramIndex++}`);
+      params.push(options.childId);
+    }
+    if (options?.dateFrom) {
+      conditions.push(`sa.assessment_date >= $${paramIndex++}`);
+      params.push(options.dateFrom);
+    }
+    if (options?.dateTo) {
+      conditions.push(`sa.assessment_date <= $${paramIndex++}`);
+      params.push(options.dateTo);
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM sensory_assessments sa WHERE ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
     const query = `
-      SELECT 
+      SELECT
         sa.*,
-        c.name as child_name, 
+        c.name as child_name,
         c.birth_date as child_birth_date,
         c.gender as child_gender,
         c.other_info as child_other_info,
@@ -18,23 +61,29 @@ export class PgAssessmentRepository implements AssessmentRepository {
         cg.name as caregiver_name,
         cg.relationship as caregiver_relationship,
         cg.contact as caregiver_contact
-      FROM 
+      FROM
         sensory_assessments sa
-      LEFT JOIN 
+      LEFT JOIN
         children c ON sa.child_id = c.id
-      LEFT JOIN 
+      LEFT JOIN
         examiners e ON sa.examiner_id = e.id
-      LEFT JOIN 
+      LEFT JOIN
         caregivers cg ON sa.caregiver_id = cg.id
-      WHERE 
-        sa.user_id = $1 
-      ORDER BY 
+      WHERE
+        ${whereClause}
+      ORDER BY
         sa.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
-    const result = await pool.query(query, [userId]);
+    const result = await pool.query(query, [...params, limit, offset]);
 
-    return result.rows.map(row => this.mapRowToAssessment(row));
+    return {
+      data: result.rows.map(row => this.mapRowToAssessment(row)),
+      total,
+      page,
+      limit
+    };
   }
 
   async findById(id: string, userId: string): Promise<Assessment | null> {
@@ -81,9 +130,10 @@ export class PgAssessmentRepository implements AssessmentRepository {
         auditory_processing_raw_score, visual_processing_raw_score,
         tactile_processing_raw_score, movement_processing_raw_score,
         body_position_processing_raw_score, oral_sensitivity_processing_raw_score,
+        behavioral_responses_raw_score,
         social_emotional_responses_raw_score, attention_responses_raw_score,
         user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       [
         id,
         assessment.getChildId(),
@@ -96,6 +146,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getMovementProcessingRawScore(),
         assessment.getBodyPositionProcessingRawScore(),
         assessment.getOralSensitivityProcessingRawScore(),
+        assessment.getBehavioralResponsesRawScore(),
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         userId
@@ -118,10 +169,11 @@ export class PgAssessmentRepository implements AssessmentRepository {
         movement_processing_raw_score = $8,
         body_position_processing_raw_score = $9,
         oral_sensitivity_processing_raw_score = $10,
-        social_emotional_responses_raw_score = $11,
-        attention_responses_raw_score = $12,
+        behavioral_responses_raw_score = $11,
+        social_emotional_responses_raw_score = $12,
+        attention_responses_raw_score = $13,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13 AND user_id = $14 RETURNING *`,
+      WHERE id = $14 AND user_id = $15 RETURNING *`,
       [
         assessment.getChildId(),
         assessment.getExaminerId(),
@@ -133,6 +185,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getMovementProcessingRawScore(),
         assessment.getBodyPositionProcessingRawScore(),
         assessment.getOralSensitivityProcessingRawScore(),
+        assessment.getBehavioralResponsesRawScore(),
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         assessment.getId(),
@@ -184,46 +237,46 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return result.rows.map(row => this.mapRowToAssessment(row));
   }
 
-  private mapRowToAssessment(row: any): Assessment {
+  private mapRowToAssessment(row: Record<string, unknown>): AssessmentWithRelations {
     const assessment = new Assessment(
-      row.child_id,
-      row.examiner_id,
-      row.caregiver_id,
-      row.assessment_date,
-      row.auditory_processing_raw_score,
-      row.visual_processing_raw_score,
-      row.tactile_processing_raw_score,
-      row.movement_processing_raw_score,
-      row.body_position_processing_raw_score,
-      row.oral_sensitivity_processing_raw_score,
-      row.social_emotional_responses_raw_score,
-      row.attention_responses_raw_score,
-      row.id,
-      row.created_at,
-      row.updated_at
-    );
-    
-    // Add additional properties for the frontend
+      row.child_id as string,
+      row.examiner_id as string | null,
+      row.caregiver_id as string | null,
+      row.assessment_date as Date,
+      row.auditory_processing_raw_score as number | undefined,
+      row.visual_processing_raw_score as number | undefined,
+      row.tactile_processing_raw_score as number | undefined,
+      row.movement_processing_raw_score as number | undefined,
+      row.body_position_processing_raw_score as number | undefined,
+      row.oral_sensitivity_processing_raw_score as number | undefined,
+      row.behavioral_responses_raw_score as number | undefined,
+      row.social_emotional_responses_raw_score as number | undefined,
+      row.attention_responses_raw_score as number | undefined,
+      row.id as string,
+      row.created_at as Date,
+      row.updated_at as Date
+    ) as AssessmentWithRelations;
+
     if (row.child_name) {
-      (assessment as any).childName = row.child_name;
-      (assessment as any).childBirthDate = row.child_birth_date;
-      (assessment as any).childGender = row.child_gender;
-      (assessment as any).childOtherInfo = row.child_other_info;
-      (assessment as any).childAge = this.calculateAge(row.child_birth_date);
+      assessment.childName = row.child_name as string;
+      assessment.childBirthDate = row.child_birth_date as Date;
+      assessment.childGender = row.child_gender as string;
+      assessment.childOtherInfo = row.child_other_info as string;
+      assessment.childAge = this.calculateAge(row.child_birth_date as Date);
     }
-    
+
     if (row.examiner_name) {
-      (assessment as any).examinerName = row.examiner_name;
-      (assessment as any).examinerProfession = row.examiner_profession;
-      (assessment as any).examinerContact = row.examiner_contact;
+      assessment.examinerName = row.examiner_name as string;
+      assessment.examinerProfession = row.examiner_profession as string;
+      assessment.examinerContact = row.examiner_contact as string;
     }
-    
+
     if (row.caregiver_name) {
-      (assessment as any).caregiverName = row.caregiver_name;
-      (assessment as any).caregiverRelationship = row.caregiver_relationship;
-      (assessment as any).caregiverContact = row.caregiver_contact;
+      assessment.caregiverName = row.caregiver_name as string;
+      assessment.caregiverRelationship = row.caregiver_relationship as string;
+      assessment.caregiverContact = row.caregiver_contact as string;
     }
-    
+
     return assessment;
   }
 

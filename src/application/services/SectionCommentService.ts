@@ -7,6 +7,10 @@ export interface SectionComment {
 }
 
 export class SectionCommentService {
+  async deleteByAssessmentId(assessmentId: string): Promise<void> {
+    await pool.query('DELETE FROM section_comments WHERE assessment_id = $1', [assessmentId]);
+  }
+
   async saveSectionComments(assessmentId: string, comments: SectionComment[]): Promise<void> {
     if (!comments || comments.length === 0) return;
     

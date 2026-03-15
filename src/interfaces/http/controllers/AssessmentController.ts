@@ -32,17 +32,26 @@ export class AssessmentController {
     
     // Validate query parameters
     const queryParams = assessmentQuerySchema.parse(req.query);
-    
+
     logger.debug(`[getAllAssessments] User ${userId} authorized, fetching assessments`, { queryParams });
-    
-    const assessments = await this.assessmentService.getAllAssessments(userId);
-    
-    logger.info(`[getAllAssessments] Successfully retrieved ${assessments.length} assessments for user ${userId}`);
-    
+
+    const result = await this.assessmentService.getAllAssessments(userId, {
+      page: queryParams.page,
+      limit: queryParams.limit,
+      childId: queryParams.childId,
+      dateFrom: queryParams.dateFrom,
+      dateTo: queryParams.dateTo
+    });
+
+    logger.info(`[getAllAssessments] Successfully retrieved ${result.data.length} of ${result.total} assessments for user ${userId}`);
+
     res.status(200).json({
       success: true,
-      data: assessments,
-      count: assessments.length,
+      data: result.data,
+      count: result.data.length,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
       timestamp: new Date().toISOString()
     });
   });
