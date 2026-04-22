@@ -148,6 +148,16 @@ sensory-profile-backend/
 - `GET /api/items` - Listar todos os itens
 - `GET /api/items/:section` - Listar itens por seção
 
+### Anamnese
+- `GET /api/anamneses` - Listar anamneses do usuário (resumo)
+- `GET /api/anamneses/:id` - Obter anamnese completa
+- `POST /api/anamneses` - Criar nova anamnese
+- `PUT /api/anamneses/:id` - Atualizar anamnese
+- `DELETE /api/anamneses/:id` - Remover anamnese
+- `POST /api/anamneses/:id/share` - Gerar link compartilhável (retorna `shareToken`)
+- `DELETE /api/anamneses/:id/share` - Revogar link compartilhável
+- `GET /api/anamneses/shared/:shareToken` - Acesso público somente leitura via token (sem autenticação)
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
