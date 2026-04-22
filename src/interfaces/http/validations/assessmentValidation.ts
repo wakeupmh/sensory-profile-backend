@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { validateItemId, getExpectedScoreRanges } from '../../../infrastructure/utils/scoring/scoringService';
 import { ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { DEFAULT_INSTRUMENT_ID } from '../../../domain/entities/Assessment';
 
