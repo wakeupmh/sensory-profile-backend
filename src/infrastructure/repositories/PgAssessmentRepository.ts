@@ -1,4 +1,4 @@
-import { Assessment } from '../../domain/entities/Assessment';
+import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import pool from '../database/connection';
 import { v7 as uuidv7 } from 'uuid';
@@ -123,7 +123,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
 
   async save(assessment: Assessment, userId: string): Promise<Assessment> {
     const id = assessment.getId() || uuidv7();
-    
+
     const result = await pool.query(
       `INSERT INTO sensory_assessments (
         id, child_id, examiner_id, caregiver_id, assessment_date,
@@ -132,8 +132,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
         body_position_processing_raw_score, oral_sensitivity_processing_raw_score,
         behavioral_responses_raw_score,
         social_emotional_responses_raw_score, attention_responses_raw_score,
-        user_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+        user_id, instrument_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
       [
         id,
         assessment.getChildId(),
@@ -149,7 +149,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getBehavioralResponsesRawScore(),
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
-        userId
+        userId,
+        assessment.getInstrumentId()
       ]
     );
 
@@ -172,8 +173,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
         behavioral_responses_raw_score = $11,
         social_emotional_responses_raw_score = $12,
         attention_responses_raw_score = $13,
+        instrument_id = $14,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $14 AND user_id = $15 RETURNING *`,
+      WHERE id = $15 AND user_id = $16 RETURNING *`,
       [
         assessment.getChildId(),
         assessment.getExaminerId(),
@@ -188,6 +190,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getBehavioralResponsesRawScore(),
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
+        assessment.getInstrumentId(),
         assessment.getId(),
         userId
       ]
@@ -254,7 +257,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
       row.attention_responses_raw_score as number | undefined,
       row.id as string,
       row.created_at as Date,
-      row.updated_at as Date
+      row.updated_at as Date,
+      (row.instrument_id as string | undefined) ?? DEFAULT_INSTRUMENT_ID
     ) as AssessmentWithRelations;
 
     if (row.child_name) {

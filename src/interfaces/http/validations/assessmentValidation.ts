@@ -1,6 +1,34 @@
 import { z } from 'zod';
 import { validateItemId, getExpectedScoreRanges } from '../../../infrastructure/utils/scoring/scoringService';
 import { ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { DEFAULT_INSTRUMENT_ID } from '../../../domain/entities/Assessment';
+
+// Instruments that use the legacy Criança 3-14 validation + scoring stack.
+// Other instrument IDs are accepted but skip the 3-14-specific checks and
+// are persisted with zeroed raw scores (scoring lives in the frontend).
+const LEGACY_INSTRUMENT_ID = DEFAULT_INSTRUMENT_ID;
+
+export const isLegacyInstrument = (instrumentId?: string): boolean =>
+  (instrumentId ?? LEGACY_INSTRUMENT_ID) === LEGACY_INSTRUMENT_ID;
+
+const instrumentIdSchema = z
+  .string()
+  .min(1, 'Instrument ID cannot be empty')
+  .max(100, 'Instrument ID must not exceed 100 characters')
+  .regex(/^[a-z0-9-]+$/i, 'Instrument ID contains invalid characters')
+  .default(LEGACY_INSTRUMENT_ID);
+
+const ZERO_RAW_SCORES = {
+  auditoryProcessing: 0,
+  visualProcessing: 0,
+  tactileProcessing: 0,
+  movementProcessing: 0,
+  bodyPositionProcessing: 0,
+  oralSensitivityProcessing: 0,
+  behavioralResponses: 0,
+  socialEmotionalResponses: 0,
+  attentionResponses: 0,
+};
 
 // Valid response values based on official Sensory Profile 2 form
 const responseEnum = z.enum([
@@ -80,12 +108,15 @@ const caregiverSchema = z.object({
     .optional()
 }).strict();
 
-// Individual response validation
+// Individual response validation.
+// Item IDs are global across instruments (1–85 for Criança 3–14,
+// 1001–1048 for Criança Pequena, etc); the scoring stack is what
+// scopes them per instrument.
 const responseSchema = z.object({
   itemId: z.number()
     .int('Item ID must be an integer')
-    .refine(validateItemId, 'Item ID must be between 1 and 86'),
-  
+    .positive('Item ID must be a positive integer'),
+
   response: responseEnum
 }).strict();
 
@@ -116,21 +147,25 @@ const rawScoresSchema = z.object({
 
 // Main assessment schema
 export const assessmentSchema = z.object({
+  instrumentId: instrumentIdSchema,
   child: childSchema,
   examiner: examinerSchema.optional(),
   caregiver: caregiverSchema.optional(),
   responses: z.array(responseSchema)
     .min(1, 'At least one response is required')
-    .max(86, 'Cannot have more than 86 responses')
+    .max(200, 'Cannot have more than 200 responses')
     .refine((responses) => {
       // Check for duplicate item IDs
       const itemIds = responses.map(r => r.itemId);
       const uniqueIds = new Set(itemIds);
       return uniqueIds.size === itemIds.length;
     }, 'Duplicate item IDs are not allowed'),
-  
-  rawScores: rawScoresSchema,
-  
+
+  // rawScores are only validated against legacy ranges for the Criança 3-14
+  // instrument; for other instruments any provided scores are accepted and
+  // scoring is deferred to the frontend.
+  rawScores: rawScoresSchema.optional(),
+
   sectionComments: z.array(sectionCommentSchema)
     .max(9, 'Cannot have more than 9 section comments')
     .optional()
@@ -138,18 +173,19 @@ export const assessmentSchema = z.object({
 
 // Simplified schema for creating assessments (auto-calculate scores)
 export const createAssessmentSchema = z.object({
+  instrumentId: instrumentIdSchema,
   child: childSchema,
   examiner: examinerSchema.optional(),
   caregiver: caregiverSchema.optional(),
   responses: z.array(responseSchema)
     .min(1, 'At least one response is required')
-    .max(86, 'Cannot have more than 86 responses')
+    .max(200, 'Cannot have more than 200 responses')
     .refine((responses) => {
       const itemIds = responses.map(r => r.itemId);
       const uniqueIds = new Set(itemIds);
       return uniqueIds.size === itemIds.length;
     }, 'Duplicate item IDs are not allowed'),
-  
+
   sectionComments: z.array(sectionCommentSchema)
     .max(9, 'Cannot have more than 9 section comments')
     .optional()
@@ -200,24 +236,38 @@ export type CreateAssessmentPayload = z.infer<typeof createAssessmentSchema>;
 export type UpdateAssessmentPayload = z.infer<typeof updateAssessmentSchema>;
 export type AssessmentQuery = z.infer<typeof assessmentQuerySchema>;
 
-// Transform function with enhanced validation
+// Transform function with enhanced validation.
+// For the legacy Criança 3-14 instrument we auto-calculate section raw scores
+// from responses and validate against the official ranges. For any other
+// instrument we short-circuit with zeroed raw scores — scoring for those
+// instruments lives in the frontend.
 export const transformPayloadForService = (payload: CreateAssessmentPayload) => {
+  const base = {
+    instrumentId: payload.instrumentId,
+    child: payload.child,
+    examiner: payload.examiner,
+    caregiver: payload.caregiver,
+    responses: payload.responses,
+    sectionComments: payload.sectionComments || [],
+  };
+
+  if (!isLegacyInstrument(payload.instrumentId)) {
+    return { ...base, rawScores: { ...ZERO_RAW_SCORES } };
+  }
+
   try {
     // Import scoring functions dynamically to avoid circular imports
     const { calculateScores, validateScores } = require('../../../infrastructure/utils/scoring/scoringService');
-    
-    // Calculate scores from responses
+
     const scoringResults = calculateScores(payload.responses);
-    
-    // Check for invalid responses
+
     if (scoringResults.invalidResponses.length > 0) {
       throw new ValidationError(
         'Invalid responses detected',
         { invalidResponses: scoringResults.invalidResponses }
       );
     }
-    
-    // Validate calculated scores
+
     const scoreWarnings = validateScores(scoringResults);
     if (scoreWarnings.length > 0) {
       throw new ValidationError(
@@ -225,15 +275,8 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
         { warnings: scoreWarnings }
       );
     }
-    
-    return {
-      child: payload.child,
-      examiner: payload.examiner,
-      caregiver: payload.caregiver,
-      responses: payload.responses,
-      rawScores: scoringResults.sectionScores,
-      sectionComments: payload.sectionComments || []
-    };
+
+    return { ...base, rawScores: scoringResults.sectionScores };
   } catch (error) {
     if (error instanceof ValidationError) {
       throw error;
@@ -245,25 +288,38 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
   }
 };
 
-// Validation helper functions
-export const validateChildAge = (birthDate: string): number => {
+// Validation helper functions.
+// The 3-14 age range only applies to the legacy Criança 3-14 instrument.
+// Other instruments (e.g. Criança Pequena 7-36 meses) accept any non-future
+// birth date and defer age-appropriateness to the frontend.
+export const validateChildAge = (birthDate: string, instrumentId?: string): number => {
   const birth = new Date(birthDate);
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
   const monthDiff = today.getMonth() - birth.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
     age--;
   }
-  
-  if (age < 3 || age > 14) {
+
+  if (birth > today) {
+    throw new ValidationError('Birth date cannot be in the future');
+  }
+
+  if (isLegacyInstrument(instrumentId) && (age < 3 || age > 14)) {
     throw new ValidationError(`Child age ${age} is outside the valid range (3-14 years)`);
   }
-  
+
   return age;
 };
 
-export const validateRequiredResponses = (responses: Array<{ itemId: number, response: string }>): void => {
+export const validateRequiredResponses = (responses: Array<{ itemId: number, response: string }>, instrumentId?: string): void => {
+  // Section minimums below are specific to the Criança 3-14 form and
+  // meaningless for other instruments (which have their own item IDs).
+  if (!isLegacyInstrument(instrumentId)) {
+    return;
+  }
+
   const itemCounts = {
     auditoryProcessing: 0,
     visualProcessing: 0,
