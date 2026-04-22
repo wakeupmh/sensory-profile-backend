@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import { clerkMiddleware } from '@clerk/express';
 
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
+import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -87,6 +88,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/assessments', assessmentRoutes);
+app.use('/api/anamneses', anamneseRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

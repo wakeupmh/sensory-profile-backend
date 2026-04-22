@@ -86,6 +86,18 @@ export class ChildNotFoundError extends NotFoundError {
   }
 }
 
+export class AnamneseNotFoundError extends NotFoundError {
+  constructor(id: string, cause?: Error) {
+    super('Anamnese', id, cause);
+  }
+}
+
+export class AnamneseAccessDeniedError extends AuthorizationError {
+  constructor(cause?: Error) {
+    super('Access to this anamnese is not permitted', 'anamnese:owner', cause);
+  }
+}
+
 // 409 Conflict Errors
 export class ConflictError extends BaseError {
   readonly statusCode = 409;
