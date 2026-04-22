@@ -1,4 +1,4 @@
-import { Assessment } from '../../domain/entities/Assessment';
+import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
 import { Response } from '../../domain/entities/Response';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
@@ -48,15 +48,19 @@ export class AssessmentService {
       return null;
     }
 
-    // Validate data consistency for retrieved assessment
-    const responses = await this.responseRepository.findByAssessmentId(id, userId);
-    const validationResult = DataConsistencyValidator.validateAssessmentScoreConsistency(assessment, responses);
-    
-    if (!validationResult.isValid) {
-      logger.warn(`[AssessmentService] Data consistency issues found for assessment ${id}`, {
-        errors: validationResult.errors,
-        warnings: validationResult.warnings
-      });
+    // Validate data consistency for retrieved assessment. The current
+    // validator is hard-coded to the Criança 3-14 scoring map; skip it for
+    // other instruments so we don't emit spurious mismatch warnings.
+    if (assessment.getInstrumentId() === DEFAULT_INSTRUMENT_ID) {
+      const responses = await this.responseRepository.findByAssessmentId(id, userId);
+      const validationResult = DataConsistencyValidator.validateAssessmentScoreConsistency(assessment, responses);
+
+      if (!validationResult.isValid) {
+        logger.warn(`[AssessmentService] Data consistency issues found for assessment ${id}`, {
+          errors: validationResult.errors,
+          warnings: validationResult.warnings
+        });
+      }
     }
 
     logger.info(`[AssessmentService] Retrieved assessment with id ${id} for user ${userId}`);
@@ -85,6 +89,7 @@ export class AssessmentService {
   }
 
   async createAssessment(assessmentData: {
+    instrumentId?: string;
     child: {
       name: string;
       birthDate: string;
@@ -154,7 +159,10 @@ export class AssessmentService {
         assessmentData.rawScores.behavioralResponses,
         assessmentData.rawScores.socialEmotionalResponses,
         assessmentData.rawScores.attentionResponses,
-        assessmentId
+        assessmentId,
+        undefined,
+        undefined,
+        assessmentData.instrumentId ?? DEFAULT_INSTRUMENT_ID
       );
       
       logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
@@ -186,6 +194,7 @@ export class AssessmentService {
   }
 
   async updateAssessment(id: string, assessmentData: {
+    instrumentId?: string;
     child?: {
       name: string;
       birthDate: string;
@@ -274,7 +283,8 @@ export class AssessmentService {
         existingAssessment.getAttentionResponsesRawScore(),
         existingAssessment.getId(),
         existingAssessment.getCreatedAt(),
-        existingAssessment.getUpdatedAt()
+        existingAssessment.getUpdatedAt(),
+        assessmentData.instrumentId ?? existingAssessment.getInstrumentId()
       );
       
       // If raw scores are provided, update them

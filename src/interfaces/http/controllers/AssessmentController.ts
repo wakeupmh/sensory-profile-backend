@@ -104,15 +104,16 @@ export class AssessmentController {
     const validatedData = createAssessmentSchema.parse(req.body);
     logger.debug(`[createAssessment] Assessment data validated successfully`);
     
-    // Additional validation checks
-    validateChildAge(validatedData.child.birthDate);
-    validateRequiredResponses(validatedData.responses);
-    
+    // Additional validation checks (some are gated by instrumentId)
+    validateChildAge(validatedData.child.birthDate, validatedData.instrumentId);
+    validateRequiredResponses(validatedData.responses, validatedData.instrumentId);
+
     // Transform and validate scoring
     const transformedData = transformPayloadForService(validatedData);
     logger.debug(`[createAssessment] Assessment data transformed, creating assessment`);
-    
+
     const assessment = await this.assessmentService.createAssessment({
+      instrumentId: transformedData.instrumentId,
       child: transformedData.child,
       examiner: transformedData.examiner,
       caregiver: transformedData.caregiver,
