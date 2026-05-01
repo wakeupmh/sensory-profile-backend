@@ -144,6 +144,12 @@ sensory-profile-backend/
 - `DELETE /api/assessments/:id` - Remover uma avaliação
 - `GET /api/assessments/:id/report` - Gerar relatório de uma avaliação
 
+Campo `instrumentId` (string, opcional no POST/PUT, ecoado no GET) identifica o
+instrumento clínico usado na avaliação. Default: `crianca-3-14`. Outros valores
+(ex.: `crianca-pequena-7-36`) são aceitos e armazenados; as validações
+específicas do Criança 3-14 (faixa etária, contagem de itens por seção,
+cálculo de raw scores) só são aplicadas quando `instrumentId === 'crianca-3-14'`.
+
 ### Itens do Questionário
 - `GET /api/items` - Listar todos os itens
 - `GET /api/items/:section` - Listar itens por seção

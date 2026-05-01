@@ -1,3 +1,5 @@
+export const DEFAULT_INSTRUMENT_ID = 'crianca-3-14';
+
 export class Assessment {
   constructor(
     private childId: string,
@@ -15,11 +17,21 @@ export class Assessment {
     private attentionResponsesRawScore?: number,
     private id?: string,
     private createdAt?: Date,
-    private updatedAt?: Date
+    private updatedAt?: Date,
+    private instrumentId: string = DEFAULT_INSTRUMENT_ID
   ) {}
 
   getId(): string | undefined {
     return this.id;
+  }
+
+  getInstrumentId(): string {
+    return this.instrumentId;
+  }
+
+  setInstrumentId(instrumentId: string): void {
+    this.instrumentId = instrumentId;
+    this.updatedAt = new Date();
   }
 
   getChildId(): string {
