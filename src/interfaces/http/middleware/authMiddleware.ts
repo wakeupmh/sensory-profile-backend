@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { jwtVerify } from 'jose';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
 import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
 
 declare global {
@@ -10,6 +10,13 @@ declare global {
   }
 }
 
+const supabaseUrl = process.env.SUPABASE_URL;
+if (!supabaseUrl) throw new Error('SUPABASE_URL not set');
+
+const JWKS = createRemoteJWKSet(
+  new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`)
+);
+
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -17,13 +24,9 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
   }
 
   const token = authHeader.slice(7);
-  const secret = process.env.SUPABASE_JWT_SECRET;
-  if (!secret) {
-    return next(new Error('SUPABASE_JWT_SECRET not set'));
-  }
 
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
+    const { payload } = await jwtVerify(token, JWKS);
     if (!payload.sub) {
       return next(new AuthenticationError());
     }
