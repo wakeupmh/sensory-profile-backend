@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { jwtVerify } from 'jose';
 import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
 
 declare global {
@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+export const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return next(new AuthenticationError());
@@ -23,7 +23,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
   }
 
   try {
-    const payload = jwt.verify(token, secret) as { sub?: string };
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
     if (!payload.sub) {
       return next(new AuthenticationError());
     }

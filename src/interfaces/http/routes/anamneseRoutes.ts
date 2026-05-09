@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '@clerk/express';
+import { authMiddleware } from '../middleware/authMiddleware';
 
 import { AnamneseController } from '../controllers/AnamneseController';
 import { AnamneseService } from '../../../application/services/AnamneseService';
@@ -17,8 +17,7 @@ router.get(
   anamneseController.getByShareToken.bind(anamneseController)
 );
 
-// Everything below requires an authenticated Clerk session.
-router.use(requireAuth());
+router.use(authMiddleware);
 
 router.get('/', anamneseController.list.bind(anamneseController));
 router.post('/', anamneseController.create.bind(anamneseController));

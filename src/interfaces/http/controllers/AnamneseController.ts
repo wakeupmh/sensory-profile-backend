@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getAuth } from '@clerk/express';
+
 
 import { AnamneseService } from '../../../application/services/AnamneseService';
 import {
@@ -29,9 +29,8 @@ function assertValidShareToken(token: string | undefined): asserts token is stri
 }
 
 function requireUserId(req: Request): string {
-  const { userId } = getAuth(req);
-  if (!userId) throw new AuthenticationError();
-  return userId;
+  if (!req.userId) throw new AuthenticationError();
+  return req.userId;
 }
 
 export class AnamneseController {
