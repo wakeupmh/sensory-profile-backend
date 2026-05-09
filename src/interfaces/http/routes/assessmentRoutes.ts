@@ -7,9 +7,8 @@ import { ChildService } from '../../../application/services/ChildService';
 import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { SectionCommentService } from '../../../application/services/SectionCommentService';
-import { requireAuth } from '@clerk/express';
+import { authMiddleware } from '../middleware/authMiddleware';
 import { Request, Response } from 'express';
-import { getAuth } from '@clerk/express';
 
 const assessmentRepository = new PgAssessmentRepository();
 const responseRepository = new PgResponseRepository();
@@ -31,17 +30,12 @@ const assessmentController = new AssessmentController(assessmentService);
 
 const router = Router();
 
-router.use(requireAuth());
+router.use(authMiddleware);
 
 // Child routes
 router.get('/children', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const children = await childService.getAllChildren(userId);
     res.status(200).json(children);
@@ -55,12 +49,7 @@ router.get('/children', async (req: Request, res: Response) => {
 
 router.get('/children/:id', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const child = await childService.getChildById(req.params.id, userId);
     
@@ -81,12 +70,7 @@ router.get('/children/:id', async (req: Request, res: Response) => {
 // Examiner routes
 router.get('/examiners', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const examiners = await examinerService.getAllExaminers(userId);
     res.status(200).json(examiners);
@@ -100,12 +84,7 @@ router.get('/examiners', async (req: Request, res: Response) => {
 
 router.get('/examiners/:id', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const examiner = await examinerService.getExaminerById(req.params.id);
     
@@ -126,12 +105,7 @@ router.get('/examiners/:id', async (req: Request, res: Response) => {
 // Caregiver routes
 router.get('/caregivers', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const caregivers = await caregiverService.getAllCaregivers(userId);
     res.status(200).json(caregivers);
@@ -145,12 +119,7 @@ router.get('/caregivers', async (req: Request, res: Response) => {
 
 router.get('/caregivers/:id', async (req: Request, res: Response) => {
   try {
-    const { userId } = getAuth(req);
-    
-    if (!userId) {
-      res.status(401).json({ message: 'Usuário não autenticado' });
-      return;
-    }
+    const userId = req.userId!;
     
     const caregiver = await caregiverService.getCaregiverById(req.params.id);
     

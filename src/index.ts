@@ -4,7 +4,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { clerkMiddleware } from '@clerk/express';
 
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
@@ -28,9 +27,6 @@ app.set('trust proxy', 1);
 // Request ID and logging middleware (before everything else)
 app.use(requestIdMiddleware);
 app.use(requestLogger);
-
-// Authentication middleware
-app.use(clerkMiddleware());
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

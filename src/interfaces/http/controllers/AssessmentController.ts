@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { AssessmentService } from '../../../application/services/AssessmentService';
-import { getAuth } from '@clerk/express';
 import { 
   createAssessmentSchema, 
   updateAssessmentSchema,
@@ -11,9 +10,8 @@ import {
 } from '../validations/assessmentValidation';
 import { SectionComment } from '../../../application/services/SectionCommentService';
 import logger from '../../../infrastructure/utils/logger';
-import { 
-  ValidationError, 
-  AuthenticationError, 
+import {
+  ValidationError,
   NotFoundError,
   AssessmentNotFoundError
 } from '../../../infrastructure/utils/errors/CustomErrors';
@@ -25,10 +23,7 @@ export class AssessmentController {
   getAllAssessments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     logger.info(`[getAllAssessments] Fetching all assessments`);
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     // Validate query parameters
     const queryParams = assessmentQuerySchema.parse(req.query);
@@ -64,10 +59,7 @@ export class AssessmentController {
       throw new ValidationError('Invalid assessment ID format');
     }
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     logger.debug(`[getAssessmentById] User ${userId} authorized, fetching assessment ${id}`);
     
@@ -93,10 +85,7 @@ export class AssessmentController {
   createAssessment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     logger.info(`[createAssessment] Creating new assessment`);
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     logger.debug(`[createAssessment] User ${userId} authorized, validating assessment data`);
     
@@ -140,10 +129,7 @@ export class AssessmentController {
       throw new ValidationError('Invalid assessment ID format');
     }
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     logger.debug(`[updateAssessment] User ${userId} authorized, validating assessment data for update`);
     
@@ -175,10 +161,7 @@ export class AssessmentController {
       throw new ValidationError('Invalid assessment ID format');
     }
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     logger.debug(`[deleteAssessment] User ${userId} authorized, attempting to delete assessment ${id}`);
     
@@ -205,10 +188,7 @@ export class AssessmentController {
       throw new ValidationError('Invalid assessment ID format');
     }
     
-    const { userId } = getAuth(req);
-    if (!userId) {
-      throw new AuthenticationError();
-    }
+    const userId = req.userId!;
     
     logger.debug(`[generateReport] User ${userId} authorized, generating report for assessment ${id}`);
     
