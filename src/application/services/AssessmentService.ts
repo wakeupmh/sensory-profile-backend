@@ -34,7 +34,7 @@ export class AssessmentService {
       logger.info(`[AssessmentService] Retrieved ${result.data.length} of ${result.total} assessments for user ${userId}`);
       return result;
     } catch (error: any) {
-      logger.error(`[AssessmentService] Error retrieving assessments for user ${userId}: ${error.message}`, { error });
+      logger.error(`[AssessmentService] Error retrieving assessments for user ${userId}: ${error?.message ?? String(error)}`, { errorType: typeof error, errorKeys: error ? Object.keys(error) : [], errorJson: JSON.stringify(error), code: error?.code, stack: error?.stack });
       throw error;
     }
   }

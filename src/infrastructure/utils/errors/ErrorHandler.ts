@@ -24,7 +24,7 @@ const handleZodError = (error: ZodError): ValidationError => {
 
 // Convert database errors to custom errors
 const handleDatabaseError = (error: Error): BaseError => {
-  const message = error.message.toLowerCase();
+  const message = (error.message ?? '').toLowerCase();
   
   // PostgreSQL specific error handling
   if (message.includes('duplicate key')) {
@@ -61,7 +61,7 @@ export const errorHandler = (
     customError = error;
   } else if (error instanceof ZodError) {
     customError = handleZodError(error);
-  } else if (error.name === 'QueryFailedError' || error.message.includes('pg_')) {
+  } else if (error.name === 'QueryFailedError' || (error.message ?? '').includes('pg_')) {
     customError = handleDatabaseError(error);
   } else {
     // Unknown error - treat as internal server error
