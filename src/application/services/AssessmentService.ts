@@ -4,13 +4,14 @@ import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '.
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
 import { calculateScores } from '../../infrastructure/utils/scoring/scoringService';
 import { DataConsistencyValidator } from '../../infrastructure/utils/validation/DataConsistencyValidator';
-import { 
-  NotFoundError, 
-  ValidationError, 
+import {
+  NotFoundError,
+  ValidationError,
   DataConsistencyError,
-  AssessmentNotFoundError 
+  AssessmentNotFoundError
 } from '../../infrastructure/utils/errors/CustomErrors';
 import { v7 as uuidv7 } from 'uuid';
+import pool from '../../infrastructure/database/connection';
 import { ChildService } from './ChildService';
 import { ExaminerService } from './ExaminerService';
 import { CaregiverService } from './CaregiverService';
@@ -91,6 +92,7 @@ export class AssessmentService {
   async createAssessment(assessmentData: {
     instrumentId?: string;
     child: {
+      id?: string;
       name: string;
       birthDate: string;
       gender?: string;
@@ -123,9 +125,23 @@ export class AssessmentService {
   }, userId: string): Promise<Assessment> {
     logger.info(`[AssessmentService] Creating new assessment for user ${userId}`);
     try {
-      logger.debug(`[AssessmentService] Finding or creating child for user ${userId}`);
-      const childId = await this.childService.findOrCreateChild(assessmentData.child, userId);
-      logger.debug(`[AssessmentService] Child id: ${childId} for user ${userId}`);
+      let childId: string;
+      if (assessmentData.child.id) {
+        logger.debug(`[AssessmentService] Validating child ownership id=${assessmentData.child.id} for user ${userId}`);
+        const ownerCheck = await pool.query(
+          `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
+          [assessmentData.child.id, userId]
+        );
+        if (ownerCheck.rows.length === 0) {
+          throw new NotFoundError('Child', assessmentData.child.id);
+        }
+        childId = assessmentData.child.id;
+        logger.debug(`[AssessmentService] Child id validated: ${childId}`);
+      } else {
+        logger.debug(`[AssessmentService] Finding or creating child for user ${userId}`);
+        childId = await this.childService.findOrCreateChild(assessmentData.child, userId);
+        logger.debug(`[AssessmentService] Child id: ${childId} for user ${userId}`);
+      }
       
       let examinerId = null;
       if (assessmentData.examiner) {
@@ -196,6 +212,7 @@ export class AssessmentService {
   async updateAssessment(id: string, assessmentData: {
     instrumentId?: string;
     child?: {
+      id?: string;
       name: string;
       birthDate: string;
       gender?: string;
@@ -244,9 +261,22 @@ export class AssessmentService {
       // Update child data if provided
       let childId = existingAssessment.getChildId();
       if (assessmentData.child) {
-        logger.debug(`[AssessmentService] Updating child data for assessment ${id}`);
-        childId = await this.childService.findOrCreateChild(assessmentData.child, userId);
-        logger.debug(`[AssessmentService] Updated child id: ${childId}`);
+        if (assessmentData.child.id) {
+          logger.debug(`[AssessmentService] Validating child ownership id=${assessmentData.child.id} for user ${userId}`);
+          const ownerCheck = await pool.query(
+            `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
+            [assessmentData.child.id, userId]
+          );
+          if (ownerCheck.rows.length === 0) {
+            throw new NotFoundError('Child', assessmentData.child.id);
+          }
+          childId = assessmentData.child.id;
+          logger.debug(`[AssessmentService] Updated child id (direct): ${childId}`);
+        } else {
+          logger.debug(`[AssessmentService] Updating child data for assessment ${id}`);
+          childId = await this.childService.findOrCreateChild(assessmentData.child, userId);
+          logger.debug(`[AssessmentService] Updated child id: ${childId}`);
+        }
       }
       
       // Update examiner if provided

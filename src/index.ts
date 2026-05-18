@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
+import draftRoutes from './interfaces/http/routes/draftRoutes';
+import childRoutes from './interfaces/http/routes/childRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -85,6 +87,8 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
+app.use('/api/drafts', draftRoutes);
+app.use('/api/children', childRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
