@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { ChildService } from '../../../application/services/ChildService';
-import { createChildSchema, updateChildSchema } from '../validations/childValidation';
+import { ChildProfileService } from '../../../application/services/ChildProfileService';
+import { createChildSchema, updateChildSchema, profileQuerySchema, timelineQuerySchema } from '../validations/childValidation';
 import {
   AuthenticationError,
   NotFoundError,
@@ -15,7 +16,10 @@ function requireUserId(req: Request): string {
 }
 
 export class ChildController {
-  constructor(private readonly service: ChildService) {}
+  constructor(
+    private readonly service: ChildService,
+    private readonly profileService: ChildProfileService,
+  ) {}
 
   list = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
@@ -82,5 +86,34 @@ export class ChildController {
       );
     }
     res.status(204).send();
+  });
+
+  getProfile = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const userId = requireUserId(req);
+    const { childId } = req.params;
+    const { periodDays } = profileQuerySchema.parse(req.query);
+    logger.info(`[child.getProfile] userId=${userId} childId=${childId} periodDays=${periodDays}`);
+    const profile = await this.profileService.getProfile(childId, userId, periodDays);
+    res.status(200).json({
+      success: true,
+      data: profile,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  getTimeline = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const userId = requireUserId(req);
+    const { childId } = req.params;
+    const { page, limit, from, to } = timelineQuerySchema.parse(req.query);
+    logger.info(`[child.getTimeline] userId=${userId} childId=${childId} page=${page} limit=${limit}`);
+    const result = await this.profileService.getTimeline(childId, userId, page, limit, from, to);
+    res.status(200).json({
+      success: true,
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      timestamp: new Date().toISOString(),
+    });
   });
 }

@@ -17,6 +17,21 @@ import { ExaminerService } from './ExaminerService';
 import { CaregiverService } from './CaregiverService';
 import { SectionCommentService } from './SectionCommentService';
 import logger from '../../infrastructure/utils/logger';
+import { getInstrument } from '../../instruments/index';
+
+// Zero values for the 9 SP-2 raw-score columns; used when persisting a new-
+// instrument assessment so the INSERT still satisfies the schema.
+const ZERO_RAW_SCORES = {
+  auditoryProcessing: 0,
+  visualProcessing: 0,
+  tactileProcessing: 0,
+  movementProcessing: 0,
+  bodyPositionProcessing: 0,
+  oralSensitivityProcessing: 0,
+  behavioralResponses: 0,
+  socialEmotionalResponses: 0,
+  attentionResponses: 0,
+} as const;
 
 export class AssessmentService {
   constructor(
@@ -109,6 +124,7 @@ export class AssessmentService {
       relationship: string;
       contact?: string;
     };
+    parentAssessmentId?: string;
     responses: Array<{ itemId: number, response: string }>;
     rawScores: {
       auditoryProcessing: number;
@@ -160,27 +176,86 @@ export class AssessmentService {
       // Create assessment
       const assessmentId = uuidv7();
       logger.debug(`[AssessmentService] Generated assessment id: ${assessmentId}`);
+
+      const instrumentId = assessmentData.instrumentId ?? DEFAULT_INSTRUMENT_ID;
+
+      // Validate parent assessment linkage before persisting
+      if (assessmentData.parentAssessmentId) {
+        const parent = await this.assessmentRepository.findById(assessmentData.parentAssessmentId, userId);
+        if (!parent) {
+          throw new NotFoundError('Avaliação pai', assessmentData.parentAssessmentId);
+        }
+        if (parent.getInstrumentId() !== 'mchat-r') {
+          throw new ValidationError('parentAssessmentId deve referenciar uma avaliação M-CHAT-R');
+        }
+        const parentScores = parent.getScoresJson() as { risk?: string } | null;
+        if (!parentScores || parentScores.risk !== 'medio') {
+          throw new ValidationError('Entrevista de acompanhamento só é aplicável para risco médio');
+        }
+        if (instrumentId !== 'mchat-rf-followup') {
+          throw new ValidationError('Instrumento deve ser mchat-rf-followup quando parentAssessmentId é fornecido');
+        }
+      }
+
+      const instrument = getInstrument(instrumentId);
+      const isLegacy = !instrument || instrument.legacy === true;
+
+      let assessment: Assessment;
+      if (isLegacy) {
+        // Legacy SP-2 path — use the pre-computed raw scores passed in from the validation layer.
+        assessment = new Assessment(
+          childId,
+          examinerId,
+          caregiverId,
+          new Date(),
+          assessmentData.rawScores.auditoryProcessing,
+          assessmentData.rawScores.visualProcessing,
+          assessmentData.rawScores.tactileProcessing,
+          assessmentData.rawScores.movementProcessing,
+          assessmentData.rawScores.bodyPositionProcessing,
+          assessmentData.rawScores.oralSensitivityProcessing,
+          assessmentData.rawScores.behavioralResponses,
+          assessmentData.rawScores.socialEmotionalResponses,
+          assessmentData.rawScores.attentionResponses,
+          assessmentId,
+          undefined,
+          undefined,
+          instrumentId
+        );
+      } else {
+        // New instrument path — compute scores via the instrument's strategy.
+        const responsesMap = new Map<number, string>(
+          assessmentData.responses.map(r => [r.itemId, r.response])
+        );
+        const scoringResult = instrument.scoringStrategy(responsesMap, instrument);
+        logger.debug(`[AssessmentService] New instrument scoring complete for ${instrumentId}`);
+
+        assessment = new Assessment(
+          childId,
+          examinerId,
+          caregiverId,
+          new Date(),
+          ZERO_RAW_SCORES.auditoryProcessing,
+          ZERO_RAW_SCORES.visualProcessing,
+          ZERO_RAW_SCORES.tactileProcessing,
+          ZERO_RAW_SCORES.movementProcessing,
+          ZERO_RAW_SCORES.bodyPositionProcessing,
+          ZERO_RAW_SCORES.oralSensitivityProcessing,
+          ZERO_RAW_SCORES.behavioralResponses,
+          ZERO_RAW_SCORES.socialEmotionalResponses,
+          ZERO_RAW_SCORES.attentionResponses,
+          assessmentId,
+          undefined,
+          undefined,
+          instrumentId
+        );
+        assessment.setScoresJson(scoringResult.scores_json);
+      }
       
-      const assessment = new Assessment(
-        childId,
-        examinerId,
-        caregiverId,
-        new Date(),
-        assessmentData.rawScores.auditoryProcessing,
-        assessmentData.rawScores.visualProcessing,
-        assessmentData.rawScores.tactileProcessing,
-        assessmentData.rawScores.movementProcessing,
-        assessmentData.rawScores.bodyPositionProcessing,
-        assessmentData.rawScores.oralSensitivityProcessing,
-        assessmentData.rawScores.behavioralResponses,
-        assessmentData.rawScores.socialEmotionalResponses,
-        assessmentData.rawScores.attentionResponses,
-        assessmentId,
-        undefined,
-        undefined,
-        assessmentData.instrumentId ?? DEFAULT_INSTRUMENT_ID
-      );
-      
+      if (assessmentData.parentAssessmentId) {
+        assessment.setParentAssessmentId(assessmentData.parentAssessmentId);
+      }
+
       logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
       const savedAssessment = await this.assessmentRepository.save(assessment, userId);
       logger.info(`[AssessmentService] Assessment ${savedAssessment.getId()} saved successfully for user ${userId}`);
@@ -317,38 +392,56 @@ export class AssessmentService {
         assessmentData.instrumentId ?? existingAssessment.getInstrumentId()
       );
       
-      // If raw scores are provided, update them
-      if (assessmentData.rawScores) {
-        logger.debug(`[AssessmentService] Updating raw scores for assessment ${id}`);
-        if (assessmentData.rawScores.auditoryProcessing !== undefined) {
-          updatedAssessment.setAuditoryProcessingRawScore(assessmentData.rawScores.auditoryProcessing);
+      const updatedInstrumentId = assessmentData.instrumentId ?? existingAssessment.getInstrumentId();
+      const updatedInstrument = getInstrument(updatedInstrumentId);
+      const updatedIsLegacy = !updatedInstrument || updatedInstrument.legacy === true;
+
+      if (updatedIsLegacy) {
+        // Legacy SP-2 path — apply any explicitly-provided raw score fields.
+        if (assessmentData.rawScores) {
+          logger.debug(`[AssessmentService] Updating raw scores for assessment ${id}`);
+          if (assessmentData.rawScores.auditoryProcessing !== undefined) {
+            updatedAssessment.setAuditoryProcessingRawScore(assessmentData.rawScores.auditoryProcessing);
+          }
+          if (assessmentData.rawScores.visualProcessing !== undefined) {
+            updatedAssessment.setVisualProcessingRawScore(assessmentData.rawScores.visualProcessing);
+          }
+          if (assessmentData.rawScores.tactileProcessing !== undefined) {
+            updatedAssessment.setTactileProcessingRawScore(assessmentData.rawScores.tactileProcessing);
+          }
+          if (assessmentData.rawScores.movementProcessing !== undefined) {
+            updatedAssessment.setMovementProcessingRawScore(assessmentData.rawScores.movementProcessing);
+          }
+          if (assessmentData.rawScores.bodyPositionProcessing !== undefined) {
+            updatedAssessment.setBodyPositionProcessingRawScore(assessmentData.rawScores.bodyPositionProcessing);
+          }
+          if (assessmentData.rawScores.oralSensitivityProcessing !== undefined) {
+            updatedAssessment.setOralSensitivityProcessingRawScore(assessmentData.rawScores.oralSensitivityProcessing);
+          }
+          if (assessmentData.rawScores.behavioralResponses !== undefined) {
+            updatedAssessment.setBehavioralResponsesRawScore(assessmentData.rawScores.behavioralResponses);
+          }
+          if (assessmentData.rawScores.socialEmotionalResponses !== undefined) {
+            updatedAssessment.setSocialEmotionalResponsesRawScore(assessmentData.rawScores.socialEmotionalResponses);
+          }
+          if (assessmentData.rawScores.attentionResponses !== undefined) {
+            updatedAssessment.setAttentionResponsesRawScore(assessmentData.rawScores.attentionResponses);
+          }
         }
-        if (assessmentData.rawScores.visualProcessing !== undefined) {
-          updatedAssessment.setVisualProcessingRawScore(assessmentData.rawScores.visualProcessing);
-        }
-        if (assessmentData.rawScores.tactileProcessing !== undefined) {
-          updatedAssessment.setTactileProcessingRawScore(assessmentData.rawScores.tactileProcessing);
-        }
-        if (assessmentData.rawScores.movementProcessing !== undefined) {
-          updatedAssessment.setMovementProcessingRawScore(assessmentData.rawScores.movementProcessing);
-        }
-        if (assessmentData.rawScores.bodyPositionProcessing !== undefined) {
-          updatedAssessment.setBodyPositionProcessingRawScore(assessmentData.rawScores.bodyPositionProcessing);
-        }
-        if (assessmentData.rawScores.oralSensitivityProcessing !== undefined) {
-          updatedAssessment.setOralSensitivityProcessingRawScore(assessmentData.rawScores.oralSensitivityProcessing);
-        }
-        if (assessmentData.rawScores.behavioralResponses !== undefined) {
-          updatedAssessment.setBehavioralResponsesRawScore(assessmentData.rawScores.behavioralResponses);
-        }
-        if (assessmentData.rawScores.socialEmotionalResponses !== undefined) {
-          updatedAssessment.setSocialEmotionalResponsesRawScore(assessmentData.rawScores.socialEmotionalResponses);
-        }
-        if (assessmentData.rawScores.attentionResponses !== undefined) {
-          updatedAssessment.setAttentionResponsesRawScore(assessmentData.rawScores.attentionResponses);
-        }
+      } else {
+        // New instrument path — re-compute scores from the incoming or existing responses.
+        const responsesToScore = assessmentData.responses && assessmentData.responses.length > 0
+          ? assessmentData.responses
+          : await this.responseRepository.findByAssessmentId(id, userId).then(rs => rs.map(r => ({ itemId: r.getItemId(), response: r.getResponse() })));
+
+        const responsesMap = new Map<number, string>(
+          responsesToScore.map(r => [r.itemId, r.response])
+        );
+        const scoringResult = updatedInstrument.scoringStrategy(responsesMap, updatedInstrument);
+        logger.debug(`[AssessmentService] New instrument re-scoring complete for ${updatedInstrumentId}`);
+        updatedAssessment.setScoresJson(scoringResult.scores_json);
       }
-      
+
       // If responses are provided, atomically replace them via the repository
       if (assessmentData.responses && assessmentData.responses.length > 0) {
         logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
@@ -415,25 +508,44 @@ export class AssessmentService {
       }
       
       logger.debug(`[AssessmentService] Creating report for assessment ${id}`);
-      // Generate a report based on the assessment and responses
-      // This is a placeholder for the actual report generation logic
-      const report = {
-        assessmentId: assessment.getId(),
-        childId: assessment.getChildId(),
-        date: assessment.getAssessmentDate(),
-        scores: {
-          auditoryProcessing: assessment.getAuditoryProcessingRawScore(),
-          visualProcessing: assessment.getVisualProcessingRawScore(),
-          tactileProcessing: assessment.getTactileProcessingRawScore(),
-          movementProcessing: assessment.getMovementProcessingRawScore(),
-          bodyPositionProcessing: assessment.getBodyPositionProcessingRawScore(),
-          oralSensitivityProcessing: assessment.getOralSensitivityProcessingRawScore(),
-          behavioralResponses: assessment.getBehavioralResponsesRawScore(),
-          socialEmotionalResponses: assessment.getSocialEmotionalResponsesRawScore(),
-          attentionResponses: assessment.getAttentionResponsesRawScore()
-        },
-        responseCount: responses.length
-      };
+
+      const reportInstrumentId = assessment.getInstrumentId();
+      const reportInstrument = getInstrument(reportInstrumentId);
+      const reportIsLegacy = !reportInstrument || reportInstrument.legacy === true;
+
+      let report: Record<string, unknown>;
+      if (reportIsLegacy) {
+        // Legacy SP-2 report shape — preserve existing field names for backward compatibility.
+        report = {
+          assessmentId: assessment.getId(),
+          instrumentId: reportInstrumentId,
+          childId: assessment.getChildId(),
+          date: assessment.getAssessmentDate(),
+          scores: {
+            auditoryProcessing: assessment.getAuditoryProcessingRawScore(),
+            visualProcessing: assessment.getVisualProcessingRawScore(),
+            tactileProcessing: assessment.getTactileProcessingRawScore(),
+            movementProcessing: assessment.getMovementProcessingRawScore(),
+            bodyPositionProcessing: assessment.getBodyPositionProcessingRawScore(),
+            oralSensitivityProcessing: assessment.getOralSensitivityProcessingRawScore(),
+            behavioralResponses: assessment.getBehavioralResponsesRawScore(),
+            socialEmotionalResponses: assessment.getSocialEmotionalResponsesRawScore(),
+            attentionResponses: assessment.getAttentionResponsesRawScore()
+          },
+          responseCount: responses.length
+        };
+      } else {
+        // New instrument report shape — scores come from scores_json.
+        report = {
+          assessmentId: assessment.getId(),
+          instrumentId: reportInstrumentId,
+          childId: assessment.getChildId(),
+          date: assessment.getAssessmentDate(),
+          scores: assessment.getScoresJson(),
+          responses: responses.map(r => ({ itemId: r.getItemId(), response: r.getResponse() })),
+          responseCount: responses.length
+        };
+      }
       
       logger.info(`[AssessmentService] Report generated successfully for assessment ${id}`);
       return report;

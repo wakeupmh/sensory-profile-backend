@@ -132,8 +132,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
         body_position_processing_raw_score, oral_sensitivity_processing_raw_score,
         behavioral_responses_raw_score,
         social_emotional_responses_raw_score, attention_responses_raw_score,
-        user_id, instrument_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+        user_id, instrument_id, scores_json, parent_assessment_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
       [
         id,
         assessment.getChildId(),
@@ -150,7 +150,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         userId,
-        assessment.getInstrumentId()
+        assessment.getInstrumentId(),
+        assessment.getScoresJson() ?? null,
+        assessment.getParentAssessmentId() ?? null
       ]
     );
 
@@ -174,8 +176,10 @@ export class PgAssessmentRepository implements AssessmentRepository {
         social_emotional_responses_raw_score = $12,
         attention_responses_raw_score = $13,
         instrument_id = $14,
+        scores_json = $15,
+        parent_assessment_id = $16,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $15 AND user_id = $16 RETURNING *`,
+      WHERE id = $17 AND user_id = $18 RETURNING *`,
       [
         assessment.getChildId(),
         assessment.getExaminerId(),
@@ -191,6 +195,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         assessment.getInstrumentId(),
+        assessment.getScoresJson() ?? null,
+        assessment.getParentAssessmentId() ?? null,
         assessment.getId(),
         userId
       ]
@@ -258,7 +264,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
       row.id as string,
       row.created_at as Date,
       row.updated_at as Date,
-      (row.instrument_id as string | undefined) ?? DEFAULT_INSTRUMENT_ID
+      (row.instrument_id as string | undefined) ?? DEFAULT_INSTRUMENT_ID,
+      (row.scores_json as Record<string, unknown> | null) ?? null,
+      (row.parent_assessment_id as string | null) ?? null
     ) as AssessmentWithRelations;
 
     if (row.child_name) {

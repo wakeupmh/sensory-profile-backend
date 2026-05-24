@@ -9,6 +9,12 @@ import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import draftRoutes from './interfaces/http/routes/draftRoutes';
 import childRoutes from './interfaces/http/routes/childRoutes';
+import dailyLogRoutes from './interfaces/http/routes/dailyLogRoutes';
+import therapyRoutes from './interfaces/http/routes/therapyRoutes';
+import medicalRoutes from './interfaces/http/routes/medicalRoutes';
+import developmentRoutes from './interfaces/http/routes/developmentRoutes';
+import educationRoutes from './interfaces/http/routes/educationRoutes';
+import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -89,6 +95,12 @@ app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/children', childRoutes);
+app.use('/api/logs', dailyLogRoutes);
+app.use('/api/therapy', therapyRoutes);
+app.use('/api/medical', medicalRoutes);
+app.use('/api/development', developmentRoutes);
+app.use('/api/education', educationRoutes);
+app.use('/api/consolidated', consolidatedReportRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
