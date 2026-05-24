@@ -282,54 +282,42 @@ describe('ReportShareService', () => {
 // ---------------------------------------------------------------------------
 
 describe('AISummaryService', () => {
-  // 11. generateSummary throws when ANTHROPIC_API_KEY not set
-  test('generateSummary throws when ANTHROPIC_API_KEY is not configured', async () => {
+  // 11. generateSummary throws when AWS_REGION not set
+  test('generateSummary throws when AWS_REGION is not configured', async () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const aiService = new AISummaryService(consolidatedService);
 
-    const originalKey = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
+    const originalRegion = process.env.AWS_REGION;
+    const originalDefaultRegion = process.env.AWS_DEFAULT_REGION;
+    delete process.env.AWS_REGION;
+    delete process.env.AWS_DEFAULT_REGION;
 
     try {
-      await expect(aiService.generateSummary(USER_ID, CHILD_ID, 90)).rejects.toThrow('ANTHROPIC_API_KEY');
+      await expect(aiService.generateSummary(USER_ID, CHILD_ID, 90)).rejects.toThrow('AWS_REGION');
     } finally {
-      if (originalKey !== undefined) {
-        process.env.ANTHROPIC_API_KEY = originalKey;
-      }
+      if (originalRegion !== undefined) process.env.AWS_REGION = originalRegion;
+      if (originalDefaultRegion !== undefined) process.env.AWS_DEFAULT_REGION = originalDefaultRegion;
     }
   });
 
-  // 12. generateSummary calls Anthropic SDK and returns text
-  test('generateSummary calls Anthropic and returns text block', async () => {
+  // 12. generateSummary attempts Bedrock invoke when region is set
+  test('generateSummary attempts Bedrock invocation when AWS_REGION is set', async () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const aiService = new AISummaryService(consolidatedService);
 
-    process.env.ANTHROPIC_API_KEY = 'test-key';
+    const originalRegion = process.env.AWS_REGION;
+    process.env.AWS_REGION = 'us-east-1';
 
-    // Mock the Anthropic SDK
-    const mockCreate = jest.fn().mockResolvedValue({
-      content: [{ type: 'text', text: 'Resumo gerado com sucesso.' }],
-    });
-
-    jest.mock('@anthropic-ai/sdk', () => {
-      return jest.fn().mockImplementation(() => ({
-        messages: { create: mockCreate },
-      }));
-    });
-
-    // Since jest.mock doesn't work at runtime inside a test easily,
-    // we test the error path: with a real key but mocked at the module level.
-    // The test verifies the service throws if the API key is present but the
-    // Anthropic call fails (network error in test env).
     try {
       await aiService.generateSummary(USER_ID, CHILD_ID, 90);
     } catch (e) {
-      // Expected — no real API in test environment
+      // Expected — no real Bedrock endpoint in test env (auth/network error)
       expect(e).toBeDefined();
+    } finally {
+      if (originalRegion !== undefined) process.env.AWS_REGION = originalRegion;
+      else delete process.env.AWS_REGION;
     }
-
-    delete process.env.ANTHROPIC_API_KEY;
   });
 });

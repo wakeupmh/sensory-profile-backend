@@ -1,5 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { ConsolidatedReportService } from './ConsolidatedReportService';
+
+const DEFAULT_MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
+
+interface BedrockClaudeResponse {
+  content: Array<{ type: string; text?: string }>;
+}
 
 export class AISummaryService {
   constructor(private readonly consolidatedService: ConsolidatedReportService) {}
@@ -66,19 +72,35 @@ PLANOS EDUCACIONAIS: ${plansLine}
 
 Gere um resumo trimestral conciso (200-300 palavras) em português brasileiro para compartilhar com a equipe terapêutica. Destaque: progressos observados, áreas que precisam de atenção, consistência no acompanhamento terapêutico, e sugestões gerais. Tom: objetivo, clínico mas acessível.`;
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY não configurada');
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+    if (!region) throw new Error('AWS_REGION não configurada');
 
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const modelId = process.env.BEDROCK_MODEL_ID || DEFAULT_MODEL_ID;
+
+    const client = new BedrockRuntimeClient({ region });
+
+    const body = {
+      anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
+    };
+
+    const command = new InvokeModelCommand({
+      modelId,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify(body),
     });
 
-    const block = message.content[0];
-    if (block.type !== 'text') throw new Error('Resposta inválida da IA');
+    const response = await client.send(command);
+    if (!response.body) throw new Error('Resposta vazia do Bedrock');
+    const payload = JSON.parse(new TextDecoder().decode(response.body)) as BedrockClaudeResponse;
+
+    const block = payload.content?.[0];
+    if (!block || block.type !== 'text' || !block.text) {
+      throw new Error('Resposta inválida da IA');
+    }
     return block.text;
   }
 }
