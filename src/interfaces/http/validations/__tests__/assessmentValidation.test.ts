@@ -142,6 +142,53 @@ describe('ATEC — numeric string values accepted', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. ATEC subscale allowedValues enforcement
+// ---------------------------------------------------------------------------
+
+describe('ATEC — subscale allowedValues enforcement', () => {
+  test('Sociability item (2015) with value "3" is rejected (subscale allows only 0-2)', () => {
+    const result = parse({
+      instrumentId: 'atec',
+      child: VALID_CHILD,
+      responses: [{ itemId: 2015, response: '3' }],
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message).join(' ');
+      expect(messages).toMatch(/sociabilidade/i);
+      expect(messages).toMatch(/Invalid response value/i);
+    }
+  });
+
+  test('Sensory/Cognitive Awareness item (2035) with value "3" is rejected', () => {
+    const result = parse({
+      instrumentId: 'atec',
+      child: VALID_CHILD,
+      responses: [{ itemId: 2035, response: '3' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test('Sociability item with value "2" still passes', () => {
+    const result = parse({
+      instrumentId: 'atec',
+      child: VALID_CHILD,
+      responses: [{ itemId: 2015, response: '2' }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('Speech item (2001) with value "3" still passes (no allowedValues restriction)', () => {
+    const result = parse({
+      instrumentId: 'atec',
+      child: VALID_CHILD,
+      responses: [{ itemId: 2001, response: '3' }],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. ATEC rejects SP-2 string values
 // ---------------------------------------------------------------------------
 
@@ -210,6 +257,52 @@ describe('M-CHAT-R — sim/nao values accepted', () => {
       instrumentId: 'mchat-r',
       child: VALID_CHILD,
       responses: makeResponses(1, 'quase sempre', 3001),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5b. M-CHAT-R/F follow-up — strict passou/falhou
+// ---------------------------------------------------------------------------
+
+describe('M-CHAT-R/F (mchat-rf-followup) — strict passou/falhou', () => {
+  test('"passou" passes', () => {
+    const result = parse({
+      instrumentId: 'mchat-rf-followup',
+      child: VALID_CHILD,
+      responses: makeResponses(1, 'passou', 4001),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('"falhou" passes', () => {
+    const result = parse({
+      instrumentId: 'mchat-rf-followup',
+      child: VALID_CHILD,
+      responses: makeResponses(1, 'falhou', 4001),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('typo "passu" is rejected', () => {
+    const result = parse({
+      instrumentId: 'mchat-rf-followup',
+      child: VALID_CHILD,
+      responses: makeResponses(1, 'passu', 4001),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message).join(' ');
+      expect(messages).toMatch(/Invalid response value/i);
+    }
+  });
+
+  test('"sim" (M-CHAT-R value) is rejected on follow-up', () => {
+    const result = parse({
+      instrumentId: 'mchat-rf-followup',
+      child: VALID_CHILD,
+      responses: makeResponses(1, 'sim', 4001),
     });
     expect(result.success).toBe(false);
   });

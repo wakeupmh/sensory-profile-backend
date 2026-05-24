@@ -143,7 +143,6 @@ describe('mchatRFFollowupStrategy', () => {
       const map = new Map<number, string>([
         [4001, 'passou'],
         [4002, 'falhou'],
-        [4003, 'qualquercoisa'], // any non-'passou' is treated as 'falhou'
       ]);
       const result = mchatRFFollowupStrategy(map, instrument);
       const perItem = (result.scores_json as Record<string, unknown>).perItem as Array<{
@@ -154,7 +153,23 @@ describe('mchatRFFollowupStrategy', () => {
       const byProbeId = Object.fromEntries(perItem.map((p) => [p.probeItemId, p]));
       expect(byProbeId[4001].result).toBe('passou');
       expect(byProbeId[4002].result).toBe('falhou');
-      expect(byProbeId[4003].result).toBe('falhou'); // non-'passou' counts as falhou
+    });
+
+    it('throws on invalid response values (strict matching)', () => {
+      const map = new Map<number, string>([
+        [4001, 'passou'],
+        [4003, 'qualquercoisa'],
+      ]);
+      expect(() => mchatRFFollowupStrategy(map, instrument)).toThrow(
+        /Resposta inválida para M-CHAT-R\/F item 4003/,
+      );
+    });
+
+    it('throws on empty string response', () => {
+      const map = new Map<number, string>([[4001, '']]);
+      expect(() => mchatRFFollowupStrategy(map, instrument)).toThrow(
+        /Resposta inválida para M-CHAT-R\/F item 4001/,
+      );
     });
   });
 

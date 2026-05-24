@@ -5,8 +5,17 @@ export const mchatRFFollowupStrategy: ScoringStrategy = (responses, _instrument)
   const perItem: { probeItemId: number; screenItemId: number; result: 'passou' | 'falhou' }[] = [];
 
   for (const [itemId, response] of responses) {
-    const result = response === 'passou' ? 'passou' : 'falhou';
-    if (result === 'falhou') failCount++;
+    let result: 'passou' | 'falhou';
+    if (response === 'passou') {
+      result = 'passou';
+    } else if (response === 'falhou') {
+      result = 'falhou';
+      failCount++;
+    } else {
+      throw new Error(
+        `Resposta inválida para M-CHAT-R/F item ${itemId}: '${response}'`,
+      );
+    }
     // Reverse the offset: probe items are 4001-4020, screen items are 3001-3020
     const screenItemId = itemId - 4000 + 3000;
     perItem.push({ probeItemId: itemId, screenItemId, result });

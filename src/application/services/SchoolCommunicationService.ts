@@ -5,6 +5,7 @@ import {
   SchoolCommunicationFilters,
   SchoolCommunicationSummary,
 } from '../../domain/repositories/SchoolCommunicationRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateSchoolCommunicationPayload {
   childId: string;
@@ -39,7 +40,7 @@ export class SchoolCommunicationService {
 
   async getById(id: string, userId: string): Promise<SchoolCommunication> {
     const comm = await this.repo.findById(id, userId);
-    if (!comm) throw new Error(`SchoolCommunication ${id} not found`);
+    if (!comm) throw new NotFoundError('Comunicação escolar não encontrada', id);
     return comm;
   }
 
@@ -57,12 +58,12 @@ export class SchoolCommunicationService {
       ...payload,
       occurredAt: payload.occurredAt ? new Date(payload.occurredAt) : undefined,
     });
-    if (!updated) throw new Error(`SchoolCommunication ${id} not found`);
+    if (!updated) throw new NotFoundError('Comunicação escolar não encontrada', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`SchoolCommunication ${id} not found`);
+    if (!ok) throw new NotFoundError('Comunicação escolar não encontrada', id);
   }
 }

@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { Medication } from '../../domain/entities/Medication';
 import { MedicationRepository, MedicationCreateInput, MedicationUpdateInput } from '../../domain/repositories/MedicationRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateMedicationPayload {
   childId: string;
@@ -34,7 +35,7 @@ export class MedicationService {
 
   async getById(id: string, userId: string): Promise<Medication> {
     const medication = await this.repo.findById(id, userId);
-    if (!medication) throw new Error(`Medication ${id} not found`);
+    if (!medication) throw new NotFoundError('Medicamento não encontrado', id);
     return medication;
   }
 
@@ -49,12 +50,12 @@ export class MedicationService {
 
   async update(id: string, payload: UpdateMedicationPayload, userId: string): Promise<Medication> {
     const updated = await this.repo.update(id, userId, payload as MedicationUpdateInput);
-    if (!updated) throw new Error(`Medication ${id} not found`);
+    if (!updated) throw new NotFoundError('Medicamento não encontrado', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`Medication ${id} not found`);
+    if (!ok) throw new NotFoundError('Medicamento não encontrado', id);
   }
 }

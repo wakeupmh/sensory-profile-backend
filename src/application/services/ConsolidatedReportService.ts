@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface ConsolidatedSummary {
-  child: { id: string; name: string };
+  child: { id: string; name: string; birthDate: string | null; notes: string | null };
   generatedAt: string;
   period: { from: string; to: string };
   assessments: {
@@ -40,13 +40,13 @@ export class ConsolidatedReportService {
   async getSummary(userId: string, childId: string, periodDays: number = 90): Promise<ConsolidatedSummary> {
     // Verify child ownership
     const childResult = await this.pool.query(
-      `SELECT id, name FROM children WHERE id = $1 AND user_id = $2`,
+      `SELECT id, name, birth_date, notes FROM children WHERE id = $1 AND user_id = $2`,
       [childId, userId],
     );
     if (childResult.rows.length === 0) {
       throw new NotFoundError('Child not found');
     }
-    const child = childResult.rows[0] as { id: string; name: string };
+    const child = childResult.rows[0] as { id: string; name: string; birth_date: Date | string | null; notes: string | null };
 
     const now = new Date();
     const from = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
@@ -67,17 +67,17 @@ export class ConsolidatedReportService {
     ] = await Promise.all([
       // assessments
       this.pool.query(`
-        SELECT id, instrument_id, completed_at, scores_json,
+        SELECT id, instrument_id, assessment_date AS completed_at, scores_json,
                CASE WHEN scores_json IS NULL THEN
                  (SELECT json_object_agg(section_name, section_score)
                   FROM (
                     SELECT unnest(ARRAY['auditivo','visual','tato','movimento','posicao_corporal','oral','conduta','socio_emocional','atencao'])::text AS section_name,
-                           unnest(ARRAY[score_auditivo,score_visual,score_tato,score_movimento,score_posicao_corporal,score_oral,score_conduta,score_socio_emocional,score_atencao]) AS section_score
+                           unnest(ARRAY[auditory_processing_raw_score,visual_processing_raw_score,tactile_processing_raw_score,movement_processing_raw_score,body_position_processing_raw_score,oral_sensitivity_processing_raw_score,behavioral_responses_raw_score,social_emotional_responses_raw_score,attention_responses_raw_score]) AS section_score
                   ) s
                ) END AS legacy_scores
         FROM sensory_assessments
-        WHERE user_id = $1 AND child_id = $2 AND status = 'completed'
-        ORDER BY completed_at DESC NULLS LAST
+        WHERE user_id = $1 AND child_id = $2
+        ORDER BY assessment_date DESC NULLS LAST
         LIMIT 5
       `, [userId, childId]),
 
@@ -193,8 +193,12 @@ export class ConsolidatedReportService {
       else if (status === 'regressed') milestoneStats.regressed = cnt;
     }
 
+    const birthDateOut = child.birth_date == null
+      ? null
+      : (child.birth_date instanceof Date ? child.birth_date.toISOString().slice(0, 10) : String(child.birth_date));
+
     return {
-      child: { id: child.id, name: child.name },
+      child: { id: child.id, name: child.name, birthDate: birthDateOut, notes: child.notes },
       generatedAt: now.toISOString(),
       period: { from: from.toISOString(), to: to.toISOString() },
       assessments: {

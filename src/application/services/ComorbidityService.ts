@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { Comorbidity } from '../../domain/entities/Comorbidity';
 import { ComorbidityRepository, ComorbidityCreateInput, ComorbidityUpdateInput } from '../../domain/repositories/ComorbidityRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateComorbidityPayload {
   childId: string;
@@ -28,7 +29,7 @@ export class ComorbidityService {
 
   async getById(id: string, userId: string): Promise<Comorbidity> {
     const comorbidity = await this.repo.findById(id, userId);
-    if (!comorbidity) throw new Error(`Comorbidity ${id} not found`);
+    if (!comorbidity) throw new NotFoundError('Comorbidade não encontrada', id);
     return comorbidity;
   }
 
@@ -43,12 +44,12 @@ export class ComorbidityService {
 
   async update(id: string, payload: UpdateComorbidityPayload, userId: string): Promise<Comorbidity> {
     const updated = await this.repo.update(id, userId, payload as ComorbidityUpdateInput);
-    if (!updated) throw new Error(`Comorbidity ${id} not found`);
+    if (!updated) throw new NotFoundError('Comorbidade não encontrada', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`Comorbidity ${id} not found`);
+    if (!ok) throw new NotFoundError('Comorbidade não encontrada', id);
   }
 }

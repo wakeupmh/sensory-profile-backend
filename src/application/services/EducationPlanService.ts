@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { EducationPlan, EducationPlanType } from '../../domain/entities/EducationPlan';
 import { EducationPlanRepository, EducationPlanFilters } from '../../domain/repositories/EducationPlanRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateEducationPlanPayload {
   childId: string;
@@ -36,7 +37,7 @@ export class EducationPlanService {
 
   async getById(id: string, userId: string): Promise<EducationPlan> {
     const plan = await this.repo.findById(id, userId);
-    if (!plan) throw new Error(`EducationPlan ${id} not found`);
+    if (!plan) throw new NotFoundError('Plano educacional não encontrado', id);
     return plan;
   }
 
@@ -50,12 +51,12 @@ export class EducationPlanService {
 
   async update(id: string, payload: UpdateEducationPlanPayload, userId: string): Promise<EducationPlan> {
     const updated = await this.repo.update(id, userId, payload);
-    if (!updated) throw new Error(`EducationPlan ${id} not found`);
+    if (!updated) throw new NotFoundError('Plano educacional não encontrado', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`EducationPlan ${id} not found`);
+    if (!ok) throw new NotFoundError('Plano educacional não encontrado', id);
   }
 }

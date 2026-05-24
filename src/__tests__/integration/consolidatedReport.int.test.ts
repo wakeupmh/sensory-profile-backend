@@ -29,7 +29,7 @@ import { ReportShareService } from 'application/services/ReportShareService';
 import { AISummaryService } from 'application/services/AISummaryService';
 import { ReportShare } from 'domain/entities/ReportShare';
 import type { ReportShareRepository } from 'domain/repositories/ReportShareRepository';
-import { NotFoundError, AuthorizationError } from 'infrastructure/utils/errors/CustomErrors';
+import { NotFoundError, GoneError } from 'infrastructure/utils/errors/CustomErrors';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,7 +61,7 @@ function makeQueryResult(rows: Record<string, unknown>[]) {
 
 function makeSummary(childName: string = 'Ana'): ConsolidatedSummary {
   return {
-    child: { id: CHILD_ID, name: childName },
+    child: { id: CHILD_ID, name: childName, birthDate: null, notes: null },
     generatedAt: new Date().toISOString(),
     period: { from: new Date().toISOString(), to: new Date().toISOString() },
     assessments: { recent: [], count: 0 },
@@ -196,7 +196,7 @@ describe('ReportShareService', () => {
     const pool = makePool([]); // child not found
     const consolidatedService = new ConsolidatedReportService(pool);
     const repo = makeShareRepo();
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     await expect(service.createShare(USER_ID, CHILD_ID, 30)).rejects.toThrow(NotFoundError);
   });
@@ -206,7 +206,7 @@ describe('ReportShareService', () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const repo = makeShareRepo();
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     const share = await service.createShare(USER_ID, CHILD_ID, 30);
     expect(share).toBeInstanceOf(ReportShare);
@@ -224,7 +224,7 @@ describe('ReportShareService', () => {
     const repo = makeShareRepo({
       findByUserAndChild: jest.fn().mockResolvedValue([share]),
     });
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     const result = await service.listShares(USER_ID, CHILD_ID);
     expect(result).toHaveLength(1);
@@ -237,7 +237,7 @@ describe('ReportShareService', () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const repo = makeShareRepo();
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     await service.deleteShare(SHARE_ID, USER_ID);
     expect(repo.deleteById).toHaveBeenCalledWith(SHARE_ID, USER_ID);
@@ -248,20 +248,20 @@ describe('ReportShareService', () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const repo = makeShareRepo({ findByToken: jest.fn().mockResolvedValue(null) });
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     await expect(service.getSharedSummary(TOKEN)).rejects.toThrow(NotFoundError);
   });
 
-  // 9. getSharedSummary throws AuthorizationError when share is expired
-  test('getSharedSummary throws AuthorizationError when share is expired', async () => {
+  // 9. getSharedSummary throws GoneError when share is expired
+  test('getSharedSummary throws GoneError when share is expired', async () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
     const expiredShare = makeShare({ expiresAt: new Date(Date.now() - 1000) }); // 1 second ago
     const repo = makeShareRepo({ findByToken: jest.fn().mockResolvedValue(expiredShare) });
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
-    await expect(service.getSharedSummary(TOKEN)).rejects.toThrow(AuthorizationError);
+    await expect(service.getSharedSummary(TOKEN)).rejects.toThrow(GoneError);
   });
 
   // 10. getSharedSummary returns summary for valid non-expired share
@@ -270,7 +270,7 @@ describe('ReportShareService', () => {
     const consolidatedService = new ConsolidatedReportService(pool);
     const validShare = makeShare();
     const repo = makeShareRepo({ findByToken: jest.fn().mockResolvedValue(validShare) });
-    const service = new ReportShareService(repo, consolidatedService);
+    const service = new ReportShareService(repo, consolidatedService, pool);
 
     const result = await service.getSharedSummary(TOKEN);
     expect(result.child.id).toBe(CHILD_ID);

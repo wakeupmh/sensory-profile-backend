@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { MedicalAppointment } from '../../domain/entities/MedicalAppointment';
 import { MedicalAppointmentRepository, MedicalAppointmentCreateInput, MedicalAppointmentUpdateInput } from '../../domain/repositories/MedicalAppointmentRepository';
 import { MedicalAppointmentSummary } from '../../domain/entities/MedicalAppointment';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateAppointmentPayload {
   childId: string;
@@ -41,7 +42,7 @@ export class MedicalAppointmentService {
 
   async getById(id: string, userId: string): Promise<MedicalAppointment> {
     const appointment = await this.repo.findById(id, userId);
-    if (!appointment) throw new Error(`MedicalAppointment ${id} not found`);
+    if (!appointment) throw new NotFoundError('Consulta médica não encontrada', id);
     return appointment;
   }
 
@@ -56,12 +57,12 @@ export class MedicalAppointmentService {
 
   async update(id: string, payload: UpdateAppointmentPayload, userId: string): Promise<MedicalAppointment> {
     const updated = await this.repo.update(id, userId, payload as MedicalAppointmentUpdateInput);
-    if (!updated) throw new Error(`MedicalAppointment ${id} not found`);
+    if (!updated) throw new NotFoundError('Consulta médica não encontrada', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`MedicalAppointment ${id} not found`);
+    if (!ok) throw new NotFoundError('Consulta médica não encontrada', id);
   }
 }

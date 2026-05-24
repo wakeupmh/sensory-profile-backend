@@ -6,6 +6,7 @@ import {
   CommunicationLogUpdateInput,
   CommunicationLogFilters,
 } from '../../domain/repositories/CommunicationLogRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateCommunicationLogPayload {
   childId: string;
@@ -36,7 +37,7 @@ export class CommunicationLogService {
 
   async getById(id: string, userId: string): Promise<CommunicationLog> {
     const log = await this.repo.findById(id, userId);
-    if (!log) throw new Error(`CommunicationLog ${id} not found`);
+    if (!log) throw new NotFoundError('Registro de comunicação não encontrado', id);
     return log;
   }
 
@@ -51,12 +52,12 @@ export class CommunicationLogService {
 
   async update(id: string, payload: UpdateCommunicationLogPayload, userId: string): Promise<CommunicationLog> {
     const updated = await this.repo.update(id, userId, payload as CommunicationLogUpdateInput);
-    if (!updated) throw new Error(`CommunicationLog ${id} not found`);
+    if (!updated) throw new NotFoundError('Registro de comunicação não encontrado', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`CommunicationLog ${id} not found`);
+    if (!ok) throw new NotFoundError('Registro de comunicação não encontrado', id);
   }
 }

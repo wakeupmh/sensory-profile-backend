@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { DailyLog, LogData, LogType } from '../../domain/entities/DailyLog';
 import { DailyLogRepository, DailyLogFilters } from '../../domain/repositories/DailyLogRepository';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateLogPayload {
   childId: string;
@@ -26,7 +27,7 @@ export class DailyLogService {
 
   async getById(id: string, userId: string): Promise<DailyLog> {
     const log = await this.repo.findById(id, userId);
-    if (!log) throw new Error(`Daily log ${id} not found`);
+    if (!log) throw new NotFoundError('Registro diário não encontrado', id);
     return log;
   }
 
@@ -36,12 +37,12 @@ export class DailyLogService {
 
   async update(id: string, payload: UpdateLogPayload, userId: string): Promise<DailyLog> {
     const updated = await this.repo.update(id, userId, payload);
-    if (!updated) throw new Error(`Daily log ${id} not found`);
+    if (!updated) throw new NotFoundError('Registro diário não encontrado', id);
     return updated;
   }
 
   async remove(id: string, userId: string): Promise<void> {
     const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new Error(`Daily log ${id} not found`);
+    if (!ok) throw new NotFoundError('Registro diário não encontrado', id);
   }
 }

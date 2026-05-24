@@ -128,14 +128,18 @@ function buildResponsesRefine(instrumentId: string) {
   ) => {
     const instrument = getInstrument(instrumentId);
     if (instrument && !instrument.legacy) {
-      // Non-legacy instrument registered in the registry — validate against its scale.
-      const validValues = new Set(instrument.scale.options.map((o) => o.value));
+      // Non-legacy instrument registered in the registry — validate against its scale,
+      // narrowing to the section's allowedValues when the item belongs to a section
+      // that restricts the response set (e.g. ATEC Sociability accepts 0-2, not 0-3).
+      const scaleValues = instrument.scale.options.map((o) => o.value);
       responses.forEach((r, idx) => {
-        if (!validValues.has(r.response)) {
+        const section = instrument.sections.find((s) => s.itemIds.includes(r.itemId));
+        const validValues = section?.allowedValues ?? scaleValues;
+        if (!validValues.includes(r.response)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: [idx, 'response'],
-            message: `Invalid response value "${r.response}" for instrument "${instrumentId}". Valid values: ${[...validValues].join(', ')}`,
+            message: `Invalid response value "${r.response}" for instrument "${instrumentId}"${section ? ` section "${section.key}"` : ''}. Valid values: ${validValues.join(', ')}`,
           });
         }
       });
