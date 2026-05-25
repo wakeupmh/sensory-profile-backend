@@ -10,6 +10,17 @@
  * - Strings: parsed via the Date constructor; invalid strings → null.
  * - null / undefined → null.
  */
+export function calculateAgeUTC(birthDateStr: string): number {
+  const [y, m, d] = birthDateStr.split('-').map(Number);
+  const today = new Date();
+  let age = today.getUTCFullYear() - y;
+  const monthDiff = (today.getUTCMonth() + 1) - m;
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < d)) {
+    age--;
+  }
+  return age;
+}
+
 export function formatDateString(date: Date | string | null | undefined): string | null {
   if (date == null) return null;
   if (date instanceof Date) {

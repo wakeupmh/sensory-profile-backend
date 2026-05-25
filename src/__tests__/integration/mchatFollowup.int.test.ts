@@ -39,6 +39,7 @@ function makeParentAssessment(
     getInstrumentId: jest.fn(() => instrumentId),
     getScoresJson: jest.fn(() => scoresJson),
     getUserId: jest.fn(() => 'user-001'),
+    getChildId: jest.fn(() => null),
   };
 }
 

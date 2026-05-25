@@ -195,6 +195,9 @@ export class AssessmentService {
         if (instrumentId !== 'mchat-rf-followup') {
           throw new ValidationError('Instrumento deve ser mchat-rf-followup quando parentAssessmentId é fornecido');
         }
+        if (parent.getChildId() && parent.getChildId() !== childId) {
+          throw new ValidationError('Avaliação de acompanhamento deve referenciar a mesma criança da avaliação pai');
+        }
       }
 
       const instrument = getInstrument(instrumentId);
@@ -397,35 +400,26 @@ export class AssessmentService {
       const updatedIsLegacy = !updatedInstrument || updatedInstrument.legacy === true;
 
       if (updatedIsLegacy) {
-        // Legacy SP-2 path — apply any explicitly-provided raw score fields.
-        if (assessmentData.rawScores) {
-          logger.debug(`[AssessmentService] Updating raw scores for assessment ${id}`);
-          if (assessmentData.rawScores.auditoryProcessing !== undefined) {
-            updatedAssessment.setAuditoryProcessingRawScore(assessmentData.rawScores.auditoryProcessing);
-          }
-          if (assessmentData.rawScores.visualProcessing !== undefined) {
-            updatedAssessment.setVisualProcessingRawScore(assessmentData.rawScores.visualProcessing);
-          }
-          if (assessmentData.rawScores.tactileProcessing !== undefined) {
-            updatedAssessment.setTactileProcessingRawScore(assessmentData.rawScores.tactileProcessing);
-          }
-          if (assessmentData.rawScores.movementProcessing !== undefined) {
-            updatedAssessment.setMovementProcessingRawScore(assessmentData.rawScores.movementProcessing);
-          }
-          if (assessmentData.rawScores.bodyPositionProcessing !== undefined) {
-            updatedAssessment.setBodyPositionProcessingRawScore(assessmentData.rawScores.bodyPositionProcessing);
-          }
-          if (assessmentData.rawScores.oralSensitivityProcessing !== undefined) {
-            updatedAssessment.setOralSensitivityProcessingRawScore(assessmentData.rawScores.oralSensitivityProcessing);
-          }
-          if (assessmentData.rawScores.behavioralResponses !== undefined) {
-            updatedAssessment.setBehavioralResponsesRawScore(assessmentData.rawScores.behavioralResponses);
-          }
-          if (assessmentData.rawScores.socialEmotionalResponses !== undefined) {
-            updatedAssessment.setSocialEmotionalResponsesRawScore(assessmentData.rawScores.socialEmotionalResponses);
-          }
-          if (assessmentData.rawScores.attentionResponses !== undefined) {
-            updatedAssessment.setAttentionResponsesRawScore(assessmentData.rawScores.attentionResponses);
+        // Legacy SP-2 path — always recompute scores server-side from responses (ignore client rawScores)
+        if (assessmentData.responses && assessmentData.responses.length > 0) {
+          const sp2 = getInstrument(updatedInstrumentId);
+          if (sp2?.scoringStrategy) {
+            const responsesMap = new Map<number, string>(
+              assessmentData.responses.map(r => [r.itemId, r.response])
+            );
+            const result = sp2.scoringStrategy(responsesMap, sp2);
+            if (result.perSection) {
+              const ps = result.perSection;
+              updatedAssessment.setAuditoryProcessingRawScore(ps['auditivo'] ?? 0);
+              updatedAssessment.setVisualProcessingRawScore(ps['visual'] ?? 0);
+              updatedAssessment.setTactileProcessingRawScore(ps['tato'] ?? 0);
+              updatedAssessment.setMovementProcessingRawScore(ps['movimento'] ?? 0);
+              updatedAssessment.setBodyPositionProcessingRawScore(ps['posicao_corporal'] ?? 0);
+              updatedAssessment.setOralSensitivityProcessingRawScore(ps['oral'] ?? 0);
+              updatedAssessment.setBehavioralResponsesRawScore(ps['conduta'] ?? 0);
+              updatedAssessment.setSocialEmotionalResponsesRawScore(ps['socio_emocional'] ?? 0);
+              updatedAssessment.setAttentionResponsesRawScore(ps['atencao'] ?? 0);
+            }
           }
         }
       } else {
@@ -481,6 +475,15 @@ export class AssessmentService {
         return false;
       }
       
+      // Check for linked follow-up assessments (cascade would silently delete them)
+      const linkedResult = await pool.query(
+        'SELECT id FROM sensory_assessments WHERE parent_assessment_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      if (linkedResult.rows.length > 0) {
+        throw new ValidationError('Esta avaliação possui entrevista(s) de acompanhamento vinculada(s). Exclua-as primeiro.');
+      }
+
       // Delete responses first (due to foreign key constraints)
       logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);
       await this.responseRepository.deleteByAssessmentId(id, userId);

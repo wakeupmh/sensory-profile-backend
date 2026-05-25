@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { DEFAULT_INSTRUMENT_ID } from '../../../domain/entities/Assessment';
 import { getInstrument } from '../../../instruments';
+import { calculateAgeUTC } from '../../../infrastructure/utils/date';
 
 // Instruments that use the legacy Criança 3-14 validation + scoring stack.
 // Other instrument IDs are accepted but skip the 3-14-specific checks and
@@ -54,9 +55,7 @@ const childSchema = z.object({
       return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
     }, 'Data inválida')
     .refine((date) => {
-      const birthDate = new Date(date);
-      const today = new Date();
-      const age = today.getFullYear() - birthDate.getFullYear();
+      const age = calculateAgeUTC(date);
       return age >= 3 && age <= 14;
     }, 'Child must be between 3 and 14 years old'),
   
@@ -374,14 +373,9 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
 // Other instruments (e.g. Criança Pequena 7-36 meses) accept any non-future
 // birth date and defer age-appropriateness to the frontend.
 export const validateChildAge = (birthDate: string, instrumentId?: string): number => {
-  const birth = new Date(birthDate);
+  const birth = new Date(birthDate + 'T12:00:00Z');
   const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
+  const age = calculateAgeUTC(birthDate);
 
   if (birth > today) {
     throw new ValidationError('Birth date cannot be in the future');

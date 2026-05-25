@@ -55,7 +55,7 @@ export class AssessmentController {
     const { id } = req.params;
     logger.info(`[getAssessmentById] Getting assessment by id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new ValidationError('Invalid assessment ID format');
     }
     
@@ -125,7 +125,7 @@ export class AssessmentController {
     const { id } = req.params;
     logger.info(`[updateAssessment] Updating assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new ValidationError('Invalid assessment ID format');
     }
     
@@ -157,7 +157,7 @@ export class AssessmentController {
     const { id } = req.params;
     logger.info(`[deleteAssessment] Deleting assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new ValidationError('Invalid assessment ID format');
     }
     
@@ -184,7 +184,7 @@ export class AssessmentController {
     const { id } = req.params;
     logger.info(`[generateReport] Generating report for assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
+    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       throw new ValidationError('Invalid assessment ID format');
     }
     

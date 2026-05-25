@@ -24,9 +24,13 @@ export class AISummaryService {
     return s.replace(/[\n\r]+/g, ' ').trim();
   }
 
+  private escapeXml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   private tag(value: string | null | undefined): string {
     if (value == null) return '<dado></dado>';
-    return `<dado>${this.stripNewlines(String(value))}</dado>`;
+    return `<dado>${this.escapeXml(this.stripNewlines(String(value)))}</dado>`;
   }
 
   async generateSummary(userId: string, childId: string, periodDays: number = 90): Promise<string> {

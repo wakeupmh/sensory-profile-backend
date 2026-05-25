@@ -21,7 +21,7 @@ const aiSummaryLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => (req as any).user?.id ?? req.ip ?? 'unknown',
+  keyGenerator: (req: Request) => (req as any).userId ?? req.ip ?? 'unknown',
   message: {
     success: false,
     error: {

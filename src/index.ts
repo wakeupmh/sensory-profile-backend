@@ -26,6 +26,20 @@ import logger from './infrastructure/utils/logger';
 
 dotenv.config();
 
+function validateEnv() {
+  const required: string[] = [];
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.DATABASE_URL) required.push('DATABASE_URL');
+    if (!process.env.SUPABASE_URL) required.push('SUPABASE_URL');
+    if (!process.env.FRONTEND_URL) required.push('FRONTEND_URL');
+  }
+  if (required.length > 0) {
+    console.error(`Missing required env vars: ${required.join(', ')}`);
+    process.exit(1);
+  }
+}
+validateEnv();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -42,7 +56,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Security middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : true,
+  origin: process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL]
+    : process.env.NODE_ENV === 'production'
+      ? []
+      : ['http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
@@ -108,9 +126,6 @@ app.use(notFoundHandler);
 // Global error handler (must be last)
 app.use(errorHandler);
 
-// Setup graceful shutdown handlers
-setupGracefulShutdown();
-
 // Start server
 const server = app.listen(PORT, () => {
   logger.info(`🚀 Server started successfully`, {
@@ -120,6 +135,8 @@ const server = app.listen(PORT, () => {
     uptime: process.uptime()
   });
 });
+
+setupGracefulShutdown(server);
 
 // Handle server startup errors
 server.on('error', (error: NodeJS.ErrnoException) => {

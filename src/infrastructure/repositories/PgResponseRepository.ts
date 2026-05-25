@@ -102,35 +102,6 @@ export class PgResponseRepository implements ResponseRepository {
     }
   }
 
-  async update(response: Response, userId: string): Promise<Response> {
-    // Verify that the assessment belongs to the user
-    const assessmentCheck = await pool.query(
-      'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-      [response.getAssessmentId(), userId]
-    );
-    
-    if (assessmentCheck.rows.length === 0) {
-      throw new Error(`Assessment with ID ${response.getAssessmentId()} not found for this user`);
-    }
-    
-    const result = await pool.query(
-      `UPDATE sensory_responses SET
-        response = $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 RETURNING *`,
-      [
-        response.getResponse(),
-        response.getId()
-      ]
-    );
-
-    if (result.rows.length === 0) {
-      throw new Error(`Response with ID ${response.getId()} not found`);
-    }
-
-    return this.mapRowToResponse(result.rows[0]);
-  }
-
   async delete(id: string, userId: string): Promise<void> {
     // First get the assessment_id for this response
     const responseQuery = await pool.query(

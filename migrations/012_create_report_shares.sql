@@ -10,7 +10,6 @@ CREATE TABLE report_shares (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX report_shares_token_idx ON report_shares(token);
 CREATE INDEX report_shares_user_id_child_id_idx ON report_shares(user_id, child_id);
 
 COMMIT;

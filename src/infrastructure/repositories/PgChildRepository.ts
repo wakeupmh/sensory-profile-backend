@@ -64,16 +64,16 @@ export class PgChildRepository implements ChildRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const has = await this.hasAssessments(id);
+    const has = await this.hasAssessments(id, userId);
     if (has) return false;
-    await pool.query(`DELETE FROM children WHERE id = $1 AND user_id = $2`, [id, userId]);
-    return true;
+    const result = await pool.query(`DELETE FROM children WHERE id = $1 AND user_id = $2`, [id, userId]);
+    return (result.rowCount ?? 0) > 0;
   }
 
-  async hasAssessments(id: string): Promise<boolean> {
+  async hasAssessments(id: string, userId: string): Promise<boolean> {
     const result = await pool.query(
-      `SELECT 1 FROM sensory_assessments WHERE child_id = $1 LIMIT 1`,
-      [id]
+      `SELECT 1 FROM sensory_assessments WHERE child_id = $1 AND user_id = $2 LIMIT 1`,
+      [id, userId]
     );
     return result.rows.length > 0;
   }

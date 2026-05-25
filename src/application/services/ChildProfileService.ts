@@ -16,6 +16,8 @@ export interface ChildProfileResult {
     id: string;
     name: string;
     birthDate: string | null;
+    gender: string | null;
+    nationalIdentity: string | null;
     notes: string | null;
     createdAt: string;
   };
@@ -40,15 +42,15 @@ export interface PaginatedTimeline {
 export class ChildProfileService {
   constructor(private readonly pool: Pool) {}
 
-  async verifyChildOwnership(childId: string, userId: string): Promise<{ id: string; name: string; birth_date: string | null; notes: string | null; created_at: Date }> {
+  async verifyChildOwnership(childId: string, userId: string): Promise<{ id: string; name: string; birth_date: string | null; gender: string | null; national_identity: string | null; notes: string | null; created_at: Date }> {
     const result = await this.pool.query(
-      `SELECT id, name, birth_date, notes, created_at FROM children WHERE id = $1 AND user_id = $2`,
+      `SELECT id, name, birth_date, gender, national_identity, notes, created_at FROM children WHERE id = $1 AND user_id = $2`,
       [childId, userId],
     );
     if (result.rows.length === 0) {
       throw new NotFoundError('Child not found');
     }
-    return result.rows[0] as { id: string; name: string; birth_date: string | null; notes: string | null; created_at: Date };
+    return result.rows[0] as { id: string; name: string; birth_date: string | null; gender: string | null; national_identity: string | null; notes: string | null; created_at: Date };
   }
 
   async getProfile(childId: string, userId: string, periodDays: number = 30): Promise<ChildProfileResult> {
@@ -96,6 +98,8 @@ export class ChildProfileService {
         id: childRow.id,
         name: childRow.name,
         birthDate: formatDateString(childRow.birth_date),
+        gender: childRow.gender,
+        nationalIdentity: childRow.national_identity,
         notes: childRow.notes,
         createdAt: childRow.created_at.toISOString(),
       },
