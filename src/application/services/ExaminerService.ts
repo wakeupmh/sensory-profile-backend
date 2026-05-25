@@ -8,33 +8,33 @@ export interface ExaminerData {
 }
 
 export class ExaminerService {
-  async createExaminer(examinerData: ExaminerData): Promise<string | null> {
+  async createExaminer(examinerData: ExaminerData, userId: string): Promise<string | null> {
     if (!examinerData) return null;
 
     const examinerId = uuidv7();
     const result = await pool.query(
-      `INSERT INTO examiners (id, name, profession, contact)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (name, profession) DO UPDATE SET
+      `INSERT INTO examiners (id, name, profession, contact, user_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name, profession, user_id) DO UPDATE SET
          contact = COALESCE(EXCLUDED.contact, examiners.contact),
          updated_at = CURRENT_TIMESTAMP
        RETURNING id`,
-      [examinerId, examinerData.name, examinerData.profession, examinerData.contact || null]
+      [examinerId, examinerData.name, examinerData.profession, examinerData.contact || null, userId]
     );
 
     return result.rows[0].id;
   }
-  
-  async getExaminerById(examinerId: string): Promise<ExaminerData | null> {
+
+  async getExaminerById(examinerId: string, userId: string): Promise<ExaminerData | null> {
     const result = await pool.query(
-      'SELECT * FROM examiners WHERE id = $1',
-      [examinerId]
+      'SELECT * FROM examiners WHERE id = $1 AND user_id = $2',
+      [examinerId, userId]
     );
-    
+
     if (result.rows.length === 0) {
       return null;
     }
-    
+
     const examiner = result.rows[0];
     return {
       name: examiner.name,
@@ -42,11 +42,11 @@ export class ExaminerService {
       contact: examiner.contact
     };
   }
-  
+
   async getAllExaminers(userId: string): Promise<Array<ExaminerData & { id: string }>> {
     const result = await pool.query(
       `SELECT * FROM examiners
-       WHERE id IN (SELECT examiner_id FROM sensory_assessments WHERE user_id = $1)
+       WHERE user_id = $1
        ORDER BY name`,
       [userId]
     );

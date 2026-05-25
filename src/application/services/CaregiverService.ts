@@ -8,33 +8,33 @@ export interface CaregiverData {
 }
 
 export class CaregiverService {
-  async createCaregiver(caregiverData: CaregiverData): Promise<string | null> {
+  async createCaregiver(caregiverData: CaregiverData, userId: string): Promise<string | null> {
     if (!caregiverData) return null;
 
     const caregiverId = uuidv7();
     const result = await pool.query(
-      `INSERT INTO caregivers (id, name, relationship, contact)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (name, relationship) DO UPDATE SET
+      `INSERT INTO caregivers (id, name, relationship, contact, user_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name, relationship, user_id) DO UPDATE SET
          contact = COALESCE(EXCLUDED.contact, caregivers.contact),
          updated_at = CURRENT_TIMESTAMP
        RETURNING id`,
-      [caregiverId, caregiverData.name, caregiverData.relationship, caregiverData.contact || null]
+      [caregiverId, caregiverData.name, caregiverData.relationship, caregiverData.contact || null, userId]
     );
 
     return result.rows[0].id;
   }
-  
-  async getCaregiverById(caregiverId: string): Promise<CaregiverData | null> {
+
+  async getCaregiverById(caregiverId: string, userId: string): Promise<CaregiverData | null> {
     const result = await pool.query(
-      'SELECT * FROM caregivers WHERE id = $1',
-      [caregiverId]
+      'SELECT * FROM caregivers WHERE id = $1 AND user_id = $2',
+      [caregiverId, userId]
     );
-    
+
     if (result.rows.length === 0) {
       return null;
     }
-    
+
     const caregiver = result.rows[0];
     return {
       name: caregiver.name,
@@ -42,11 +42,11 @@ export class CaregiverService {
       contact: caregiver.contact
     };
   }
-  
+
   async getAllCaregivers(userId: string): Promise<Array<CaregiverData & { id: string }>> {
     const result = await pool.query(
       `SELECT * FROM caregivers
-       WHERE id IN (SELECT caregiver_id FROM sensory_assessments WHERE user_id = $1)
+       WHERE user_id = $1
        ORDER BY name`,
       [userId]
     );

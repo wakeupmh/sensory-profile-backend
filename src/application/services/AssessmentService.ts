@@ -12,6 +12,9 @@ import {
 } from '../../infrastructure/utils/errors/CustomErrors';
 import { v7 as uuidv7 } from 'uuid';
 import pool from '../../infrastructure/database/connection';
+import { PoolClient } from 'pg';
+import { PgAssessmentRepository } from '../../infrastructure/repositories/PgAssessmentRepository';
+import { PgResponseRepository } from '../../infrastructure/repositories/PgResponseRepository';
 import { ChildService } from './ChildService';
 import { ExaminerService } from './ExaminerService';
 import { CaregiverService } from './CaregiverService';
@@ -162,17 +165,17 @@ export class AssessmentService {
       let examinerId = null;
       if (assessmentData.examiner) {
         logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner);
+        examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId);
         logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
       }
-      
+
       let caregiverId = null;
       if (assessmentData.caregiver) {
         logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver);
+        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId);
         logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
       }
-      
+
       // Create assessment
       const assessmentId = uuidv7();
       logger.debug(`[AssessmentService] Generated assessment id: ${assessmentId}`);
@@ -259,28 +262,41 @@ export class AssessmentService {
         assessment.setParentAssessmentId(assessmentData.parentAssessmentId);
       }
 
-      logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
-      const savedAssessment = await this.assessmentRepository.save(assessment, userId);
-      logger.info(`[AssessmentService] Assessment ${savedAssessment.getId()} saved successfully for user ${userId}`);
-      
-      // Save responses
-      logger.debug(`[AssessmentService] Creating ${assessmentData.responses.length} responses for assessment ${savedAssessment.getId()}`);
-      const responseEntities = assessmentData.responses.map(
-        r => new Response(savedAssessment.getId()!, r.itemId, r.response, uuidv7())
-      );
-      
-      await this.responseRepository.saveMany(responseEntities, userId);
-      logger.debug(`[AssessmentService] Responses saved for assessment ${savedAssessment.getId()}`);
-      
-      // Save section comments if provided
-      if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
-        logger.debug(`[AssessmentService] Saving ${assessmentData.sectionComments.length} section comments for assessment ${savedAssessment.getId()}`);
-        await this.sectionCommentService.saveSectionComments(savedAssessment.getId()!, assessmentData.sectionComments);
-        logger.debug(`[AssessmentService] Section comments saved for assessment ${savedAssessment.getId()}`);
+      // Wrap assessment + responses + comments in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
+        const savedAssessment = await (this.assessmentRepository as PgAssessmentRepository).save(assessment, userId, client);
+        logger.info(`[AssessmentService] Assessment ${savedAssessment.getId()} saved successfully for user ${userId}`);
+
+        // Save responses
+        logger.debug(`[AssessmentService] Creating ${assessmentData.responses.length} responses for assessment ${savedAssessment.getId()}`);
+        const responseEntities = assessmentData.responses.map(
+          r => new Response(savedAssessment.getId()!, r.itemId, r.response, uuidv7())
+        );
+
+        await (this.responseRepository as PgResponseRepository).saveMany(responseEntities, userId, client);
+        logger.debug(`[AssessmentService] Responses saved for assessment ${savedAssessment.getId()}`);
+
+        // Save section comments if provided
+        if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
+          logger.debug(`[AssessmentService] Saving ${assessmentData.sectionComments.length} section comments for assessment ${savedAssessment.getId()}`);
+          await this.sectionCommentService.saveSectionComments(savedAssessment.getId()!, assessmentData.sectionComments, client);
+          logger.debug(`[AssessmentService] Section comments saved for assessment ${savedAssessment.getId()}`);
+        }
+
+        await client.query('COMMIT');
+
+        logger.info(`[AssessmentService] Assessment creation completed successfully for id ${savedAssessment.getId()}`);
+        return savedAssessment;
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
       }
-      
-      logger.info(`[AssessmentService] Assessment creation completed successfully for id ${savedAssessment.getId()}`);
-      return savedAssessment;
     } catch (error: any) {
       logger.error(`[AssessmentService] Error creating assessment for user ${userId}: ${error.message}`, { error });
       throw error;
@@ -361,15 +377,15 @@ export class AssessmentService {
       let examinerId = existingAssessment.getExaminerId();
       if (assessmentData.examiner) {
         logger.debug(`[AssessmentService] Updating examiner data for assessment ${id}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner);
+        examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId);
         logger.debug(`[AssessmentService] Updated examiner id: ${examinerId}`);
       }
-      
+
       // Update caregiver if provided
       let caregiverId = existingAssessment.getCaregiverId();
       if (assessmentData.caregiver) {
         logger.debug(`[AssessmentService] Updating caregiver data for assessment ${id}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver);
+        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId);
         logger.debug(`[AssessmentService] Updated caregiver id: ${caregiverId}`);
       }
       
@@ -436,29 +452,42 @@ export class AssessmentService {
         updatedAssessment.setScoresJson(scoringResult.scores_json);
       }
 
-      // If responses are provided, atomically replace them via the repository
-      if (assessmentData.responses && assessmentData.responses.length > 0) {
-        logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
-        const responseEntities = assessmentData.responses.map(
-          r => new Response(id, r.itemId, r.response, uuidv7())
-        );
-        await this.responseRepository.replaceByAssessmentId(id, responseEntities, userId);
-        logger.debug(`[AssessmentService] Replaced responses for assessment ${id}`);
-      }
+      // Wrap assessment update + responses + comments in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      // If section comments are provided, delete existing and insert new
-      if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
-        logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
-        await this.sectionCommentService.deleteByAssessmentId(id);
-        await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments);
-        logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
+        // If responses are provided, atomically replace them via the repository
+        if (assessmentData.responses && assessmentData.responses.length > 0) {
+          logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
+          const responseEntities = assessmentData.responses.map(
+            r => new Response(id, r.itemId, r.response, uuidv7())
+          );
+          await (this.responseRepository as PgResponseRepository).replaceByAssessmentId(id, responseEntities, userId, client);
+          logger.debug(`[AssessmentService] Replaced responses for assessment ${id}`);
+        }
+
+        // If section comments are provided, delete existing and insert new
+        if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
+          logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
+          await this.sectionCommentService.deleteByAssessmentId(id, client);
+          await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments, client);
+          logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
+        }
+
+        logger.debug(`[AssessmentService] Saving updated assessment ${id}`);
+        const result = await (this.assessmentRepository as PgAssessmentRepository).update(updatedAssessment, userId, client);
+        logger.info(`[AssessmentService] Assessment ${id} updated successfully for user ${userId}`);
+
+        await client.query('COMMIT');
+
+        return result;
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
       }
-      
-      logger.debug(`[AssessmentService] Saving updated assessment ${id}`);
-      const result = await this.assessmentRepository.update(updatedAssessment, userId);
-      logger.info(`[AssessmentService] Assessment ${id} updated successfully for user ${userId}`);
-      
-      return result;
     } catch (error: any) {
       logger.error(`[AssessmentService] Error updating assessment ${id} for user ${userId}: ${error.message}`, { error });
       throw error;
@@ -484,14 +513,31 @@ export class AssessmentService {
         throw new ValidationError('Esta avaliação possui entrevista(s) de acompanhamento vinculada(s). Exclua-as primeiro.');
       }
 
-      // Delete responses first (due to foreign key constraints)
-      logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);
-      await this.responseRepository.deleteByAssessmentId(id, userId);
-      
-      // Then delete the assessment
-      logger.debug(`[AssessmentService] Deleting assessment ${id}`);
-      await this.assessmentRepository.delete(id, userId);
-      
+      // Wrap deletes in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Delete section comments first
+        logger.debug(`[AssessmentService] Deleting section comments for assessment ${id}`);
+        await this.sectionCommentService.deleteByAssessmentId(id, client);
+
+        // Delete responses (due to foreign key constraints)
+        logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);
+        await (this.responseRepository as PgResponseRepository).deleteByAssessmentId(id, userId, client);
+
+        // Then delete the assessment
+        logger.debug(`[AssessmentService] Deleting assessment ${id}`);
+        await (this.assessmentRepository as PgAssessmentRepository).delete(id, userId, client);
+
+        await client.query('COMMIT');
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
+      }
+
       logger.info(`[AssessmentService] Assessment ${id} deleted successfully for user ${userId}`);
       return true;
     } catch (error: any) {

@@ -1,6 +1,7 @@
 import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import pool from '../database/connection';
+import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 
 export interface AssessmentWithRelations extends Assessment {
@@ -121,10 +122,11 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async save(assessment: Assessment, userId: string): Promise<Assessment> {
+  async save(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
     const id = assessment.getId() || uuidv7();
+    const queryable = externalClient ?? pool;
 
-    const result = await pool.query(
+    const result = await queryable.query(
       `INSERT INTO sensory_assessments (
         id, child_id, examiner_id, caregiver_id, assessment_date,
         auditory_processing_raw_score, visual_processing_raw_score,
@@ -159,8 +161,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async update(assessment: Assessment, userId: string): Promise<Assessment> {
-    const result = await pool.query(
+  async update(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
+    const queryable = externalClient ?? pool;
+    const result = await queryable.query(
       `UPDATE sensory_assessments SET
         child_id = $1,
         examiner_id = $2,
@@ -209,8 +212,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async delete(id: string, userId: string): Promise<void> {
-    await pool.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
+  async delete(id: string, userId: string, externalClient?: PoolClient): Promise<void> {
+    const queryable = externalClient ?? pool;
+    await queryable.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
   async findByChildId(childId: string, userId: string): Promise<Assessment[]> {
