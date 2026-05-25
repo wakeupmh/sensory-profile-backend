@@ -470,7 +470,7 @@ export class AssessmentService {
         // If section comments are provided, delete existing and insert new
         if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
           logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
-          await this.sectionCommentService.deleteByAssessmentId(id, client);
+          await this.sectionCommentService.deleteByAssessmentId(id, client, userId);
           await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments, client);
           logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
         }
@@ -520,7 +520,7 @@ export class AssessmentService {
 
         // Delete section comments first
         logger.debug(`[AssessmentService] Deleting section comments for assessment ${id}`);
-        await this.sectionCommentService.deleteByAssessmentId(id, client);
+        await this.sectionCommentService.deleteByAssessmentId(id, client, userId);
 
         // Delete responses (due to foreign key constraints)
         logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);

@@ -129,8 +129,7 @@ export class ChildProfileService {
     const fromVal = from ? from : null;
     const toVal = to ? to : null;
 
-    const sql = `
-      WITH timeline_raw AS (
+    const unionCte = `
         SELECT id::text, 'assessment'::text AS type, assessment_date AS occurred_at,
                instrument_id AS title, NULL::text AS subtitle
         FROM sensory_assessments
@@ -172,8 +171,11 @@ export class ChildProfileService {
         SELECT id::text, 'milestone'::text, achieved_date::timestamptz, title, category
         FROM developmental_milestones
         WHERE user_id = $1 AND child_id = $2 AND status = 'achieved' AND achieved_date IS NOT NULL
-      )
-      SELECT *, COUNT(*) OVER() AS total_count
+    `;
+
+    const dataSql = `
+      WITH timeline_raw AS (${unionCte})
+      SELECT *
       FROM timeline_raw
       WHERE ($3::timestamptz IS NULL OR occurred_at >= $3)
         AND ($4::timestamptz IS NULL OR occurred_at <= $4)
@@ -181,9 +183,26 @@ export class ChildProfileService {
       LIMIT $5 OFFSET $6
     `;
 
-    const result = await this.pool.query(sql, [userId, childId, fromVal, toVal, limit, offset]);
+    const countSql = `
+      WITH timeline_raw AS (
+        SELECT 1 AS _one, occurred_at
+        FROM (${unionCte}) _u
+      )
+      SELECT COUNT(*)::int AS total_count
+      FROM timeline_raw
+      WHERE ($3::timestamptz IS NULL OR occurred_at >= $3)
+        AND ($4::timestamptz IS NULL OR occurred_at <= $4)
+    `;
 
-    const total = result.rows.length > 0 ? Number(result.rows[0].total_count) : 0;
+    const params = [userId, childId, fromVal, toVal, limit, offset];
+    const countParams = [userId, childId, fromVal, toVal];
+
+    const [result, countResult] = await Promise.all([
+      this.pool.query(dataSql, params),
+      this.pool.query(countSql, countParams),
+    ]);
+
+    const total = Number(countResult.rows[0]?.total_count ?? 0);
 
     const data: TimelineEvent[] = result.rows.map(row => {
       const rawDate = row.occurred_at;

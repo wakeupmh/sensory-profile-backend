@@ -1,5 +1,13 @@
 -- Migration 015: Add user_id to examiners and caregivers for user-scoped isolation
 -- Previously these tables were globally shared, which is a security/isolation problem.
+--
+-- WARNING: If an examiner/caregiver is referenced by assessments from multiple users,
+-- the backfill arbitrarily assigns it to one user (LIMIT 1). Run the following check
+-- BEFORE applying this migration to identify affected rows:
+--   SELECT e.id, e.name, array_agg(DISTINCT sa.user_id)
+--   FROM examiners e JOIN sensory_assessments sa ON sa.examiner_id = e.id
+--   GROUP BY e.id, e.name HAVING COUNT(DISTINCT sa.user_id) > 1;
+-- Manually resolve multi-user rows before running, or accept the arbitrary assignment.
 
 -- 1. Add user_id columns
 ALTER TABLE examiners ADD COLUMN user_id TEXT;

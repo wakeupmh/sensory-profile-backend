@@ -247,8 +247,7 @@ export class PgResponseRepository implements ResponseRepository {
       row.item_id,
       row.response,
       row.id,
-      row.created_at,
-      row.updated_at
+      row.created_at
     );
   }
 }

@@ -28,8 +28,8 @@ dotenv.config();
 
 function validateEnv() {
   const required: string[] = [];
+  if (!process.env.DATABASE_URL) required.push('DATABASE_URL');
   if (process.env.NODE_ENV === 'production') {
-    if (!process.env.DATABASE_URL) required.push('DATABASE_URL');
     if (!process.env.SUPABASE_URL) required.push('SUPABASE_URL');
     if (!process.env.FRONTEND_URL) required.push('FRONTEND_URL');
   }

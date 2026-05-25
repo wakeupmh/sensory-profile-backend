@@ -25,7 +25,7 @@ export class CaregiverService {
     return result.rows[0].id;
   }
 
-  async getCaregiverById(caregiverId: string, userId: string): Promise<CaregiverData | null> {
+  async getCaregiverById(caregiverId: string, userId: string): Promise<(CaregiverData & { id: string }) | null> {
     const result = await pool.query(
       'SELECT * FROM caregivers WHERE id = $1 AND user_id = $2',
       [caregiverId, userId]
@@ -37,6 +37,7 @@ export class CaregiverService {
 
     const caregiver = result.rows[0];
     return {
+      id: caregiver.id,
       name: caregiver.name,
       relationship: caregiver.relationship,
       contact: caregiver.contact

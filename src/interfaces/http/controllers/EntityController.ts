@@ -3,7 +3,15 @@ import { ChildService } from '../../../application/services/ChildService';
 import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { NotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { NotFoundError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateUuidParam(id: string): void {
+  if (!id || !UUID_REGEX.test(id)) {
+    throw new ValidationError('ID inválido');
+  }
+}
 
 export class EntityController {
   constructor(
@@ -19,6 +27,7 @@ export class EntityController {
   });
 
   getChildById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    validateUuidParam(req.params.id);
     const userId = req.userId!;
     const child = await this.childService.getChildById(req.params.id, userId);
 
@@ -36,6 +45,7 @@ export class EntityController {
   });
 
   getExaminerById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    validateUuidParam(req.params.id);
     const userId = req.userId!;
     const examiner = await this.examinerService.getExaminerById(req.params.id, userId);
 
@@ -53,6 +63,7 @@ export class EntityController {
   });
 
   getCaregiverById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    validateUuidParam(req.params.id);
     const userId = req.userId!;
     const caregiver = await this.caregiverService.getCaregiverById(req.params.id, userId);
 

@@ -67,9 +67,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
       LEFT JOIN
         children c ON sa.child_id = c.id
       LEFT JOIN
-        examiners e ON sa.examiner_id = e.id
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
       LEFT JOIN
-        caregivers cg ON sa.caregiver_id = cg.id
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
       WHERE
         ${whereClause}
       ORDER BY
@@ -105,11 +105,11 @@ export class PgAssessmentRepository implements AssessmentRepository {
         sensory_assessments sa
       LEFT JOIN 
         children c ON sa.child_id = c.id
-      LEFT JOIN 
-        examiners e ON sa.examiner_id = e.id
-      LEFT JOIN 
-        caregivers cg ON sa.caregiver_id = cg.id
-      WHERE 
+      LEFT JOIN
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
+      LEFT JOIN
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
+      WHERE
         sa.id = $1 AND sa.user_id = $2
     `;
 
@@ -217,11 +217,12 @@ export class PgAssessmentRepository implements AssessmentRepository {
     await queryable.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
-  async findByChildId(childId: string, userId: string): Promise<Assessment[]> {
+  async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<Assessment[]> {
+    const offset = (page - 1) * limit;
     const query = `
-      SELECT 
+      SELECT
         sa.*,
-        c.name as child_name, 
+        c.name as child_name,
         c.birth_date as child_birth_date,
         c.gender as child_gender,
         c.other_info as child_other_info,
@@ -231,21 +232,22 @@ export class PgAssessmentRepository implements AssessmentRepository {
         cg.name as caregiver_name,
         cg.relationship as caregiver_relationship,
         cg.contact as caregiver_contact
-      FROM 
+      FROM
         sensory_assessments sa
-      LEFT JOIN 
+      LEFT JOIN
         children c ON sa.child_id = c.id
-      LEFT JOIN 
-        examiners e ON sa.examiner_id = e.id
-      LEFT JOIN 
-        caregivers cg ON sa.caregiver_id = cg.id
-      WHERE 
+      LEFT JOIN
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
+      LEFT JOIN
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
+      WHERE
         sa.child_id = $1 AND sa.user_id = $2
-      ORDER BY 
+      ORDER BY
         sa.assessment_date DESC
+      LIMIT $3 OFFSET $4
     `;
 
-    const result = await pool.query(query, [childId, userId]);
+    const result = await pool.query(query, [childId, userId, limit, offset]);
 
     return result.rows.map(row => this.mapRowToAssessment(row));
   }

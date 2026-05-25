@@ -72,13 +72,11 @@ export class ConsolidatedReportService {
       // assessments
       this.pool.query(`
         SELECT id, instrument_id, assessment_date AS completed_at, scores_json,
-               CASE WHEN scores_json IS NULL THEN
-                 (SELECT json_object_agg(section_name, section_score)
-                  FROM (
-                    SELECT unnest(ARRAY['auditivo','visual','tato','movimento','posicao_corporal','oral','conduta','socio_emocional','atencao'])::text AS section_name,
-                           unnest(ARRAY[auditory_processing_raw_score,visual_processing_raw_score,tactile_processing_raw_score,movement_processing_raw_score,body_position_processing_raw_score,oral_sensitivity_processing_raw_score,behavioral_responses_raw_score,social_emotional_responses_raw_score,attention_responses_raw_score]) AS section_score
-                  ) s
-               ) END AS legacy_scores
+               auditory_processing_raw_score, visual_processing_raw_score,
+               tactile_processing_raw_score, movement_processing_raw_score,
+               body_position_processing_raw_score, oral_sensitivity_processing_raw_score,
+               behavioral_responses_raw_score, social_emotional_responses_raw_score,
+               attention_responses_raw_score
         FROM sensory_assessments
         WHERE user_id = $1 AND child_id = $2
         ORDER BY assessment_date DESC NULLS LAST
@@ -221,7 +219,17 @@ export class ConsolidatedReportService {
           id: row.id as string,
           instrumentId: row.instrument_id as string,
           completedAt: row.completed_at ? (row.completed_at as Date).toISOString() : null,
-          scoresJson: (row.scores_json ?? row.legacy_scores ?? null) as Record<string, unknown> | null,
+          scoresJson: (row.scores_json ?? {
+            auditivo: row.auditory_processing_raw_score,
+            visual: row.visual_processing_raw_score,
+            tato: row.tactile_processing_raw_score,
+            movimento: row.movement_processing_raw_score,
+            posicao_corporal: row.body_position_processing_raw_score,
+            oral: row.oral_sensitivity_processing_raw_score,
+            conduta: row.behavioral_responses_raw_score,
+            socio_emocional: row.social_emotional_responses_raw_score,
+            atencao: row.attention_responses_raw_score,
+          }) as Record<string, unknown> | null,
         })),
         count: Number(assessmentCountResult.rows[0]?.cnt ?? 0),
       },

@@ -25,7 +25,7 @@ export class ExaminerService {
     return result.rows[0].id;
   }
 
-  async getExaminerById(examinerId: string, userId: string): Promise<ExaminerData | null> {
+  async getExaminerById(examinerId: string, userId: string): Promise<(ExaminerData & { id: string }) | null> {
     const result = await pool.query(
       'SELECT * FROM examiners WHERE id = $1 AND user_id = $2',
       [examinerId, userId]
@@ -37,6 +37,7 @@ export class ExaminerService {
 
     const examiner = result.rows[0];
     return {
+      id: examiner.id,
       name: examiner.name,
       profession: examiner.profession,
       contact: examiner.contact
