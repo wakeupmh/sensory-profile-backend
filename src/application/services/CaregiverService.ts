@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import pool from '../../infrastructure/database/connection';
+import { PoolClient } from 'pg';
 
 export interface CaregiverData {
   name: string;
@@ -8,11 +9,12 @@ export interface CaregiverData {
 }
 
 export class CaregiverService {
-  async createCaregiver(caregiverData: CaregiverData, userId: string): Promise<string | null> {
+  async createCaregiver(caregiverData: CaregiverData, userId: string, externalClient?: PoolClient): Promise<string | null> {
     if (!caregiverData) return null;
 
+    const queryable = externalClient ?? pool;
     const caregiverId = uuidv7();
-    const result = await pool.query(
+    const result = await queryable.query(
       `INSERT INTO caregivers (id, name, relationship, contact, user_id)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (name, relationship, user_id) DO UPDATE SET

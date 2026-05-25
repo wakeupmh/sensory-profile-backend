@@ -52,6 +52,7 @@ export class ConsolidatedReportService {
     const now = new Date();
     const from = new Date(now);
     from.setDate(from.getDate() - periodDays);
+    from.setHours(0, 0, 0, 0);
     const to = now;
 
     const [

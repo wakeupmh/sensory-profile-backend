@@ -162,20 +162,6 @@ export class AssessmentService {
         logger.debug(`[AssessmentService] Child id: ${childId} for user ${userId}`);
       }
       
-      let examinerId = null;
-      if (assessmentData.examiner) {
-        logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId);
-        logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
-      }
-
-      let caregiverId = null;
-      if (assessmentData.caregiver) {
-        logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId);
-        logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
-      }
-
       // Create assessment
       const assessmentId = uuidv7();
       logger.debug(`[AssessmentService] Generated assessment id: ${assessmentId}`);
@@ -206,66 +192,78 @@ export class AssessmentService {
       const instrument = getInstrument(instrumentId);
       const isLegacy = !instrument || instrument.legacy === true;
 
-      let assessment: Assessment;
-      if (isLegacy) {
-        // Legacy SP-2 path — use the pre-computed raw scores passed in from the validation layer.
-        assessment = new Assessment(
-          childId,
-          examinerId,
-          caregiverId,
-          new Date(),
-          assessmentData.rawScores.auditoryProcessing,
-          assessmentData.rawScores.visualProcessing,
-          assessmentData.rawScores.tactileProcessing,
-          assessmentData.rawScores.movementProcessing,
-          assessmentData.rawScores.bodyPositionProcessing,
-          assessmentData.rawScores.oralSensitivityProcessing,
-          assessmentData.rawScores.behavioralResponses,
-          assessmentData.rawScores.socialEmotionalResponses,
-          assessmentData.rawScores.attentionResponses,
-          assessmentId,
-          undefined,
-          undefined,
-          instrumentId
-        );
-      } else {
-        // New instrument path — compute scores via the instrument's strategy.
-        const responsesMap = new Map<number, string>(
-          assessmentData.responses.map(r => [r.itemId, r.response])
-        );
-        const scoringResult = instrument.scoringStrategy(responsesMap, instrument);
-        logger.debug(`[AssessmentService] New instrument scoring complete for ${instrumentId}`);
-
-        assessment = new Assessment(
-          childId,
-          examinerId,
-          caregiverId,
-          new Date(),
-          ZERO_RAW_SCORES.auditoryProcessing,
-          ZERO_RAW_SCORES.visualProcessing,
-          ZERO_RAW_SCORES.tactileProcessing,
-          ZERO_RAW_SCORES.movementProcessing,
-          ZERO_RAW_SCORES.bodyPositionProcessing,
-          ZERO_RAW_SCORES.oralSensitivityProcessing,
-          ZERO_RAW_SCORES.behavioralResponses,
-          ZERO_RAW_SCORES.socialEmotionalResponses,
-          ZERO_RAW_SCORES.attentionResponses,
-          assessmentId,
-          undefined,
-          undefined,
-          instrumentId
-        );
-        assessment.setScoresJson(scoringResult.scores_json);
-      }
-      
-      if (assessmentData.parentAssessmentId) {
-        assessment.setParentAssessmentId(assessmentData.parentAssessmentId);
-      }
-
-      // Wrap assessment + responses + comments in a single transaction
+      // Wrap all writes (examiner, caregiver, assessment, responses, comments) in a single transaction
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+
+        let examinerId = null;
+        if (assessmentData.examiner) {
+          logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
+          examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId, client);
+          logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
+        }
+
+        let caregiverId = null;
+        if (assessmentData.caregiver) {
+          logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
+          caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId, client);
+          logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
+        }
+
+        let assessment: Assessment;
+        if (isLegacy) {
+          assessment = new Assessment(
+            childId,
+            examinerId,
+            caregiverId,
+            new Date(),
+            assessmentData.rawScores.auditoryProcessing,
+            assessmentData.rawScores.visualProcessing,
+            assessmentData.rawScores.tactileProcessing,
+            assessmentData.rawScores.movementProcessing,
+            assessmentData.rawScores.bodyPositionProcessing,
+            assessmentData.rawScores.oralSensitivityProcessing,
+            assessmentData.rawScores.behavioralResponses,
+            assessmentData.rawScores.socialEmotionalResponses,
+            assessmentData.rawScores.attentionResponses,
+            assessmentId,
+            undefined,
+            undefined,
+            instrumentId
+          );
+        } else {
+          const responsesMap = new Map<number, string>(
+            assessmentData.responses.map(r => [r.itemId, r.response])
+          );
+          const scoringResult = instrument.scoringStrategy(responsesMap, instrument);
+          logger.debug(`[AssessmentService] New instrument scoring complete for ${instrumentId}`);
+
+          assessment = new Assessment(
+            childId,
+            examinerId,
+            caregiverId,
+            new Date(),
+            ZERO_RAW_SCORES.auditoryProcessing,
+            ZERO_RAW_SCORES.visualProcessing,
+            ZERO_RAW_SCORES.tactileProcessing,
+            ZERO_RAW_SCORES.movementProcessing,
+            ZERO_RAW_SCORES.bodyPositionProcessing,
+            ZERO_RAW_SCORES.oralSensitivityProcessing,
+            ZERO_RAW_SCORES.behavioralResponses,
+            ZERO_RAW_SCORES.socialEmotionalResponses,
+            ZERO_RAW_SCORES.attentionResponses,
+            assessmentId,
+            undefined,
+            undefined,
+            instrumentId
+          );
+          assessment.setScoresJson(scoringResult.scores_json);
+        }
+
+        if (assessmentData.parentAssessmentId) {
+          assessment.setParentAssessmentId(assessmentData.parentAssessmentId);
+        }
 
         logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
         const savedAssessment = await (this.assessmentRepository as PgAssessmentRepository).save(assessment, userId, client);
@@ -373,28 +371,36 @@ export class AssessmentService {
         }
       }
       
-      // Update examiner if provided
-      let examinerId = existingAssessment.getExaminerId();
-      if (assessmentData.examiner) {
-        logger.debug(`[AssessmentService] Updating examiner data for assessment ${id}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId);
-        logger.debug(`[AssessmentService] Updated examiner id: ${examinerId}`);
-      }
+      const updatedInstrumentId = assessmentData.instrumentId ?? existingAssessment.getInstrumentId();
+      const updatedInstrument = getInstrument(updatedInstrumentId);
+      const updatedIsLegacy = !updatedInstrument || updatedInstrument.legacy === true;
 
-      // Update caregiver if provided
-      let caregiverId = existingAssessment.getCaregiverId();
-      if (assessmentData.caregiver) {
-        logger.debug(`[AssessmentService] Updating caregiver data for assessment ${id}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId);
-        logger.debug(`[AssessmentService] Updated caregiver id: ${caregiverId}`);
-      }
-      
-      // Update assessment fields if provided
-      logger.debug(`[AssessmentService] Creating updated assessment object for id ${id}`);
-      const updatedAssessment = new Assessment(
-        childId,
-        examinerId,
-        caregiverId,
+      // Wrap all writes in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Update examiner if provided
+        let examinerId = existingAssessment.getExaminerId();
+        if (assessmentData.examiner) {
+          logger.debug(`[AssessmentService] Updating examiner data for assessment ${id}`);
+          examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId, client);
+          logger.debug(`[AssessmentService] Updated examiner id: ${examinerId}`);
+        }
+
+        // Update caregiver if provided
+        let caregiverId = existingAssessment.getCaregiverId();
+        if (assessmentData.caregiver) {
+          logger.debug(`[AssessmentService] Updating caregiver data for assessment ${id}`);
+          caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId, client);
+          logger.debug(`[AssessmentService] Updated caregiver id: ${caregiverId}`);
+        }
+
+        logger.debug(`[AssessmentService] Creating updated assessment object for id ${id}`);
+        const updatedAssessment = new Assessment(
+          childId,
+          examinerId,
+          caregiverId,
         assessmentData.assessmentDate || existingAssessment.getAssessmentDate(),
         existingAssessment.getAuditoryProcessingRawScore(),
         existingAssessment.getVisualProcessingRawScore(),
@@ -411,10 +417,6 @@ export class AssessmentService {
         assessmentData.instrumentId ?? existingAssessment.getInstrumentId()
       );
       
-      const updatedInstrumentId = assessmentData.instrumentId ?? existingAssessment.getInstrumentId();
-      const updatedInstrument = getInstrument(updatedInstrumentId);
-      const updatedIsLegacy = !updatedInstrument || updatedInstrument.legacy === true;
-
       if (updatedIsLegacy) {
         // Legacy SP-2 path — always recompute scores server-side from responses (ignore client rawScores)
         if (assessmentData.responses && assessmentData.responses.length > 0) {
@@ -451,11 +453,6 @@ export class AssessmentService {
         logger.debug(`[AssessmentService] New instrument re-scoring complete for ${updatedInstrumentId}`);
         updatedAssessment.setScoresJson(scoringResult.scores_json);
       }
-
-      // Wrap assessment update + responses + comments in a single transaction
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
 
         // If responses are provided, atomically replace them via the repository
         if (assessmentData.responses && assessmentData.responses.length > 0) {

@@ -58,6 +58,7 @@ export class ChildProfileService {
 
     const periodStart = new Date();
     periodStart.setDate(periodStart.getDate() - periodDays);
+    periodStart.setHours(0, 0, 0, 0);
 
     const [
       assessmentResult,

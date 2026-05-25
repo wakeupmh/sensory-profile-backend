@@ -1,5 +1,6 @@
 import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
+import { NotFoundError } from '../utils/errors/CustomErrors';
 import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
@@ -206,7 +207,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
     );
 
     if (result.rows.length === 0) {
-      throw new Error(`Assessment with ID ${assessment.getId()} not found for this user`);
+      throw new NotFoundError('Assessment', assessment.getId());
     }
 
     return this.mapRowToAssessment(result.rows[0]);
@@ -217,7 +218,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
     await queryable.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
-  async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<Assessment[]> {
+  async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<AssessmentWithRelations[]> {
     const offset = (page - 1) * limit;
     const query = `
       SELECT
