@@ -1,20 +1,10 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { ComorbidityService } from '../../../application/services/ComorbidityService';
 import { createComorbiditySchema, updateComorbiditySchema, listComorbidityFiltersSchema } from '../validations/medicalValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) throw new ValidationError('Invalid ID format');
-}
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class ComorbidityController {
   constructor(private readonly service: ComorbidityService) {}
@@ -24,7 +14,7 @@ export class ComorbidityController {
     const parsed = listComorbidityFiltersSchema.parse(req.query);
     logger.info(`[comorbidity.list] userId=${userId}`);
     const result = await this.service.list(userId, parsed);
-    res.status(200).json({ success: true, data: result.map(c => c.toJSON()), timestamp: new Date().toISOString() });
+    jsonResponse(res, result.map(c => c.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {
@@ -32,7 +22,7 @@ export class ComorbidityController {
     const userId = requireUserId(req);
     logger.info(`[comorbidity.getById] userId=${userId} id=${req.params.id}`);
     const comorbidity = await this.service.getById(req.params.id, userId);
-    res.status(200).json({ success: true, data: comorbidity.toJSON(), timestamp: new Date().toISOString() });
+    jsonResponse(res, comorbidity.toJSON());
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
@@ -40,7 +30,7 @@ export class ComorbidityController {
     const parsed = createComorbiditySchema.parse(req.body);
     logger.info(`[comorbidity.create] userId=${userId}`);
     const comorbidity = await this.service.create(parsed, userId);
-    res.status(201).json({ success: true, data: comorbidity.toJSON(), message: 'Comorbidade criada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, comorbidity.toJSON(), 201, { message: 'Comorbidade criada com sucesso' });
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -49,7 +39,7 @@ export class ComorbidityController {
     const parsed = updateComorbiditySchema.parse(req.body);
     logger.info(`[comorbidity.update] userId=${userId} id=${req.params.id}`);
     const comorbidity = await this.service.update(req.params.id, parsed, userId);
-    res.status(200).json({ success: true, data: comorbidity.toJSON(), message: 'Comorbidade atualizada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, comorbidity.toJSON(), 200, { message: 'Comorbidade atualizada com sucesso' });
   });
 
   remove = asyncHandler(async (req: Request, res: Response) => {

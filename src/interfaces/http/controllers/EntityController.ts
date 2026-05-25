@@ -3,15 +3,8 @@ import { ChildService } from '../../../application/services/ChildService';
 import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { NotFoundError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function validateUuidParam(id: string): void {
-  if (!id || !UUID_REGEX.test(id)) {
-    throw new ValidationError('ID inválido');
-  }
-}
+import { NotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { assertValidId, requireUserId } from './controllerUtils';
 
 export class EntityController {
   constructor(
@@ -21,14 +14,14 @@ export class EntityController {
   ) {}
 
   getAllChildren = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     const children = await this.childService.getAllChildren(userId);
     res.status(200).json(children);
   });
 
   getChildById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    validateUuidParam(req.params.id);
-    const userId = req.userId!;
+    assertValidId(req.params.id);
+    const userId = requireUserId(req);
     const child = await this.childService.getChildById(req.params.id, userId);
 
     if (!child) {
@@ -39,14 +32,14 @@ export class EntityController {
   });
 
   getAllExaminers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     const examiners = await this.examinerService.getAllExaminers(userId);
     res.status(200).json(examiners);
   });
 
   getExaminerById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    validateUuidParam(req.params.id);
-    const userId = req.userId!;
+    assertValidId(req.params.id);
+    const userId = requireUserId(req);
     const examiner = await this.examinerService.getExaminerById(req.params.id, userId);
 
     if (!examiner) {
@@ -57,14 +50,14 @@ export class EntityController {
   });
 
   getAllCaregivers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     const caregivers = await this.caregiverService.getAllCaregivers(userId);
     res.status(200).json(caregivers);
   });
 
   getCaregiverById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    validateUuidParam(req.params.id);
-    const userId = req.userId!;
+    assertValidId(req.params.id);
+    const userId = requireUserId(req);
     const caregiver = await this.caregiverService.getCaregiverById(req.params.id, userId);
 
     if (!caregiver) {

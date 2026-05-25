@@ -55,9 +55,8 @@ const childSchema = z.object({
       return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
     }, 'Data inválida')
     .refine((date) => {
-      const age = calculateAgeUTC(date);
-      return age >= 3 && age <= 14;
-    }, 'Child must be between 3 and 14 years old'),
+      return new Date(`${date}T12:00:00Z`) <= new Date();
+    }, 'Data de nascimento não pode ser futura'),
   
   gender: z.enum(['male', 'female', 'other'], {
     errorMap: () => ({ message: 'Gender must be male, female, or other' })
@@ -261,7 +260,12 @@ const assessmentObjectShape = z.object({
     .max(20, 'Cannot have more than 20 section comments')
     .optional(),
 });
-export const updateAssessmentSchema = assessmentObjectShape.partial().strict();
+export const updateAssessmentSchema = assessmentObjectShape.partial().strict().superRefine((data, ctx) => {
+  if (data.responses && data.responses.length > 0) {
+    const instrumentId = data.instrumentId ?? LEGACY_INSTRUMENT_ID;
+    buildResponsesRefine(instrumentId)(data.responses, ctx);
+  }
+});
 
 // Query parameter validation
 export const assessmentQuerySchema = z.object({

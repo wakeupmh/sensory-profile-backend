@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { ConsolidatedReportService } from '../../../application/services/ConsolidatedReportService';
 import { ReportShareService } from '../../../application/services/ReportShareService';
@@ -11,19 +10,8 @@ import {
   listSharesQuerySchema,
   generateAISummarySchema,
 } from '../validations/consolidatedReportValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) {
-    throw new ValidationError('Invalid ID format');
-  }
-}
-
-function requireUserId(req: Request): string {
-  if (!(req as any).userId) throw new AuthenticationError();
-  return (req as any).userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse } from '../utils/response';
 
 export class ConsolidatedReportController {
   constructor(
@@ -37,11 +25,7 @@ export class ConsolidatedReportController {
     const parsed = getSummaryQuerySchema.parse(req.query);
     logger.info(`[consolidatedReport.getSummary] userId=${userId} childId=${parsed.childId}`);
     const summary = await this.consolidatedService.getSummary(userId, parsed.childId, parsed.periodDays);
-    res.status(200).json({
-      success: true,
-      data: summary,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, summary);
   });
 
   createShare = asyncHandler(async (req: Request, res: Response) => {
@@ -49,14 +33,10 @@ export class ConsolidatedReportController {
     const parsed = createShareSchema.parse(req.body);
     logger.info(`[consolidatedReport.createShare] userId=${userId} childId=${parsed.childId}`);
     const share = await this.shareService.createShare(userId, parsed.childId, parsed.expiresInDays, parsed.periodDays);
-    res.status(201).json({
-      success: true,
-      data: {
-        share: share.toJSON(),
-        shareUrl: `${process.env.FRONTEND_URL}/consolidated/shared/${share.getToken()}`,
-      },
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, {
+      share: share.toJSON(),
+      shareUrl: `${process.env.FRONTEND_URL}/consolidated/shared/${share.getToken()}`,
+    }, 201);
   });
 
   listShares = asyncHandler(async (req: Request, res: Response) => {
@@ -64,11 +44,7 @@ export class ConsolidatedReportController {
     const parsed = listSharesQuerySchema.parse(req.query);
     logger.info(`[consolidatedReport.listShares] userId=${userId} childId=${parsed.childId}`);
     const shares = await this.shareService.listShares(userId, parsed.childId);
-    res.status(200).json({
-      success: true,
-      data: { shares: shares.map((s) => s.toJSON()) },
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, { shares: shares.map((s) => s.toJSON()) });
   });
 
   deleteShare = asyncHandler(async (req: Request, res: Response) => {
@@ -84,11 +60,7 @@ export class ConsolidatedReportController {
     const { token } = req.params;
     logger.info(`[consolidatedReport.getSharedSummary] token=${token.slice(0, 4)}...${token.slice(-4)}`);
     const summary = await this.shareService.getSharedSummary(token);
-    res.status(200).json({
-      success: true,
-      data: summary,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, summary);
   });
 
   generateAISummary = asyncHandler(async (req: Request, res: Response) => {
@@ -96,10 +68,6 @@ export class ConsolidatedReportController {
     const parsed = generateAISummarySchema.parse(req.body);
     logger.info(`[consolidatedReport.generateAISummary] userId=${userId} childId=${parsed.childId}`);
     const summaryText = await this.aiService.generateSummary(userId, parsed.childId, parsed.periodDays);
-    res.status(200).json({
-      success: true,
-      data: { summary: summaryText },
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, { summary: summaryText });
   });
 }

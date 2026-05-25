@@ -1,20 +1,10 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { MedicalAppointmentService } from '../../../application/services/MedicalAppointmentService';
 import { createAppointmentSchema, updateAppointmentSchema, listAppointmentFiltersSchema } from '../validations/medicalValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) throw new ValidationError('Invalid ID format');
-}
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class MedicalAppointmentController {
   constructor(private readonly service: MedicalAppointmentService) {}
@@ -28,7 +18,11 @@ export class MedicalAppointmentController {
       from: parsed.from ? new Date(parsed.from) : undefined,
       to: parsed.to ? new Date(parsed.to) : undefined,
     });
-    res.status(200).json({ success: true, ...result, timestamp: new Date().toISOString() });
+    jsonResponse(res, result.data, 200, {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    });
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {
@@ -36,7 +30,7 @@ export class MedicalAppointmentController {
     const userId = requireUserId(req);
     logger.info(`[medicalAppointment.getById] userId=${userId} id=${req.params.id}`);
     const appointment = await this.service.getById(req.params.id, userId);
-    res.status(200).json({ success: true, data: appointment.toJSON(), timestamp: new Date().toISOString() });
+    jsonResponse(res, appointment.toJSON());
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
@@ -47,7 +41,7 @@ export class MedicalAppointmentController {
       { ...parsed, occurredAt: new Date(parsed.occurredAt) },
       userId,
     );
-    res.status(201).json({ success: true, data: appointment.toJSON(), message: 'Consulta criada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, appointment.toJSON(), 201, { message: 'Consulta criada com sucesso' });
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -60,7 +54,7 @@ export class MedicalAppointmentController {
       occurredAt: parsed.occurredAt ? new Date(parsed.occurredAt) : undefined,
     };
     const appointment = await this.service.update(req.params.id, payload, userId);
-    res.status(200).json({ success: true, data: appointment.toJSON(), message: 'Consulta atualizada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, appointment.toJSON(), 200, { message: 'Consulta atualizada com sucesso' });
   });
 
   remove = asyncHandler(async (req: Request, res: Response) => {

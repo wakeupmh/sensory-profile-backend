@@ -73,15 +73,7 @@ export class PgResponseRepository implements ResponseRepository {
       }
 
       // Single batched INSERT
-      const values: string[] = [];
-      const params: (string | number)[] = [];
-      let idx = 1;
-      for (const r of responses) {
-        const id = r.getId() || uuidv7();
-        values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
-        params.push(id, r.getAssessmentId(), r.getItemId(), r.getResponse());
-        idx += 4;
-      }
+      const { values, params } = this.buildBatchInsertValues(responses);
       const result = await externalClient.query(
         `INSERT INTO sensory_responses (id, assessment_id, item_id, response) VALUES ${values.join(', ')} RETURNING *`,
         params
@@ -105,15 +97,7 @@ export class PgResponseRepository implements ResponseRepository {
       }
 
       // Single batched INSERT
-      const values: string[] = [];
-      const params: (string | number)[] = [];
-      let idx = 1;
-      for (const r of responses) {
-        const id = r.getId() || uuidv7();
-        values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
-        params.push(id, r.getAssessmentId(), r.getItemId(), r.getResponse());
-        idx += 4;
-      }
+      const { values, params } = this.buildBatchInsertValues(responses);
       const result = await client.query(
         `INSERT INTO sensory_responses (id, assessment_id, item_id, response) VALUES ${values.join(', ')} RETURNING *`,
         params
@@ -186,14 +170,7 @@ export class PgResponseRepository implements ResponseRepository {
       await externalClient.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
 
       if (responses.length > 0) {
-        const values: string[] = [];
-        const params: (string | number)[] = [];
-        let idx = 1;
-        for (const r of responses) {
-          values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
-          params.push(r.getId() || uuidv7(), r.getAssessmentId(), r.getItemId(), r.getResponse());
-          idx += 4;
-        }
+        const { values, params } = this.buildBatchInsertValues(responses);
         await externalClient.query(
           `INSERT INTO sensory_responses (id, assessment_id, item_id, response) VALUES ${values.join(', ')}`,
           params
@@ -218,14 +195,7 @@ export class PgResponseRepository implements ResponseRepository {
       await client.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
 
       if (responses.length > 0) {
-        const values: string[] = [];
-        const params: (string | number)[] = [];
-        let idx = 1;
-        for (const r of responses) {
-          values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
-          params.push(r.getId() || uuidv7(), r.getAssessmentId(), r.getItemId(), r.getResponse());
-          idx += 4;
-        }
+        const { values, params } = this.buildBatchInsertValues(responses);
         await client.query(
           `INSERT INTO sensory_responses (id, assessment_id, item_id, response) VALUES ${values.join(', ')}`,
           params
@@ -239,6 +209,18 @@ export class PgResponseRepository implements ResponseRepository {
     } finally {
       client.release();
     }
+  }
+
+  private buildBatchInsertValues(responses: Response[]): { values: string[]; params: (string | number)[] } {
+    const values: string[] = [];
+    const params: (string | number)[] = [];
+    let idx = 1;
+    for (const r of responses) {
+      values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3})`);
+      params.push(r.getId() || uuidv7(), r.getAssessmentId(), r.getItemId(), r.getResponse());
+      idx += 4;
+    }
+    return { values, params };
   }
 
   private mapRowToResponse(row: any): Response {

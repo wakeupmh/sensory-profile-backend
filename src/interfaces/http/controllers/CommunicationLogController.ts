@@ -1,25 +1,14 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { CommunicationLogService } from '../../../application/services/CommunicationLogService';
 import {
   createCommunicationLogSchema,
   updateCommunicationLogSchema,
   listCommunicationLogFiltersSchema,
-  idParamSchema,
 } from '../validations/developmentValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) throw new ValidationError('Invalid ID format');
-}
-
-function requireUserId(req: Request): string {
-  if (!(req as any).userId) throw new AuthenticationError();
-  return (req as any).userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class CommunicationLogController {
   constructor(private readonly service: CommunicationLogService) {}
@@ -32,12 +21,7 @@ export class CommunicationLogController {
       { ...parsed, occurredAt: new Date(parsed.occurredAt) },
       userId,
     );
-    res.status(201).json({
-      success: true,
-      data: result.toJSON(),
-      message: 'Registro de comunicação criado com sucesso',
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, result.toJSON(), 201, { message: 'Registro de comunicação criado com sucesso' });
   });
 
   list = asyncHandler(async (req: Request, res: Response) => {
@@ -45,13 +29,10 @@ export class CommunicationLogController {
     const parsed = listCommunicationLogFiltersSchema.parse(req.query);
     logger.info(`[communicationLog.list] userId=${userId}`);
     const result = await this.service.list(userId, parsed);
-    res.status(200).json({
-      success: true,
-      data: result.data,
+    jsonResponse(res, result.data, 200, {
       total: result.total,
       page: result.page,
       limit: result.limit,
-      timestamp: new Date().toISOString(),
     });
   });
 
@@ -60,11 +41,7 @@ export class CommunicationLogController {
     const userId = requireUserId(req);
     logger.info(`[communicationLog.getById] userId=${userId} id=${req.params.id}`);
     const result = await this.service.getById(req.params.id, userId);
-    res.status(200).json({
-      success: true,
-      data: result.toJSON(),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, result.toJSON());
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -77,12 +54,7 @@ export class CommunicationLogController {
       occurredAt: parsed.occurredAt ? new Date(parsed.occurredAt) : undefined,
     };
     const result = await this.service.update(req.params.id, payload, userId);
-    res.status(200).json({
-      success: true,
-      data: result.toJSON(),
-      message: 'Registro de comunicação atualizado com sucesso',
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, result.toJSON(), 200, { message: 'Registro de comunicação atualizado com sucesso' });
   });
 
   remove = asyncHandler(async (req: Request, res: Response) => {

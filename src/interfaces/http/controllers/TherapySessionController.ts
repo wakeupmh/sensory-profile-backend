@@ -1,20 +1,10 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { TherapySessionService } from '../../../application/services/TherapySessionService';
 import { createSessionSchema, updateSessionSchema, listSessionFiltersSchema } from '../validations/therapySessionValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) throw new ValidationError('Invalid ID format');
-}
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class TherapySessionController {
   constructor(private readonly service: TherapySessionService) {}
@@ -28,7 +18,11 @@ export class TherapySessionController {
       from: parsed.from ? new Date(parsed.from) : undefined,
       to: parsed.to ? new Date(parsed.to) : undefined,
     });
-    res.status(200).json({ success: true, ...result, timestamp: new Date().toISOString() });
+    jsonResponse(res, result.data, 200, {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    });
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {
@@ -36,7 +30,7 @@ export class TherapySessionController {
     const userId = requireUserId(req);
     logger.info(`[therapySession.getById] userId=${userId} id=${req.params.id}`);
     const session = await this.service.getById(req.params.id, userId);
-    res.status(200).json({ success: true, data: session, timestamp: new Date().toISOString() });
+    jsonResponse(res, session);
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
@@ -47,7 +41,7 @@ export class TherapySessionController {
       { ...parsed, occurredAt: new Date(parsed.occurredAt) },
       userId,
     );
-    res.status(201).json({ success: true, data: session, message: 'Sessão criada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, session, 201, { message: 'Sessão criada com sucesso' });
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -60,7 +54,7 @@ export class TherapySessionController {
       occurredAt: parsed.occurredAt ? new Date(parsed.occurredAt) : undefined,
     };
     const session = await this.service.update(req.params.id, payload, userId);
-    res.status(200).json({ success: true, data: session, message: 'Sessão atualizada com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, session, 200, { message: 'Sessão atualizada com sucesso' });
   });
 
   remove = asyncHandler(async (req: Request, res: Response) => {

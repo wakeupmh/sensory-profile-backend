@@ -3,26 +3,13 @@ import { ChildService } from '../../../application/services/ChildService';
 import { ChildProfileService } from '../../../application/services/ChildProfileService';
 import { createChildSchema, updateChildSchema, profileQuerySchema, timelineQuerySchema } from '../validations/childValidation';
 import {
-  AuthenticationError,
   NotFoundError,
   ConflictError,
-  ValidationError,
 } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) {
-    throw new ValidationError('Invalid ID format');
-  }
-}
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse } from '../utils/response';
 
 export class ChildController {
   constructor(
@@ -34,11 +21,7 @@ export class ChildController {
     const userId = requireUserId(req);
     logger.info(`[child.list] userId=${userId}`);
     const children = await this.service.list(userId);
-    res.status(200).json({
-      success: true,
-      data: children.map(c => c.toJSON()),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, children.map(c => c.toJSON()));
   });
 
   get = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -48,11 +31,7 @@ export class ChildController {
     logger.info(`[child.get] userId=${userId} id=${id}`);
     const child = await this.service.get(id, userId);
     if (!child) throw new NotFoundError('Child', id);
-    res.status(200).json({
-      success: true,
-      data: child.toJSON(),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, child.toJSON());
   });
 
   create = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -60,11 +39,7 @@ export class ChildController {
     const body = createChildSchema.parse(req.body);
     logger.info(`[child.create] userId=${userId} name=${body.name}`);
     const child = await this.service.create(userId, body);
-    res.status(201).json({
-      success: true,
-      data: child.toJSON(),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, child.toJSON(), 201);
   });
 
   update = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -75,11 +50,7 @@ export class ChildController {
     logger.info(`[child.update] userId=${userId} id=${id}`);
     const child = await this.service.update(id, userId, body);
     if (!child) throw new NotFoundError('Child', id);
-    res.status(200).json({
-      success: true,
-      data: child.toJSON(),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, child.toJSON());
   });
 
   delete = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -107,11 +78,7 @@ export class ChildController {
     const { periodDays } = profileQuerySchema.parse(req.query);
     logger.info(`[child.getProfile] userId=${userId} childId=${childId} periodDays=${periodDays}`);
     const profile = await this.profileService.getProfile(childId, userId, periodDays);
-    res.status(200).json({
-      success: true,
-      data: profile,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, profile);
   });
 
   getTimeline = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -121,13 +88,10 @@ export class ChildController {
     const { page, limit, from, to } = timelineQuerySchema.parse(req.query);
     logger.info(`[child.getTimeline] userId=${userId} childId=${childId} page=${page} limit=${limit}`);
     const result = await this.profileService.getTimeline(childId, userId, page, limit, from, to);
-    res.status(200).json({
-      success: true,
-      data: result.data,
+    jsonResponse(res, result.data, 200, {
       total: result.total,
       page: result.page,
       limit: result.limit,
-      timestamp: new Date().toISOString(),
     });
   });
 }

@@ -1,20 +1,10 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { MedicationService } from '../../../application/services/MedicationService';
 import { createMedicationSchema, updateMedicationSchema, listMedicationFiltersSchema } from '../validations/medicalValidation';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function assertValidId(id: string | undefined): asserts id is string {
-  if (!id || !UUID_REGEX.test(id)) throw new ValidationError('Invalid ID format');
-}
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class MedicationController {
   constructor(private readonly service: MedicationService) {}
@@ -24,7 +14,7 @@ export class MedicationController {
     const parsed = listMedicationFiltersSchema.parse(req.query);
     logger.info(`[medication.list] userId=${userId}`);
     const result = await this.service.list(userId, parsed);
-    res.status(200).json({ success: true, data: result.map(m => m.toJSON()), timestamp: new Date().toISOString() });
+    jsonResponse(res, result.map(m => m.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {
@@ -32,7 +22,7 @@ export class MedicationController {
     const userId = requireUserId(req);
     logger.info(`[medication.getById] userId=${userId} id=${req.params.id}`);
     const medication = await this.service.getById(req.params.id, userId);
-    res.status(200).json({ success: true, data: medication.toJSON(), timestamp: new Date().toISOString() });
+    jsonResponse(res, medication.toJSON());
   });
 
   create = asyncHandler(async (req: Request, res: Response) => {
@@ -40,7 +30,7 @@ export class MedicationController {
     const parsed = createMedicationSchema.parse(req.body);
     logger.info(`[medication.create] userId=${userId}`);
     const medication = await this.service.create(parsed, userId);
-    res.status(201).json({ success: true, data: medication.toJSON(), message: 'Medicamento criado com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, medication.toJSON(), 201, { message: 'Medicamento criado com sucesso' });
   });
 
   update = asyncHandler(async (req: Request, res: Response) => {
@@ -49,7 +39,7 @@ export class MedicationController {
     const parsed = updateMedicationSchema.parse(req.body);
     logger.info(`[medication.update] userId=${userId} id=${req.params.id}`);
     const medication = await this.service.update(req.params.id, parsed, userId);
-    res.status(200).json({ success: true, data: medication.toJSON(), message: 'Medicamento atualizado com sucesso', timestamp: new Date().toISOString() });
+    jsonResponse(res, medication.toJSON(), 200, { message: 'Medicamento atualizado com sucesso' });
   });
 
   remove = asyncHandler(async (req: Request, res: Response) => {

@@ -1,14 +1,10 @@
 import { Request, Response } from 'express';
 import { FormDraftService } from '../../../application/services/FormDraftService';
 import { upsertDraftSchema, assertValidFormType } from '../validations/draftValidation';
-import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
-
-function requireUserId(req: Request): string {
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
+import { requireUserId } from './controllerUtils';
+import { jsonResponse } from '../utils/response';
 
 export class FormDraftController {
   constructor(private readonly service: FormDraftService) {}
@@ -21,11 +17,7 @@ export class FormDraftController {
 
     const draft = await this.service.get(userId, form_type);
 
-    res.status(200).json({
-      success: true,
-      data: draft ? draft.toJSON() : null,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, draft ? draft.toJSON() : null);
   });
 
   upsert = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -43,11 +35,7 @@ export class FormDraftController {
       instrumentId: body.instrumentId,
     });
 
-    res.status(200).json({
-      success: true,
-      data: draft.toJSON(),
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, draft.toJSON());
   });
 
   delete = asyncHandler(async (req: Request, res: Response): Promise<void> => {

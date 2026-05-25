@@ -10,12 +10,10 @@ import {
 } from '../validations/assessmentValidation';
 import { SectionComment } from '../../../application/services/SectionCommentService';
 import logger from '../../../infrastructure/utils/logger';
-import {
-  ValidationError,
-  NotFoundError,
-  AssessmentNotFoundError
-} from '../../../infrastructure/utils/errors/CustomErrors';
+import { AssessmentNotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
+import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class AssessmentController {
   constructor(private assessmentService: AssessmentService) {}
@@ -23,7 +21,7 @@ export class AssessmentController {
   getAllAssessments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     logger.info(`[getAllAssessments] Fetching all assessments`);
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     // Validate query parameters
     const queryParams = assessmentQuerySchema.parse(req.query);
@@ -40,13 +38,10 @@ export class AssessmentController {
 
     logger.info(`[getAllAssessments] Successfully retrieved ${result.data.length} of ${result.total} assessments for user ${userId}`);
 
-    res.status(200).json({
-      success: true,
-      data: result.data,
+    jsonResponse(res, result.data, 200, {
       total: result.total,
       page: result.page,
       limit: result.limit,
-      timestamp: new Date().toISOString()
     });
   });
 
@@ -54,11 +49,9 @@ export class AssessmentController {
     const { id } = req.params;
     logger.info(`[getAssessmentById] Getting assessment by id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      throw new ValidationError('Invalid assessment ID format');
-    }
+    assertValidId(id, 'assessment ID');
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     logger.debug(`[getAssessmentById] User ${userId} authorized, fetching assessment ${id}`);
     
@@ -70,21 +63,17 @@ export class AssessmentController {
     
     logger.info(`[getAssessmentById] Successfully retrieved assessment ${id} with ${responses.length} responses for user ${userId}`);
     
-    res.status(200).json({
-      success: true,
-      data: {
-        assessment,
-        responses,
-        responseCount: responses.length
-      },
-      timestamp: new Date().toISOString()
+    jsonResponse(res, {
+      assessment,
+      responses,
+      responseCount: responses.length
     });
   });
 
   createAssessment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     logger.info(`[createAssessment] Creating new assessment`);
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     logger.debug(`[createAssessment] User ${userId} authorized, validating assessment data`);
     
@@ -107,28 +96,22 @@ export class AssessmentController {
       caregiver: transformedData.caregiver,
       responses: transformedData.responses,
       rawScores: transformedData.rawScores,
-      sectionComments: transformedData.sectionComments as SectionComment[]
+      sectionComments: transformedData.sectionComments as SectionComment[],
+      parentAssessmentId: transformedData.parentAssessmentId
     }, userId);
     
     logger.info(`[createAssessment] Assessment created successfully with id: ${assessment.getId()}`);
     
-    res.status(201).json({
-      success: true,
-      data: assessment,
-      message: 'Assessment created successfully',
-      timestamp: new Date().toISOString()
-    });
+    jsonResponse(res, assessment, 201, { message: 'Assessment created successfully' });
   });
 
   updateAssessment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     logger.info(`[updateAssessment] Updating assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      throw new ValidationError('Invalid assessment ID format');
-    }
+    assertValidId(id, 'assessment ID');
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     logger.debug(`[updateAssessment] User ${userId} authorized, validating assessment data for update`);
     
@@ -144,23 +127,16 @@ export class AssessmentController {
     
     logger.info(`[updateAssessment] Assessment ${id} updated successfully`);
     
-    res.status(200).json({
-      success: true,
-      data: updatedAssessment,
-      message: 'Assessment updated successfully',
-      timestamp: new Date().toISOString()
-    });
+    jsonResponse(res, updatedAssessment, 200, { message: 'Assessment updated successfully' });
   });
 
   deleteAssessment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     logger.info(`[deleteAssessment] Deleting assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      throw new ValidationError('Invalid assessment ID format');
-    }
+    assertValidId(id, 'assessment ID');
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     logger.debug(`[deleteAssessment] User ${userId} authorized, attempting to delete assessment ${id}`);
     
@@ -172,22 +148,16 @@ export class AssessmentController {
     
     logger.info(`[deleteAssessment] Assessment ${id} deleted successfully by user ${userId}`);
     
-    res.status(200).json({
-      success: true,
-      message: 'Assessment deleted successfully',
-      timestamp: new Date().toISOString()
-    });
+    jsonMessage(res, 'Assessment deleted successfully');
   });
 
   generateReport = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     logger.info(`[generateReport] Generating report for assessment with id: ${id}`);
     
-    if (!id || !id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      throw new ValidationError('Invalid assessment ID format');
-    }
+    assertValidId(id, 'assessment ID');
     
-    const userId = req.userId!;
+    const userId = requireUserId(req);
     
     logger.debug(`[generateReport] User ${userId} authorized, generating report for assessment ${id}`);
     
@@ -199,11 +169,6 @@ export class AssessmentController {
     
     logger.info(`[generateReport] Report for assessment ${id} generated successfully for user ${userId}`);
     
-    res.status(200).json({
-      success: true,
-      data: report,
-      message: 'Report generated successfully',
-      timestamp: new Date().toISOString()
-    });
+    jsonResponse(res, report, 200, { message: 'Report generated successfully' });
   });
 }
