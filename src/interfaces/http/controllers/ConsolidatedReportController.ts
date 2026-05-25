@@ -40,7 +40,7 @@ export class ConsolidatedReportController {
     const userId = requireUserId(req);
     const parsed = createShareSchema.parse(req.body);
     logger.info(`[consolidatedReport.createShare] userId=${userId} childId=${parsed.childId}`);
-    const share = await this.shareService.createShare(userId, parsed.childId, parsed.expiresInDays);
+    const share = await this.shareService.createShare(userId, parsed.childId, parsed.expiresInDays, parsed.periodDays);
     res.status(201).json({
       success: true,
       data: {

@@ -3,6 +3,7 @@ export interface ReportShareProps {
   userId: string;
   childId: string;
   token: string;
+  periodDays: number;
   expiresAt: Date;
   createdAt: Date;
 }
@@ -14,6 +15,7 @@ export class ReportShare {
   getUserId(): string { return this.props.userId; }
   getChildId(): string { return this.props.childId; }
   getToken(): string { return this.props.token; }
+  getPeriodDays(): number { return this.props.periodDays; }
   getExpiresAt(): Date { return this.props.expiresAt; }
   getCreatedAt(): Date { return this.props.createdAt; }
 
@@ -23,6 +25,7 @@ export class ReportShare {
       userId: this.props.userId,
       childId: this.props.childId,
       token: this.props.token,
+      periodDays: this.props.periodDays,
       expiresAt: this.props.expiresAt,
       createdAt: this.props.createdAt,
     };

@@ -44,13 +44,14 @@ const TOKEN = 'aaaabbbb-cccc-dddd-eeee-ffffffffffff';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeShare(overrides: Partial<{ id: string; userId: string; childId: string; token: string; expiresAt: Date; createdAt: Date }> = {}): ReportShare {
+function makeShare(overrides: Partial<{ id: string; userId: string; childId: string; token: string; periodDays: number; expiresAt: Date; createdAt: Date }> = {}): ReportShare {
   return new ReportShare({
     id: overrides.id ?? SHARE_ID,
     userId: overrides.userId ?? USER_ID,
     childId: overrides.childId ?? CHILD_ID,
     token: overrides.token ?? TOKEN,
-    expiresAt: overrides.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    periodDays: overrides.periodDays ?? 90,
+    expiresAt: overrides.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     createdAt: overrides.createdAt ?? new Date(),
   });
 }

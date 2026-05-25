@@ -5,6 +5,7 @@ CREATE TABLE report_shares (
   user_id TEXT NOT NULL,
   child_id UUID NOT NULL REFERENCES children(id) ON DELETE CASCADE,
   token UUID NOT NULL UNIQUE,
+  period_days INT NOT NULL DEFAULT 90,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

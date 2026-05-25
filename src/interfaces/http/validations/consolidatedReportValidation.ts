@@ -8,6 +8,7 @@ export const getSummaryQuerySchema = z.object({
 export const createShareSchema = z.object({
   childId: z.string().uuid(),
   expiresInDays: z.number().int().min(1).max(365).default(30),
+  periodDays: z.number().int().min(7).max(365).default(90),
 });
 
 export const listSharesQuerySchema = z.object({

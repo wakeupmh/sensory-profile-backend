@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { formatDateString } from '../../infrastructure/utils/date';
 
 export interface ChildProfileStats {
   assessmentCount: number;
@@ -94,7 +95,7 @@ export class ChildProfileService {
       child: {
         id: childRow.id,
         name: childRow.name,
-        birthDate: childRow.birth_date,
+        birthDate: formatDateString(childRow.birth_date),
         notes: childRow.notes,
         createdAt: childRow.created_at.toISOString(),
       },

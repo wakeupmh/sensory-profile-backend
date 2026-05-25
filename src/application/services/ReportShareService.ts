@@ -12,7 +12,7 @@ export class ReportShareService {
     private readonly pool: Pool,
   ) {}
 
-  async createShare(userId: string, childId: string, expiresInDays: number): Promise<ReportShare> {
+  async createShare(userId: string, childId: string, expiresInDays: number, periodDays: number = 90): Promise<ReportShare> {
     // Cheap ownership check (avoid running full consolidated summary)
     const result = await this.pool.query(
       'SELECT 1 FROM children WHERE id = $1 AND user_id = $2 LIMIT 1',
@@ -30,6 +30,7 @@ export class ReportShareService {
       userId,
       childId,
       token: crypto.randomUUID(),
+      periodDays,
       expiresAt,
       createdAt: now,
     });
@@ -50,6 +51,6 @@ export class ReportShareService {
     const share = await this.repo.findByToken(token);
     if (!share) throw new NotFoundError('Relatório não encontrado');
     if (share.getExpiresAt() < new Date()) throw new GoneError('Link expirado');
-    return this.consolidatedService.getSummary(share.getUserId(), share.getChildId(), 90);
+    return this.consolidatedService.getSummary(share.getUserId(), share.getChildId(), share.getPeriodDays());
   }
 }

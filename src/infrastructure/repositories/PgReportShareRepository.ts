@@ -9,6 +9,7 @@ export class PgReportShareRepository implements ReportShareRepository {
       userId: row.user_id as string,
       childId: row.child_id as string,
       token: row.token as string,
+      periodDays: Number(row.period_days ?? 90),
       expiresAt: new Date(row.expires_at as string),
       createdAt: new Date(row.created_at as string),
     } satisfies ReportShareProps;
@@ -17,13 +18,14 @@ export class PgReportShareRepository implements ReportShareRepository {
 
   async create(share: ReportShare): Promise<void> {
     await pool.query(
-      `INSERT INTO report_shares (id, user_id, child_id, token, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO report_shares (id, user_id, child_id, token, period_days, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         share.getId(),
         share.getUserId(),
         share.getChildId(),
         share.getToken(),
+        share.getPeriodDays(),
         share.getExpiresAt().toISOString(),
         share.getCreatedAt().toISOString(),
       ],

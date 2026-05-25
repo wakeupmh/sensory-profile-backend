@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { formatDateString } from '../../infrastructure/utils/date';
 
 export interface ConsolidatedSummary {
   child: { id: string; name: string; birthDate: string | null; notes: string | null };
@@ -211,12 +212,8 @@ export class ConsolidatedReportService {
       else if (status === 'regressed') milestoneStats.regressed = cnt;
     }
 
-    const birthDateOut = child.birth_date == null
-      ? null
-      : (child.birth_date instanceof Date ? child.birth_date.toISOString().slice(0, 10) : String(child.birth_date));
-
     return {
-      child: { id: child.id, name: child.name, birthDate: birthDateOut, notes: child.notes },
+      child: { id: child.id, name: child.name, birthDate: formatDateString(child.birth_date as Date | string | null), notes: child.notes },
       generatedAt: now.toISOString(),
       period: { from: from.toISOString(), to: to.toISOString() },
       assessments: {
