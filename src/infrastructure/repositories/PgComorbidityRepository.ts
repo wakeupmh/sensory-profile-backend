@@ -5,6 +5,11 @@ import {
   ComorbidityCreateInput,
   ComorbidityUpdateInput,
 } from '../../domain/repositories/ComorbidityRepository';
+import { buildWhere, FilterSpec } from './queryUtils';
+
+const FILTER_MAP: Record<string, FilterSpec> = {
+  childId: ['child_id'],
+};
 
 export class PgComorbidityRepository implements ComorbidityRepository {
   private mapRowToComorbidity(row: Record<string, unknown>): Comorbidity {
@@ -52,15 +57,7 @@ export class PgComorbidityRepository implements ComorbidityRepository {
   }
 
   async findAllByUser(userId: string, filters: { childId?: string }): Promise<Comorbidity[]> {
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
     const result = await pool.query(
       `SELECT * FROM comorbidities WHERE ${where} ORDER BY condition_name ASC`,
       params,

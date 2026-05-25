@@ -1,8 +1,6 @@
-import { v7 as uuidv7 } from 'uuid';
-import { MedicalAppointment } from '../../domain/entities/MedicalAppointment';
-import { MedicalAppointmentRepository, MedicalAppointmentCreateInput, MedicalAppointmentUpdateInput } from '../../domain/repositories/MedicalAppointmentRepository';
-import { MedicalAppointmentSummary } from '../../domain/entities/MedicalAppointment';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { MedicalAppointment, MedicalAppointmentSummary } from '../../domain/entities/MedicalAppointment';
+import { MedicalAppointmentRepository, MedicalAppointmentCreateInput, MedicalAppointmentUpdateInput, MedicalAppointmentFilters } from '../../domain/repositories/MedicalAppointmentRepository';
+import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateAppointmentPayload {
   childId: string;
@@ -33,36 +31,15 @@ export interface AppointmentFilters {
   limit?: number;
 }
 
-export class MedicalAppointmentService {
-  constructor(private readonly repo: MedicalAppointmentRepository) {}
-
-  list(userId: string, filters: AppointmentFilters): Promise<{ data: MedicalAppointmentSummary[]; total: number; page: number; limit: number }> {
-    return this.repo.findAllByUser(userId, filters);
-  }
-
-  async getById(id: string, userId: string): Promise<MedicalAppointment> {
-    const appointment = await this.repo.findById(id, userId);
-    if (!appointment) throw new NotFoundError('Consulta médica não encontrada', id);
-    return appointment;
-  }
-
-  create(payload: CreateAppointmentPayload, userId: string): Promise<MedicalAppointment> {
-    const input: MedicalAppointmentCreateInput = {
-      id: uuidv7(),
-      userId,
-      ...payload,
-    };
-    return this.repo.save(input);
-  }
-
-  async update(id: string, payload: UpdateAppointmentPayload, userId: string): Promise<MedicalAppointment> {
-    const updated = await this.repo.update(id, userId, payload as MedicalAppointmentUpdateInput);
-    if (!updated) throw new NotFoundError('Consulta médica não encontrada', id);
-    return updated;
-  }
-
-  async remove(id: string, userId: string): Promise<void> {
-    const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new NotFoundError('Consulta médica não encontrada', id);
+export class MedicalAppointmentService extends BaseDomainService<
+  MedicalAppointment,
+  MedicalAppointmentCreateInput,
+  MedicalAppointmentUpdateInput,
+  CreateAppointmentPayload,
+  UpdateAppointmentPayload,
+  AppointmentFilters
+> {
+  constructor(repo: MedicalAppointmentRepository) {
+    super(repo, 'Consulta médica não encontrada');
   }
 }

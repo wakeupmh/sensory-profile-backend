@@ -5,6 +5,7 @@ import { CaregiverService } from '../../../application/services/CaregiverService
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import { NotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse } from '../utils/response';
 
 export class EntityController {
   constructor(
@@ -16,7 +17,7 @@ export class EntityController {
   getAllChildren = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const children = await this.childService.getAllChildren(userId);
-    res.status(200).json(children);
+    jsonResponse(res, children);
   });
 
   getChildById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -28,13 +29,13 @@ export class EntityController {
       throw new NotFoundError('Criança', req.params.id);
     }
 
-    res.status(200).json(child);
+    jsonResponse(res, child);
   });
 
   getAllExaminers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const examiners = await this.examinerService.getAllExaminers(userId);
-    res.status(200).json(examiners);
+    jsonResponse(res, examiners);
   });
 
   getExaminerById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -46,13 +47,13 @@ export class EntityController {
       throw new NotFoundError('Examinador', req.params.id);
     }
 
-    res.status(200).json(examiner);
+    jsonResponse(res, examiner);
   });
 
   getAllCaregivers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const caregivers = await this.caregiverService.getAllCaregivers(userId);
-    res.status(200).json(caregivers);
+    jsonResponse(res, caregivers);
   });
 
   getCaregiverById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -64,6 +65,6 @@ export class EntityController {
       throw new NotFoundError('Cuidador', req.params.id);
     }
 
-    res.status(200).json(caregiver);
+    jsonResponse(res, caregiver);
   });
 }

@@ -1,7 +1,6 @@
-import { v7 as uuidv7 } from 'uuid';
 import { DailyLog, LogData, LogType } from '../../domain/entities/DailyLog';
-import { DailyLogRepository, DailyLogFilters } from '../../domain/repositories/DailyLogRepository';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { DailyLogRepository, DailyLogCreateInput, DailyLogFilters } from '../../domain/repositories/DailyLogRepository';
+import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateLogPayload {
   childId: string;
@@ -18,31 +17,15 @@ export interface UpdateLogPayload {
   notes?: string | null;
 }
 
-export class DailyLogService {
-  constructor(private readonly repo: DailyLogRepository) {}
-
-  list(userId: string, filters: DailyLogFilters) {
-    return this.repo.findAllByUser(userId, filters);
-  }
-
-  async getById(id: string, userId: string): Promise<DailyLog> {
-    const log = await this.repo.findById(id, userId);
-    if (!log) throw new NotFoundError('Registro diário não encontrado', id);
-    return log;
-  }
-
-  create(payload: CreateLogPayload, userId: string): Promise<DailyLog> {
-    return this.repo.save({ id: uuidv7(), userId, ...payload });
-  }
-
-  async update(id: string, payload: UpdateLogPayload, userId: string): Promise<DailyLog> {
-    const updated = await this.repo.update(id, userId, payload);
-    if (!updated) throw new NotFoundError('Registro diário não encontrado', id);
-    return updated;
-  }
-
-  async remove(id: string, userId: string): Promise<void> {
-    const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new NotFoundError('Registro diário não encontrado', id);
+export class DailyLogService extends BaseDomainService<
+  DailyLog,
+  DailyLogCreateInput,
+  UpdateLogPayload,
+  CreateLogPayload,
+  UpdateLogPayload,
+  DailyLogFilters
+> {
+  constructor(repo: DailyLogRepository) {
+    super(repo, 'Registro diário não encontrado');
   }
 }

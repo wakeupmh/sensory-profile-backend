@@ -26,7 +26,7 @@ export class EducationPlanController {
     const parsed = listEducationPlanFiltersSchema.parse(req.query);
     logger.info(`[educationPlan.list] userId=${userId}`);
     const results = await this.service.list(userId, parsed);
-    jsonResponse(res, results.map(p => p.toJSON()));
+    jsonResponse(res, results.map((p: any) => p.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {

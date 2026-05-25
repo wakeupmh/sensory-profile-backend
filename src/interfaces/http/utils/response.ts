@@ -4,7 +4,7 @@ export function jsonResponse<T>(res: Response, data: T, statusCode = 200, meta?:
   res.status(statusCode).json({
     success: true,
     data,
-    ...(meta ? { meta } : {}),
+    ...(meta ?? {}),
     timestamp: new Date().toISOString(),
   });
 }

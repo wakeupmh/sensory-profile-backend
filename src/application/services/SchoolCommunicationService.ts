@@ -1,11 +1,11 @@
-import { v7 as uuidv7 } from 'uuid';
 import { SchoolCommunication, SchoolCommType } from '../../domain/entities/SchoolCommunication';
 import {
   SchoolCommunicationRepository,
+  SchoolCommunicationCreateInput,
+  SchoolCommunicationUpdateInput,
   SchoolCommunicationFilters,
-  SchoolCommunicationSummary,
 } from '../../domain/repositories/SchoolCommunicationRepository';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateSchoolCommunicationPayload {
   childId: string;
@@ -28,42 +28,31 @@ export interface UpdateSchoolCommunicationPayload {
   notes?: string | null;
 }
 
-export class SchoolCommunicationService {
-  constructor(private readonly repo: SchoolCommunicationRepository) {}
-
-  list(
-    userId: string,
-    filters: SchoolCommunicationFilters,
-  ): Promise<{ data: SchoolCommunicationSummary[]; total: number; page: number; limit: number }> {
-    return this.repo.findAllByUser(userId, filters);
+export class SchoolCommunicationService extends BaseDomainService<
+  SchoolCommunication,
+  SchoolCommunicationCreateInput,
+  SchoolCommunicationUpdateInput,
+  CreateSchoolCommunicationPayload,
+  UpdateSchoolCommunicationPayload,
+  SchoolCommunicationFilters
+> {
+  constructor(repo: SchoolCommunicationRepository) {
+    super(repo, 'Comunicação escolar não encontrada');
   }
 
-  async getById(id: string, userId: string): Promise<SchoolCommunication> {
-    const comm = await this.repo.findById(id, userId);
-    if (!comm) throw new NotFoundError('Comunicação escolar não encontrada', id);
-    return comm;
-  }
-
+  // Override: convert occurredAt string → Date before saving
   create(payload: CreateSchoolCommunicationPayload, userId: string): Promise<SchoolCommunication> {
-    return this.repo.save({
-      id: uuidv7(),
-      userId,
+    return super.create({
       ...payload,
       occurredAt: new Date(payload.occurredAt),
-    });
+    } as unknown as CreateSchoolCommunicationPayload, userId);
   }
 
+  // Override: convert occurredAt string → Date before updating
   async update(id: string, payload: UpdateSchoolCommunicationPayload, userId: string): Promise<SchoolCommunication> {
-    const updated = await this.repo.update(id, userId, {
+    return super.update(id, {
       ...payload,
       occurredAt: payload.occurredAt ? new Date(payload.occurredAt) : undefined,
-    });
-    if (!updated) throw new NotFoundError('Comunicação escolar não encontrada', id);
-    return updated;
-  }
-
-  async remove(id: string, userId: string): Promise<void> {
-    const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new NotFoundError('Comunicação escolar não encontrada', id);
+    } as unknown as UpdateSchoolCommunicationPayload, userId);
   }
 }

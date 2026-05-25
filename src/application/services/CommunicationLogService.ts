@@ -1,12 +1,11 @@
-import { v7 as uuidv7 } from 'uuid';
-import { CommunicationLog, CommunicationEntryType, CommunicationLogSummary } from '../../domain/entities/CommunicationLog';
+import { CommunicationLog, CommunicationEntryType } from '../../domain/entities/CommunicationLog';
 import {
   CommunicationLogRepository,
   CommunicationLogCreateInput,
   CommunicationLogUpdateInput,
   CommunicationLogFilters,
 } from '../../domain/repositories/CommunicationLogRepository';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateCommunicationLogPayload {
   childId: string;
@@ -25,39 +24,15 @@ export interface UpdateCommunicationLogPayload {
   notes?: string | null;
 }
 
-export class CommunicationLogService {
-  constructor(private readonly repo: CommunicationLogRepository) {}
-
-  list(
-    userId: string,
-    filters: CommunicationLogFilters,
-  ): Promise<{ data: CommunicationLogSummary[]; total: number; page: number; limit: number }> {
-    return this.repo.findAllByUser(userId, filters);
-  }
-
-  async getById(id: string, userId: string): Promise<CommunicationLog> {
-    const log = await this.repo.findById(id, userId);
-    if (!log) throw new NotFoundError('Registro de comunicação não encontrado', id);
-    return log;
-  }
-
-  create(payload: CreateCommunicationLogPayload, userId: string): Promise<CommunicationLog> {
-    const input: CommunicationLogCreateInput = {
-      id: uuidv7(),
-      userId,
-      ...payload,
-    };
-    return this.repo.save(input);
-  }
-
-  async update(id: string, payload: UpdateCommunicationLogPayload, userId: string): Promise<CommunicationLog> {
-    const updated = await this.repo.update(id, userId, payload as CommunicationLogUpdateInput);
-    if (!updated) throw new NotFoundError('Registro de comunicação não encontrado', id);
-    return updated;
-  }
-
-  async remove(id: string, userId: string): Promise<void> {
-    const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new NotFoundError('Registro de comunicação não encontrado', id);
+export class CommunicationLogService extends BaseDomainService<
+  CommunicationLog,
+  CommunicationLogCreateInput,
+  CommunicationLogUpdateInput,
+  CreateCommunicationLogPayload,
+  UpdateCommunicationLogPayload,
+  CommunicationLogFilters
+> {
+  constructor(repo: CommunicationLogRepository) {
+    super(repo, 'Registro de comunicação não encontrado');
   }
 }

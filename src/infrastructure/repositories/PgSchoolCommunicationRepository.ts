@@ -11,6 +11,14 @@ import {
   SchoolCommunicationFilters,
   SchoolCommunicationSummary,
 } from '../../domain/repositories/SchoolCommunicationRepository';
+import { buildWhere, FilterSpec } from './queryUtils';
+
+const FILTER_MAP: Record<string, FilterSpec> = {
+  childId: ['child_id'],
+  commType: ['comm_type'],
+  from: ['occurred_at', '>='],
+  to: ['occurred_at', '<='],
+};
 
 export class PgSchoolCommunicationRepository implements SchoolCommunicationRepository {
   private mapRowToLog(row: Record<string, unknown>): SchoolCommunication {
@@ -82,27 +90,7 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.commType) {
-      params.push(filters.commType);
-      conditions.push(`comm_type = $${params.length}`);
-    }
-    if (filters.from) {
-      params.push(filters.from);
-      conditions.push(`occurred_at >= $${params.length}`);
-    }
-    if (filters.to) {
-      params.push(filters.to);
-      conditions.push(`occurred_at <= $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM school_communications WHERE ${where}`,

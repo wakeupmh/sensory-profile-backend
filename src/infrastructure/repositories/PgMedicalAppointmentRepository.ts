@@ -6,6 +6,13 @@ import {
   MedicalAppointmentUpdateInput,
   MedicalAppointmentFilters,
 } from '../../domain/repositories/MedicalAppointmentRepository';
+import { buildWhere, FilterSpec } from './queryUtils';
+
+const FILTER_MAP: Record<string, FilterSpec> = {
+  childId: ['child_id'],
+  from: ['occurred_at', '>='],
+  to: ['occurred_at', '<='],
+};
 
 export class PgMedicalAppointmentRepository implements MedicalAppointmentRepository {
   private mapRowToAppointment(row: Record<string, unknown>): MedicalAppointment {
@@ -78,23 +85,7 @@ export class PgMedicalAppointmentRepository implements MedicalAppointmentReposit
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.from) {
-      params.push(filters.from);
-      conditions.push(`occurred_at >= $${params.length}`);
-    }
-    if (filters.to) {
-      params.push(filters.to);
-      conditions.push(`occurred_at <= $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM medical_appointments WHERE ${where}`,

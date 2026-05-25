@@ -1,7 +1,6 @@
-import { v7 as uuidv7 } from 'uuid';
 import { Medication } from '../../domain/entities/Medication';
 import { MedicationRepository, MedicationCreateInput, MedicationUpdateInput } from '../../domain/repositories/MedicationRepository';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateMedicationPayload {
   childId: string;
@@ -26,36 +25,15 @@ export interface UpdateMedicationPayload {
   notes?: string | null;
 }
 
-export class MedicationService {
-  constructor(private readonly repo: MedicationRepository) {}
-
-  list(userId: string, filters: { childId?: string; active?: boolean }): Promise<Medication[]> {
-    return this.repo.findAllByUser(userId, filters);
-  }
-
-  async getById(id: string, userId: string): Promise<Medication> {
-    const medication = await this.repo.findById(id, userId);
-    if (!medication) throw new NotFoundError('Medicamento não encontrado', id);
-    return medication;
-  }
-
-  create(payload: CreateMedicationPayload, userId: string): Promise<Medication> {
-    const input: MedicationCreateInput = {
-      id: uuidv7(),
-      userId,
-      ...payload,
-    };
-    return this.repo.save(input);
-  }
-
-  async update(id: string, payload: UpdateMedicationPayload, userId: string): Promise<Medication> {
-    const updated = await this.repo.update(id, userId, payload as MedicationUpdateInput);
-    if (!updated) throw new NotFoundError('Medicamento não encontrado', id);
-    return updated;
-  }
-
-  async remove(id: string, userId: string): Promise<void> {
-    const ok = await this.repo.delete(id, userId);
-    if (!ok) throw new NotFoundError('Medicamento não encontrado', id);
+export class MedicationService extends BaseDomainService<
+  Medication,
+  MedicationCreateInput,
+  MedicationUpdateInput,
+  CreateMedicationPayload,
+  UpdateMedicationPayload,
+  { childId?: string; active?: boolean }
+> {
+  constructor(repo: MedicationRepository) {
+    super(repo, 'Medicamento não encontrado');
   }
 }

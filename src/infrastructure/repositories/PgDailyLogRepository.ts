@@ -6,6 +6,14 @@ import {
   DailyLogUpdateInput,
   DailyLogFilters,
 } from '../../domain/repositories/DailyLogRepository';
+import { buildWhere, FilterSpec } from './queryUtils';
+
+const FILTER_MAP: Record<string, FilterSpec> = {
+  childId: ['child_id'],
+  logType: ['log_type'],
+  from: ['occurred_at', '>='],
+  to: ['occurred_at', '<='],
+};
 
 export class PgDailyLogRepository implements DailyLogRepository {
   async save(input: DailyLogCreateInput): Promise<DailyLog> {
@@ -43,27 +51,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.logType) {
-      params.push(filters.logType);
-      conditions.push(`log_type = $${params.length}`);
-    }
-    if (filters.from) {
-      params.push(filters.from);
-      conditions.push(`occurred_at >= $${params.length}`);
-    }
-    if (filters.to) {
-      params.push(filters.to);
-      conditions.push(`occurred_at <= $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM daily_logs WHERE ${where}`,

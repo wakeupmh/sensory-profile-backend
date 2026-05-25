@@ -11,6 +11,13 @@ import {
   MilestoneUpdateInput,
   MilestoneFilters,
 } from '../../domain/repositories/DevelopmentalMilestoneRepository';
+import { buildWhere, FilterSpec } from './queryUtils';
+
+const FILTER_MAP: Record<string, FilterSpec> = {
+  childId: ['child_id'],
+  category: ['category'],
+  status: ['status'],
+};
 
 export class PgDevelopmentalMilestoneRepository implements DevelopmentalMilestoneRepository {
   private mapRowToMilestone(row: Record<string, unknown>): DevelopmentalMilestone {
@@ -60,23 +67,7 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
   }
 
   async findAllByUser(userId: string, filters: MilestoneFilters): Promise<DevelopmentalMilestone[]> {
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.category) {
-      params.push(filters.category);
-      conditions.push(`category = $${params.length}`);
-    }
-    if (filters.status) {
-      params.push(filters.status);
-      conditions.push(`status = $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
     const result = await pool.query(
       `SELECT * FROM developmental_milestones WHERE ${where} ORDER BY title ASC`,
       params,
