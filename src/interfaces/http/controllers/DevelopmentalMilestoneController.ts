@@ -26,7 +26,7 @@ export class DevelopmentalMilestoneController {
     const parsed = listMilestoneFiltersSchema.parse(req.query);
     logger.info(`[developmentalMilestone.list] userId=${userId}`);
     const results = await this.service.list(userId, parsed);
-    jsonResponse(res, results.map(m => m.toJSON()));
+    jsonResponse(res, results.map((m: { toJSON: () => unknown }) => m.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {

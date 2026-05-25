@@ -1,12 +1,19 @@
 import { Response } from 'express';
 
 export function jsonResponse<T>(res: Response, data: T, statusCode = 200, meta?: Record<string, unknown>) {
-  res.status(statusCode).json({
+  const payload: Record<string, unknown> = {
     success: true,
     data,
-    ...(meta ?? {}),
     timestamp: new Date().toISOString(),
-  });
+  };
+  if (meta) {
+    Object.entries(meta).forEach(([key, value]) => {
+      if (key !== 'success' && key !== 'data' && key !== 'timestamp') {
+        payload[key] = value;
+      }
+    });
+  }
+  res.status(statusCode).json(payload);
 }
 
 export function jsonMessage(res: Response, message: string, statusCode = 200) {

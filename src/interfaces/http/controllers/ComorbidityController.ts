@@ -14,7 +14,7 @@ export class ComorbidityController {
     const parsed = listComorbidityFiltersSchema.parse(req.query);
     logger.info(`[comorbidity.list] userId=${userId}`);
     const result = await this.service.list(userId, parsed);
-    jsonResponse(res, result.map(c => c.toJSON()));
+    jsonResponse(res, result.map((c: { toJSON: () => unknown }) => c.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {

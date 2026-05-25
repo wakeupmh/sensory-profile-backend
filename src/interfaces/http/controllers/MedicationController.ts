@@ -14,7 +14,7 @@ export class MedicationController {
     const parsed = listMedicationFiltersSchema.parse(req.query);
     logger.info(`[medication.list] userId=${userId}`);
     const result = await this.service.list(userId, parsed);
-    jsonResponse(res, result.map(m => m.toJSON()));
+    jsonResponse(res, result.map((m: { toJSON: () => unknown }) => m.toJSON()));
   });
 
   getById = asyncHandler(async (req: Request, res: Response) => {
