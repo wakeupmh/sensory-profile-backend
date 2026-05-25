@@ -43,7 +43,6 @@ export class AssessmentController {
     res.status(200).json({
       success: true,
       data: result.data,
-      count: result.data.length,
       total: result.total,
       page: result.page,
       limit: result.limit,

@@ -1,23 +1,9 @@
 import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
-import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
+import { AssessmentWithRelations, AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import { NotFoundError } from '../utils/errors/CustomErrors';
 import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
-
-export interface AssessmentWithRelations extends Assessment {
-  childName?: string;
-  childBirthDate?: Date;
-  childGender?: string;
-  childOtherInfo?: string;
-  childAge?: number;
-  examinerName?: string;
-  examinerProfession?: string;
-  examinerContact?: string;
-  caregiverName?: string;
-  caregiverRelationship?: string;
-  caregiverContact?: string;
-}
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {

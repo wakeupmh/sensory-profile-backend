@@ -418,26 +418,39 @@ export class AssessmentService {
       );
       
       if (updatedIsLegacy) {
-        // Legacy SP-2 path — always recompute scores server-side from responses (ignore client rawScores)
-        if (assessmentData.responses && assessmentData.responses.length > 0) {
-          const sp2 = getInstrument(updatedInstrumentId);
-          if (sp2?.scoringStrategy) {
-            const responsesMap = new Map<number, string>(
-              assessmentData.responses.map(r => [r.itemId, r.response])
-            );
-            const result = sp2.scoringStrategy(responsesMap, sp2);
-            if (result.perSection) {
-              const ps = result.perSection;
-              updatedAssessment.setAuditoryProcessingRawScore(ps['auditivo'] ?? 0);
-              updatedAssessment.setVisualProcessingRawScore(ps['visual'] ?? 0);
-              updatedAssessment.setTactileProcessingRawScore(ps['tato'] ?? 0);
-              updatedAssessment.setMovementProcessingRawScore(ps['movimento'] ?? 0);
-              updatedAssessment.setBodyPositionProcessingRawScore(ps['posicao_corporal'] ?? 0);
-              updatedAssessment.setOralSensitivityProcessingRawScore(ps['oral'] ?? 0);
-              updatedAssessment.setBehavioralResponsesRawScore(ps['conduta'] ?? 0);
-              updatedAssessment.setSocialEmotionalResponsesRawScore(ps['socio_emocional'] ?? 0);
-              updatedAssessment.setAttentionResponsesRawScore(ps['atencao'] ?? 0);
+        // Legacy SP-2 path — recompute scores server-side from responses (ignore client rawScores).
+        // Distinguish "no responses provided" (keep existing scores) from "empty responses" (clear scores).
+        if (assessmentData.responses !== undefined) {
+          if (assessmentData.responses.length > 0) {
+            const sp2 = getInstrument(updatedInstrumentId);
+            if (sp2?.scoringStrategy) {
+              const responsesMap = new Map<number, string>(
+                assessmentData.responses.map(r => [r.itemId, r.response])
+              );
+              const result = sp2.scoringStrategy(responsesMap, sp2);
+              if (result.perSection) {
+                const ps = result.perSection;
+                updatedAssessment.setAuditoryProcessingRawScore(ps['auditivo'] ?? 0);
+                updatedAssessment.setVisualProcessingRawScore(ps['visual'] ?? 0);
+                updatedAssessment.setTactileProcessingRawScore(ps['tato'] ?? 0);
+                updatedAssessment.setMovementProcessingRawScore(ps['movimento'] ?? 0);
+                updatedAssessment.setBodyPositionProcessingRawScore(ps['posicao_corporal'] ?? 0);
+                updatedAssessment.setOralSensitivityProcessingRawScore(ps['oral'] ?? 0);
+                updatedAssessment.setBehavioralResponsesRawScore(ps['conduta'] ?? 0);
+                updatedAssessment.setSocialEmotionalResponsesRawScore(ps['socio_emocional'] ?? 0);
+                updatedAssessment.setAttentionResponsesRawScore(ps['atencao'] ?? 0);
+              }
             }
+          } else {
+            updatedAssessment.setAuditoryProcessingRawScore(0);
+            updatedAssessment.setVisualProcessingRawScore(0);
+            updatedAssessment.setTactileProcessingRawScore(0);
+            updatedAssessment.setMovementProcessingRawScore(0);
+            updatedAssessment.setBodyPositionProcessingRawScore(0);
+            updatedAssessment.setOralSensitivityProcessingRawScore(0);
+            updatedAssessment.setBehavioralResponsesRawScore(0);
+            updatedAssessment.setSocialEmotionalResponsesRawScore(0);
+            updatedAssessment.setAttentionResponsesRawScore(0);
           }
         }
       } else {

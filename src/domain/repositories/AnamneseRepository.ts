@@ -15,9 +15,9 @@ export interface AnamneseCreateInput {
 }
 
 export interface AnamneseUpdateInput {
-  child: AnamneseChild;
-  caregiver: AnamneseCaregiver;
-  clinicalHistory: AnamneseClinicalHistory;
+  child?: AnamneseChild;
+  caregiver?: AnamneseCaregiver;
+  clinicalHistory?: AnamneseClinicalHistory;
 }
 
 export interface AnamneseRepository {

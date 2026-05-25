@@ -1,11 +1,12 @@
+import { randomBytes } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { 
-  BaseError, 
-  ValidationError, 
-  InternalServerError, 
+import {
+  BaseError,
+  ValidationError,
+  InternalServerError,
   isOperationalError,
-  serializeError 
+  serializeError
 } from './CustomErrors';
 import logger from '../logger';
 
@@ -177,7 +178,7 @@ export const setupGracefulShutdown = (server?: import('http').Server): void => {
 
 // Request ID middleware
 export const requestIdMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const requestId = req.headers['x-request-id'] as string || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] as string || `req-${randomBytes(8).toString('hex')}`;
   req.headers['x-request-id'] = requestId;
   res.setHeader('X-Request-ID', requestId);
   next();

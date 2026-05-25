@@ -101,7 +101,7 @@ const caregiverSchema = z.object({
     .max(50, 'Relationship must not exceed 50 characters')
     .refine((rel) => {
       const validRelationships = ['parent', 'guardian', 'teacher', 'therapist', 'caregiver', 'other'];
-      return validRelationships.includes(rel.toLowerCase()) || rel.length > 0;
+      return validRelationships.includes(rel.toLowerCase());
     }, 'Invalid relationship type'),
   
   contact: z.string()

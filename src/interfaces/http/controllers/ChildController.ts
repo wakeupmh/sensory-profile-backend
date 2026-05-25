@@ -6,9 +6,18 @@ import {
   AuthenticationError,
   NotFoundError,
   ConflictError,
+  ValidationError,
 } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertValidId(id: string | undefined): asserts id is string {
+  if (!id || !UUID_REGEX.test(id)) {
+    throw new ValidationError('Invalid ID format');
+  }
+}
 
 function requireUserId(req: Request): string {
   if (!req.userId) throw new AuthenticationError();
@@ -35,6 +44,7 @@ export class ChildController {
   get = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { id } = req.params;
+    assertValidId(id);
     logger.info(`[child.get] userId=${userId} id=${id}`);
     const child = await this.service.get(id, userId);
     if (!child) throw new NotFoundError('Child', id);
@@ -60,6 +70,7 @@ export class ChildController {
   update = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { id } = req.params;
+    assertValidId(id);
     const body = updateChildSchema.parse(req.body);
     logger.info(`[child.update] userId=${userId} id=${id}`);
     const child = await this.service.update(id, userId, body);
@@ -74,6 +85,7 @@ export class ChildController {
   delete = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { id } = req.params;
+    assertValidId(id);
     logger.info(`[child.delete] userId=${userId} id=${id}`);
     const deleted = await this.service.delete(id, userId);
     if (deleted === false) {
@@ -91,6 +103,7 @@ export class ChildController {
   getProfile = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { childId } = req.params;
+    assertValidId(childId);
     const { periodDays } = profileQuerySchema.parse(req.query);
     logger.info(`[child.getProfile] userId=${userId} childId=${childId} periodDays=${periodDays}`);
     const profile = await this.profileService.getProfile(childId, userId, periodDays);
@@ -104,6 +117,7 @@ export class ChildController {
   getTimeline = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { childId } = req.params;
+    assertValidId(childId);
     const { page, limit, from, to } = timelineQuerySchema.parse(req.query);
     logger.info(`[child.getTimeline] userId=${userId} childId=${childId} page=${page} limit=${limit}`);
     const result = await this.profileService.getTimeline(childId, userId, page, limit, from, to);

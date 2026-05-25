@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { v7 as uuidv7 } from 'uuid';
 import { Pool } from 'pg';
 import { ReportShare } from '../../domain/entities/ReportShare';
@@ -29,7 +30,7 @@ export class ReportShareService {
       id: uuidv7(),
       userId,
       childId,
-      token: crypto.randomUUID(),
+      token: randomUUID(),
       periodDays,
       expiresAt,
       createdAt: now,

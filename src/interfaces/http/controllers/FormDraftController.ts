@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { FormDraftService } from '../../../application/services/FormDraftService';
 import { upsertDraftSchema, assertValidFormType } from '../validations/draftValidation';
-import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
 
@@ -16,11 +16,7 @@ export class FormDraftController {
   get = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { form_type } = req.params;
-    try {
-      assertValidFormType(form_type);
-    } catch {
-      throw new ValidationError(String(`Invalid form_type: ${form_type}`));
-    }
+    assertValidFormType(form_type);
     logger.info(`[draft.get] userId=${userId} form_type=${form_type}`);
 
     const draft = await this.service.get(userId, form_type);
@@ -35,11 +31,7 @@ export class FormDraftController {
   upsert = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { form_type } = req.params;
-    try {
-      assertValidFormType(form_type);
-    } catch {
-      throw new ValidationError(String(`Invalid form_type: ${form_type}`));
-    }
+    assertValidFormType(form_type);
     const body = upsertDraftSchema.parse(req.body);
     logger.info(`[draft.upsert] userId=${userId} form_type=${form_type} step=${body.currentStep}`);
 
@@ -61,11 +53,7 @@ export class FormDraftController {
   delete = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const { form_type } = req.params;
-    try {
-      assertValidFormType(form_type);
-    } catch {
-      throw new ValidationError(String(`Invalid form_type: ${form_type}`));
-    }
+    assertValidFormType(form_type);
     logger.info(`[draft.delete] userId=${userId} form_type=${form_type}`);
 
     await this.service.delete(userId, form_type);

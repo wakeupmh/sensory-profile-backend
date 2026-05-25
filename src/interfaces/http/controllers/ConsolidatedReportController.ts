@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { AuthenticationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
 import { ConsolidatedReportService } from '../../../application/services/ConsolidatedReportService';
 import { ReportShareService } from '../../../application/services/ReportShareService';
@@ -11,6 +11,14 @@ import {
   listSharesQuerySchema,
   generateAISummarySchema,
 } from '../validations/consolidatedReportValidation';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertValidId(id: string | undefined): asserts id is string {
+  if (!id || !UUID_REGEX.test(id)) {
+    throw new ValidationError('Invalid ID format');
+  }
+}
 
 function requireUserId(req: Request): string {
   if (!(req as any).userId) throw new AuthenticationError();
@@ -66,6 +74,7 @@ export class ConsolidatedReportController {
   deleteShare = asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
     const { id } = req.params;
+    assertValidId(id);
     logger.info(`[consolidatedReport.deleteShare] userId=${userId} id=${id}`);
     await this.shareService.deleteShare(id, userId);
     res.status(204).send();
