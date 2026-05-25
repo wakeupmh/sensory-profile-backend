@@ -104,7 +104,7 @@ export const createAnamneseSchema = z.object({
   clinicalHistory: clinicalHistorySchema,
 });
 
-export const updateAnamneseSchema = createAnamneseSchema;
+export const updateAnamneseSchema = createAnamneseSchema.partial();
 
 export type CreateAnamnesePayload = z.infer<typeof createAnamneseSchema>;
 export type UpdateAnamnesePayload = z.infer<typeof updateAnamneseSchema>;

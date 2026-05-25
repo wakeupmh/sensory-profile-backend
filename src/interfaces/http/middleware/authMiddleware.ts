@@ -26,7 +26,11 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
   const token = authHeader.slice(7);
 
   try {
-    const { payload } = await jwtVerify(token, JWKS);
+    const { payload } = await jwtVerify(token, JWKS, {
+      audience: 'authenticated',
+      issuer: `${supabaseUrl}/auth/v1`,
+      clockTolerance: 15,
+    });
     if (!payload.sub) {
       return next(new AuthenticationError());
     }

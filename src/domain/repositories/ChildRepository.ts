@@ -18,7 +18,7 @@ export interface ChildRepository {
   create(input: ChildCreateInput): Promise<Child>;
   update(id: string, userId: string, input: ChildUpdateInput): Promise<Child | null>;
   delete(id: string, userId: string): Promise<boolean>;
-  hasAssessments(id: string): Promise<boolean>;
+  hasAssessments(id: string, userId: string): Promise<boolean>;
   findOrCreate(userId: string, data: {
     name: string;
     birthDate?: string;

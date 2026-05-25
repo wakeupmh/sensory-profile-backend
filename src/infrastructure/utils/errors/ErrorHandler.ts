@@ -1,11 +1,12 @@
+import { randomBytes } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { 
-  BaseError, 
-  ValidationError, 
-  InternalServerError, 
+import {
+  BaseError,
+  ValidationError,
+  InternalServerError,
   isOperationalError,
-  serializeError 
+  serializeError
 } from './CustomErrors';
 import logger from '../logger';
 
@@ -72,7 +73,7 @@ export const errorHandler = (
   const errorInfo = serializeError(customError);
   const logContext = {
     requestId: req.headers['x-request-id'] || 'unknown',
-    userId: (req as any).auth?.userId || 'anonymous',
+    userId: (req as any).userId || 'anonymous',
     method: req.method,
     url: req.url,
     userAgent: req.headers['user-agent'],
@@ -147,11 +148,15 @@ export const notFoundHandler = (req: Request, res: Response): void => {
 };
 
 // Graceful shutdown handler
-export const setupGracefulShutdown = (): void => {
+export const setupGracefulShutdown = (server?: import('http').Server): void => {
   const gracefulShutdown = (signal: string) => {
     logger.info(`Received ${signal}. Starting graceful shutdown...`);
-    
-    process.exit(0);
+    if (server) {
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(1), 10000);
+    } else {
+      process.exit(0);
+    }
   };
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -173,7 +178,7 @@ export const setupGracefulShutdown = (): void => {
 
 // Request ID middleware
 export const requestIdMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const requestId = req.headers['x-request-id'] as string || `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] as string || `req-${randomBytes(8).toString('hex')}`;
   req.headers['x-request-id'] = requestId;
   res.setHeader('X-Request-ID', requestId);
   next();

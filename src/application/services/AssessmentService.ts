@@ -12,11 +12,29 @@ import {
 } from '../../infrastructure/utils/errors/CustomErrors';
 import { v7 as uuidv7 } from 'uuid';
 import pool from '../../infrastructure/database/connection';
+import { PoolClient } from 'pg';
+import { PgAssessmentRepository } from '../../infrastructure/repositories/PgAssessmentRepository';
+import { PgResponseRepository } from '../../infrastructure/repositories/PgResponseRepository';
 import { ChildService } from './ChildService';
 import { ExaminerService } from './ExaminerService';
 import { CaregiverService } from './CaregiverService';
 import { SectionCommentService } from './SectionCommentService';
 import logger from '../../infrastructure/utils/logger';
+import { getInstrument } from '../../instruments/index';
+
+// Zero values for the 9 SP-2 raw-score columns; used when persisting a new-
+// instrument assessment so the INSERT still satisfies the schema.
+const ZERO_RAW_SCORES = {
+  auditoryProcessing: 0,
+  visualProcessing: 0,
+  tactileProcessing: 0,
+  movementProcessing: 0,
+  bodyPositionProcessing: 0,
+  oralSensitivityProcessing: 0,
+  behavioralResponses: 0,
+  socialEmotionalResponses: 0,
+  attentionResponses: 0,
+} as const;
 
 export class AssessmentService {
   constructor(
@@ -109,6 +127,7 @@ export class AssessmentService {
       relationship: string;
       contact?: string;
     };
+    parentAssessmentId?: string;
     responses: Array<{ itemId: number, response: string }>;
     rawScores: {
       auditoryProcessing: number;
@@ -143,66 +162,139 @@ export class AssessmentService {
         logger.debug(`[AssessmentService] Child id: ${childId} for user ${userId}`);
       }
       
-      let examinerId = null;
-      if (assessmentData.examiner) {
-        logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner);
-        logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
-      }
-      
-      let caregiverId = null;
-      if (assessmentData.caregiver) {
-        logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver);
-        logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
-      }
-      
       // Create assessment
       const assessmentId = uuidv7();
       logger.debug(`[AssessmentService] Generated assessment id: ${assessmentId}`);
-      
-      const assessment = new Assessment(
-        childId,
-        examinerId,
-        caregiverId,
-        new Date(),
-        assessmentData.rawScores.auditoryProcessing,
-        assessmentData.rawScores.visualProcessing,
-        assessmentData.rawScores.tactileProcessing,
-        assessmentData.rawScores.movementProcessing,
-        assessmentData.rawScores.bodyPositionProcessing,
-        assessmentData.rawScores.oralSensitivityProcessing,
-        assessmentData.rawScores.behavioralResponses,
-        assessmentData.rawScores.socialEmotionalResponses,
-        assessmentData.rawScores.attentionResponses,
-        assessmentId,
-        undefined,
-        undefined,
-        assessmentData.instrumentId ?? DEFAULT_INSTRUMENT_ID
-      );
-      
-      logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
-      const savedAssessment = await this.assessmentRepository.save(assessment, userId);
-      logger.info(`[AssessmentService] Assessment ${savedAssessment.getId()} saved successfully for user ${userId}`);
-      
-      // Save responses
-      logger.debug(`[AssessmentService] Creating ${assessmentData.responses.length} responses for assessment ${savedAssessment.getId()}`);
-      const responseEntities = assessmentData.responses.map(
-        r => new Response(savedAssessment.getId()!, r.itemId, r.response, uuidv7())
-      );
-      
-      await this.responseRepository.saveMany(responseEntities, userId);
-      logger.debug(`[AssessmentService] Responses saved for assessment ${savedAssessment.getId()}`);
-      
-      // Save section comments if provided
-      if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
-        logger.debug(`[AssessmentService] Saving ${assessmentData.sectionComments.length} section comments for assessment ${savedAssessment.getId()}`);
-        await this.sectionCommentService.saveSectionComments(savedAssessment.getId()!, assessmentData.sectionComments);
-        logger.debug(`[AssessmentService] Section comments saved for assessment ${savedAssessment.getId()}`);
+
+      const instrumentId = assessmentData.instrumentId ?? DEFAULT_INSTRUMENT_ID;
+
+      // Validate parent assessment linkage before persisting
+      if (assessmentData.parentAssessmentId) {
+        const parent = await this.assessmentRepository.findById(assessmentData.parentAssessmentId, userId);
+        if (!parent) {
+          throw new NotFoundError('Avaliação pai', assessmentData.parentAssessmentId);
+        }
+        if (parent.getInstrumentId() !== 'mchat-r') {
+          throw new ValidationError('parentAssessmentId deve referenciar uma avaliação M-CHAT-R');
+        }
+        const parentScores = parent.getScoresJson() as { risk?: string } | null;
+        if (!parentScores || parentScores.risk !== 'medio') {
+          throw new ValidationError('Entrevista de acompanhamento só é aplicável para risco médio');
+        }
+        if (instrumentId !== 'mchat-rf-followup') {
+          throw new ValidationError('Instrumento deve ser mchat-rf-followup quando parentAssessmentId é fornecido');
+        }
+        if (parent.getChildId() && parent.getChildId() !== childId) {
+          throw new ValidationError('Avaliação de acompanhamento deve referenciar a mesma criança da avaliação pai');
+        }
       }
-      
-      logger.info(`[AssessmentService] Assessment creation completed successfully for id ${savedAssessment.getId()}`);
-      return savedAssessment;
+
+      const instrument = getInstrument(instrumentId);
+      const isLegacy = !instrument || instrument.legacy === true;
+
+      // Wrap all writes (examiner, caregiver, assessment, responses, comments) in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        let examinerId = null;
+        if (assessmentData.examiner) {
+          logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
+          examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId, client);
+          logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
+        }
+
+        let caregiverId = null;
+        if (assessmentData.caregiver) {
+          logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
+          caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId, client);
+          logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
+        }
+
+        let assessment: Assessment;
+        if (isLegacy) {
+          assessment = new Assessment(
+            childId,
+            examinerId,
+            caregiverId,
+            new Date(),
+            assessmentData.rawScores.auditoryProcessing,
+            assessmentData.rawScores.visualProcessing,
+            assessmentData.rawScores.tactileProcessing,
+            assessmentData.rawScores.movementProcessing,
+            assessmentData.rawScores.bodyPositionProcessing,
+            assessmentData.rawScores.oralSensitivityProcessing,
+            assessmentData.rawScores.behavioralResponses,
+            assessmentData.rawScores.socialEmotionalResponses,
+            assessmentData.rawScores.attentionResponses,
+            assessmentId,
+            undefined,
+            undefined,
+            instrumentId
+          );
+        } else {
+          const responsesMap = new Map<number, string>(
+            assessmentData.responses.map(r => [r.itemId, r.response])
+          );
+          const scoringResult = instrument.scoringStrategy(responsesMap, instrument);
+          logger.debug(`[AssessmentService] New instrument scoring complete for ${instrumentId}`);
+
+          assessment = new Assessment(
+            childId,
+            examinerId,
+            caregiverId,
+            new Date(),
+            ZERO_RAW_SCORES.auditoryProcessing,
+            ZERO_RAW_SCORES.visualProcessing,
+            ZERO_RAW_SCORES.tactileProcessing,
+            ZERO_RAW_SCORES.movementProcessing,
+            ZERO_RAW_SCORES.bodyPositionProcessing,
+            ZERO_RAW_SCORES.oralSensitivityProcessing,
+            ZERO_RAW_SCORES.behavioralResponses,
+            ZERO_RAW_SCORES.socialEmotionalResponses,
+            ZERO_RAW_SCORES.attentionResponses,
+            assessmentId,
+            undefined,
+            undefined,
+            instrumentId
+          );
+          assessment.setScoresJson(scoringResult.scores_json);
+        }
+
+        if (assessmentData.parentAssessmentId) {
+          assessment.setParentAssessmentId(assessmentData.parentAssessmentId);
+        }
+
+        logger.debug(`[AssessmentService] Saving assessment ${assessmentId} for user ${userId}`);
+        const savedAssessment = await (this.assessmentRepository as PgAssessmentRepository).save(assessment, userId, client);
+        logger.info(`[AssessmentService] Assessment ${savedAssessment.getId()} saved successfully for user ${userId}`);
+
+        // Save responses
+        logger.debug(`[AssessmentService] Creating ${assessmentData.responses.length} responses for assessment ${savedAssessment.getId()}`);
+        const responseEntities = assessmentData.responses.map(
+          r => new Response(savedAssessment.getId()!, r.itemId, r.response, uuidv7())
+        );
+
+        await (this.responseRepository as PgResponseRepository).saveMany(responseEntities, userId, client);
+        logger.debug(`[AssessmentService] Responses saved for assessment ${savedAssessment.getId()}`);
+
+        // Save section comments if provided
+        if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
+          logger.debug(`[AssessmentService] Saving ${assessmentData.sectionComments.length} section comments for assessment ${savedAssessment.getId()}`);
+          await this.sectionCommentService.saveSectionComments(savedAssessment.getId()!, assessmentData.sectionComments, client);
+          logger.debug(`[AssessmentService] Section comments saved for assessment ${savedAssessment.getId()}`);
+        }
+
+        await client.query('COMMIT');
+
+        logger.info(`[AssessmentService] Assessment creation completed successfully for id ${savedAssessment.getId()}`);
+        return savedAssessment;
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
+      }
     } catch (error: any) {
       logger.error(`[AssessmentService] Error creating assessment for user ${userId}: ${error.message}`, { error });
       throw error;
@@ -279,28 +371,36 @@ export class AssessmentService {
         }
       }
       
-      // Update examiner if provided
-      let examinerId = existingAssessment.getExaminerId();
-      if (assessmentData.examiner) {
-        logger.debug(`[AssessmentService] Updating examiner data for assessment ${id}`);
-        examinerId = await this.examinerService.createExaminer(assessmentData.examiner);
-        logger.debug(`[AssessmentService] Updated examiner id: ${examinerId}`);
-      }
-      
-      // Update caregiver if provided
-      let caregiverId = existingAssessment.getCaregiverId();
-      if (assessmentData.caregiver) {
-        logger.debug(`[AssessmentService] Updating caregiver data for assessment ${id}`);
-        caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver);
-        logger.debug(`[AssessmentService] Updated caregiver id: ${caregiverId}`);
-      }
-      
-      // Update assessment fields if provided
-      logger.debug(`[AssessmentService] Creating updated assessment object for id ${id}`);
-      const updatedAssessment = new Assessment(
-        childId,
-        examinerId,
-        caregiverId,
+      const updatedInstrumentId = assessmentData.instrumentId ?? existingAssessment.getInstrumentId();
+      const updatedInstrument = getInstrument(updatedInstrumentId);
+      const updatedIsLegacy = !updatedInstrument || updatedInstrument.legacy === true;
+
+      // Wrap all writes in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Update examiner if provided
+        let examinerId = existingAssessment.getExaminerId();
+        if (assessmentData.examiner) {
+          logger.debug(`[AssessmentService] Updating examiner data for assessment ${id}`);
+          examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId, client);
+          logger.debug(`[AssessmentService] Updated examiner id: ${examinerId}`);
+        }
+
+        // Update caregiver if provided
+        let caregiverId = existingAssessment.getCaregiverId();
+        if (assessmentData.caregiver) {
+          logger.debug(`[AssessmentService] Updating caregiver data for assessment ${id}`);
+          caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId, client);
+          logger.debug(`[AssessmentService] Updated caregiver id: ${caregiverId}`);
+        }
+
+        logger.debug(`[AssessmentService] Creating updated assessment object for id ${id}`);
+        const updatedAssessment = new Assessment(
+          childId,
+          examinerId,
+          caregiverId,
         assessmentData.assessmentDate || existingAssessment.getAssessmentDate(),
         existingAssessment.getAuditoryProcessingRawScore(),
         existingAssessment.getVisualProcessingRawScore(),
@@ -317,61 +417,87 @@ export class AssessmentService {
         assessmentData.instrumentId ?? existingAssessment.getInstrumentId()
       );
       
-      // If raw scores are provided, update them
-      if (assessmentData.rawScores) {
-        logger.debug(`[AssessmentService] Updating raw scores for assessment ${id}`);
-        if (assessmentData.rawScores.auditoryProcessing !== undefined) {
-          updatedAssessment.setAuditoryProcessingRawScore(assessmentData.rawScores.auditoryProcessing);
+      if (updatedIsLegacy) {
+        // Legacy SP-2 path — recompute scores server-side from responses (ignore client rawScores).
+        // Distinguish "no responses provided" (keep existing scores) from "empty responses" (clear scores).
+        if (assessmentData.responses !== undefined) {
+          if (assessmentData.responses.length > 0) {
+            const sp2 = getInstrument(updatedInstrumentId);
+            if (sp2?.scoringStrategy) {
+              const responsesMap = new Map<number, string>(
+                assessmentData.responses.map(r => [r.itemId, r.response])
+              );
+              const result = sp2.scoringStrategy(responsesMap, sp2);
+              if (result.perSection) {
+                const ps = result.perSection;
+                updatedAssessment.setAuditoryProcessingRawScore(ps['auditivo'] ?? 0);
+                updatedAssessment.setVisualProcessingRawScore(ps['visual'] ?? 0);
+                updatedAssessment.setTactileProcessingRawScore(ps['tato'] ?? 0);
+                updatedAssessment.setMovementProcessingRawScore(ps['movimento'] ?? 0);
+                updatedAssessment.setBodyPositionProcessingRawScore(ps['posicao_corporal'] ?? 0);
+                updatedAssessment.setOralSensitivityProcessingRawScore(ps['oral'] ?? 0);
+                updatedAssessment.setBehavioralResponsesRawScore(ps['conduta'] ?? 0);
+                updatedAssessment.setSocialEmotionalResponsesRawScore(ps['socio_emocional'] ?? 0);
+                updatedAssessment.setAttentionResponsesRawScore(ps['atencao'] ?? 0);
+              }
+            }
+          } else {
+            updatedAssessment.setAuditoryProcessingRawScore(0);
+            updatedAssessment.setVisualProcessingRawScore(0);
+            updatedAssessment.setTactileProcessingRawScore(0);
+            updatedAssessment.setMovementProcessingRawScore(0);
+            updatedAssessment.setBodyPositionProcessingRawScore(0);
+            updatedAssessment.setOralSensitivityProcessingRawScore(0);
+            updatedAssessment.setBehavioralResponsesRawScore(0);
+            updatedAssessment.setSocialEmotionalResponsesRawScore(0);
+            updatedAssessment.setAttentionResponsesRawScore(0);
+          }
         }
-        if (assessmentData.rawScores.visualProcessing !== undefined) {
-          updatedAssessment.setVisualProcessingRawScore(assessmentData.rawScores.visualProcessing);
-        }
-        if (assessmentData.rawScores.tactileProcessing !== undefined) {
-          updatedAssessment.setTactileProcessingRawScore(assessmentData.rawScores.tactileProcessing);
-        }
-        if (assessmentData.rawScores.movementProcessing !== undefined) {
-          updatedAssessment.setMovementProcessingRawScore(assessmentData.rawScores.movementProcessing);
-        }
-        if (assessmentData.rawScores.bodyPositionProcessing !== undefined) {
-          updatedAssessment.setBodyPositionProcessingRawScore(assessmentData.rawScores.bodyPositionProcessing);
-        }
-        if (assessmentData.rawScores.oralSensitivityProcessing !== undefined) {
-          updatedAssessment.setOralSensitivityProcessingRawScore(assessmentData.rawScores.oralSensitivityProcessing);
-        }
-        if (assessmentData.rawScores.behavioralResponses !== undefined) {
-          updatedAssessment.setBehavioralResponsesRawScore(assessmentData.rawScores.behavioralResponses);
-        }
-        if (assessmentData.rawScores.socialEmotionalResponses !== undefined) {
-          updatedAssessment.setSocialEmotionalResponsesRawScore(assessmentData.rawScores.socialEmotionalResponses);
-        }
-        if (assessmentData.rawScores.attentionResponses !== undefined) {
-          updatedAssessment.setAttentionResponsesRawScore(assessmentData.rawScores.attentionResponses);
-        }
-      }
-      
-      // If responses are provided, atomically replace them via the repository
-      if (assessmentData.responses && assessmentData.responses.length > 0) {
-        logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
-        const responseEntities = assessmentData.responses.map(
-          r => new Response(id, r.itemId, r.response, uuidv7())
+      } else {
+        // New instrument path — re-compute scores from the incoming or existing responses.
+        const responsesToScore = assessmentData.responses && assessmentData.responses.length > 0
+          ? assessmentData.responses
+          : await this.responseRepository.findByAssessmentId(id, userId).then(rs => rs.map(r => ({ itemId: r.getItemId(), response: r.getResponse() })));
+
+        const responsesMap = new Map<number, string>(
+          responsesToScore.map(r => [r.itemId, r.response])
         );
-        await this.responseRepository.replaceByAssessmentId(id, responseEntities, userId);
-        logger.debug(`[AssessmentService] Replaced responses for assessment ${id}`);
+        const scoringResult = updatedInstrument.scoringStrategy(responsesMap, updatedInstrument);
+        logger.debug(`[AssessmentService] New instrument re-scoring complete for ${updatedInstrumentId}`);
+        updatedAssessment.setScoresJson(scoringResult.scores_json);
       }
 
-      // If section comments are provided, delete existing and insert new
-      if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
-        logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
-        await this.sectionCommentService.deleteByAssessmentId(id);
-        await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments);
-        logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
+        // If responses are provided, atomically replace them via the repository
+        if (assessmentData.responses && assessmentData.responses.length > 0) {
+          logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
+          const responseEntities = assessmentData.responses.map(
+            r => new Response(id, r.itemId, r.response, uuidv7())
+          );
+          await (this.responseRepository as PgResponseRepository).replaceByAssessmentId(id, responseEntities, userId, client);
+          logger.debug(`[AssessmentService] Replaced responses for assessment ${id}`);
+        }
+
+        // If section comments are provided, delete existing and insert new
+        if (assessmentData.sectionComments && assessmentData.sectionComments.length > 0) {
+          logger.debug(`[AssessmentService] Updating section comments for assessment ${id}`);
+          await this.sectionCommentService.deleteByAssessmentId(id, client, userId);
+          await this.sectionCommentService.saveSectionComments(id, assessmentData.sectionComments, client);
+          logger.debug(`[AssessmentService] Updated section comments for assessment ${id}`);
+        }
+
+        logger.debug(`[AssessmentService] Saving updated assessment ${id}`);
+        const result = await (this.assessmentRepository as PgAssessmentRepository).update(updatedAssessment, userId, client);
+        logger.info(`[AssessmentService] Assessment ${id} updated successfully for user ${userId}`);
+
+        await client.query('COMMIT');
+
+        return result;
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
       }
-      
-      logger.debug(`[AssessmentService] Saving updated assessment ${id}`);
-      const result = await this.assessmentRepository.update(updatedAssessment, userId);
-      logger.info(`[AssessmentService] Assessment ${id} updated successfully for user ${userId}`);
-      
-      return result;
     } catch (error: any) {
       logger.error(`[AssessmentService] Error updating assessment ${id} for user ${userId}: ${error.message}`, { error });
       throw error;
@@ -388,14 +514,40 @@ export class AssessmentService {
         return false;
       }
       
-      // Delete responses first (due to foreign key constraints)
-      logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);
-      await this.responseRepository.deleteByAssessmentId(id, userId);
-      
-      // Then delete the assessment
-      logger.debug(`[AssessmentService] Deleting assessment ${id}`);
-      await this.assessmentRepository.delete(id, userId);
-      
+      // Check for linked follow-up assessments (cascade would silently delete them)
+      const linkedResult = await pool.query(
+        'SELECT id FROM sensory_assessments WHERE parent_assessment_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      if (linkedResult.rows.length > 0) {
+        throw new ValidationError('Esta avaliação possui entrevista(s) de acompanhamento vinculada(s). Exclua-as primeiro.');
+      }
+
+      // Wrap deletes in a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Delete section comments first
+        logger.debug(`[AssessmentService] Deleting section comments for assessment ${id}`);
+        await this.sectionCommentService.deleteByAssessmentId(id, client, userId);
+
+        // Delete responses (due to foreign key constraints)
+        logger.debug(`[AssessmentService] Deleting responses for assessment ${id}`);
+        await (this.responseRepository as PgResponseRepository).deleteByAssessmentId(id, userId, client);
+
+        // Then delete the assessment
+        logger.debug(`[AssessmentService] Deleting assessment ${id}`);
+        await (this.assessmentRepository as PgAssessmentRepository).delete(id, userId, client);
+
+        await client.query('COMMIT');
+      } catch (txError) {
+        await client.query('ROLLBACK');
+        throw txError;
+      } finally {
+        client.release();
+      }
+
       logger.info(`[AssessmentService] Assessment ${id} deleted successfully for user ${userId}`);
       return true;
     } catch (error: any) {
@@ -415,25 +567,44 @@ export class AssessmentService {
       }
       
       logger.debug(`[AssessmentService] Creating report for assessment ${id}`);
-      // Generate a report based on the assessment and responses
-      // This is a placeholder for the actual report generation logic
-      const report = {
-        assessmentId: assessment.getId(),
-        childId: assessment.getChildId(),
-        date: assessment.getAssessmentDate(),
-        scores: {
-          auditoryProcessing: assessment.getAuditoryProcessingRawScore(),
-          visualProcessing: assessment.getVisualProcessingRawScore(),
-          tactileProcessing: assessment.getTactileProcessingRawScore(),
-          movementProcessing: assessment.getMovementProcessingRawScore(),
-          bodyPositionProcessing: assessment.getBodyPositionProcessingRawScore(),
-          oralSensitivityProcessing: assessment.getOralSensitivityProcessingRawScore(),
-          behavioralResponses: assessment.getBehavioralResponsesRawScore(),
-          socialEmotionalResponses: assessment.getSocialEmotionalResponsesRawScore(),
-          attentionResponses: assessment.getAttentionResponsesRawScore()
-        },
-        responseCount: responses.length
-      };
+
+      const reportInstrumentId = assessment.getInstrumentId();
+      const reportInstrument = getInstrument(reportInstrumentId);
+      const reportIsLegacy = !reportInstrument || reportInstrument.legacy === true;
+
+      let report: Record<string, unknown>;
+      if (reportIsLegacy) {
+        // Legacy SP-2 report shape — preserve existing field names for backward compatibility.
+        report = {
+          assessmentId: assessment.getId(),
+          instrumentId: reportInstrumentId,
+          childId: assessment.getChildId(),
+          date: assessment.getAssessmentDate(),
+          scores: {
+            auditoryProcessing: assessment.getAuditoryProcessingRawScore(),
+            visualProcessing: assessment.getVisualProcessingRawScore(),
+            tactileProcessing: assessment.getTactileProcessingRawScore(),
+            movementProcessing: assessment.getMovementProcessingRawScore(),
+            bodyPositionProcessing: assessment.getBodyPositionProcessingRawScore(),
+            oralSensitivityProcessing: assessment.getOralSensitivityProcessingRawScore(),
+            behavioralResponses: assessment.getBehavioralResponsesRawScore(),
+            socialEmotionalResponses: assessment.getSocialEmotionalResponsesRawScore(),
+            attentionResponses: assessment.getAttentionResponsesRawScore()
+          },
+          responseCount: responses.length
+        };
+      } else {
+        // New instrument report shape — scores come from scores_json.
+        report = {
+          assessmentId: assessment.getId(),
+          instrumentId: reportInstrumentId,
+          childId: assessment.getChildId(),
+          date: assessment.getAssessmentDate(),
+          scores: assessment.getScoresJson(),
+          responses: responses.map(r => ({ itemId: r.getItemId(), response: r.getResponse() })),
+          responseCount: responses.length
+        };
+      }
       
       logger.info(`[AssessmentService] Report generated successfully for assessment ${id}`);
       return report;

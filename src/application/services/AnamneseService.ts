@@ -45,7 +45,7 @@ export class AnamneseService {
 
   async update(
     id: string,
-    payload: AnamnesePayload,
+    payload: Partial<AnamnesePayload>,
     userId: string
   ): Promise<Anamnese> {
     const updated = await this.repo.update(id, userId, payload as AnamneseUpdateInput);

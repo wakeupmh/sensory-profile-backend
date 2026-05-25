@@ -79,16 +79,16 @@ export class PgAnamneseRepository implements AnamneseRepository {
   ): Promise<Anamnese | null> {
     const result = await pool.query(
       `UPDATE anamneses SET
-         child            = $1::jsonb,
-         caregiver        = $2::jsonb,
-         clinical_history = $3::jsonb,
+         child            = COALESCE($1::jsonb, child),
+         caregiver        = COALESCE($2::jsonb, caregiver),
+         clinical_history = COALESCE($3::jsonb, clinical_history),
          updated_at       = CURRENT_TIMESTAMP
        WHERE id = $4 AND user_id = $5
        RETURNING *`,
       [
-        JSON.stringify(input.child),
-        JSON.stringify(input.caregiver),
-        JSON.stringify(input.clinicalHistory),
+        input.child ? JSON.stringify(input.child) : null,
+        input.caregiver ? JSON.stringify(input.caregiver) : null,
+        input.clinicalHistory ? JSON.stringify(input.clinicalHistory) : null,
         id,
         userId,
       ]

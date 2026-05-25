@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AssessmentController } from '../controllers/AssessmentController';
+import { EntityController } from '../controllers/EntityController';
 import { AssessmentService } from '../../../application/services/AssessmentService';
 import { PgAssessmentRepository } from '../../../infrastructure/repositories/PgAssessmentRepository';
 import { PgResponseRepository } from '../../../infrastructure/repositories/PgResponseRepository';
@@ -8,7 +9,6 @@ import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { SectionCommentService } from '../../../application/services/SectionCommentService';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { Request, Response } from 'express';
 
 const assessmentRepository = new PgAssessmentRepository();
 const responseRepository = new PgResponseRepository();
@@ -18,7 +18,7 @@ const caregiverService = new CaregiverService();
 const sectionCommentService = new SectionCommentService();
 
 const assessmentService = new AssessmentService(
-  assessmentRepository, 
+  assessmentRepository,
   responseRepository,
   childService,
   examinerService,
@@ -27,115 +27,23 @@ const assessmentService = new AssessmentService(
 );
 
 const assessmentController = new AssessmentController(assessmentService);
+const entityController = new EntityController(childService, examinerService, caregiverService);
 
 const router = Router();
 
 router.use(authMiddleware);
 
 // Child routes
-router.get('/children', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const children = await childService.getAllChildren(userId);
-    res.status(200).json(children);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar crianças', 
-      error: error.message 
-    });
-  }
-});
-
-router.get('/children/:id', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const child = await childService.getChildById(req.params.id, userId);
-    
-    if (!child) {
-      res.status(404).json({ message: 'Criança não encontrada' });
-      return;
-    }
-    
-    res.status(200).json(child);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar criança', 
-      error: error.message 
-    });
-  }
-});
+router.get('/children', entityController.getAllChildren.bind(entityController));
+router.get('/children/:id', entityController.getChildById.bind(entityController));
 
 // Examiner routes
-router.get('/examiners', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const examiners = await examinerService.getAllExaminers(userId);
-    res.status(200).json(examiners);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar examinadores', 
-      error: error.message 
-    });
-  }
-});
-
-router.get('/examiners/:id', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const examiner = await examinerService.getExaminerById(req.params.id);
-    
-    if (!examiner) {
-      res.status(404).json({ message: 'Examinador não encontrado' });
-      return;
-    }
-    
-    res.status(200).json(examiner);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar examinador', 
-      error: error.message 
-    });
-  }
-});
+router.get('/examiners', entityController.getAllExaminers.bind(entityController));
+router.get('/examiners/:id', entityController.getExaminerById.bind(entityController));
 
 // Caregiver routes
-router.get('/caregivers', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const caregivers = await caregiverService.getAllCaregivers(userId);
-    res.status(200).json(caregivers);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar cuidadores', 
-      error: error.message 
-    });
-  }
-});
-
-router.get('/caregivers/:id', async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId!;
-    
-    const caregiver = await caregiverService.getCaregiverById(req.params.id);
-    
-    if (!caregiver) {
-      res.status(404).json({ message: 'Cuidador não encontrado' });
-      return;
-    }
-    
-    res.status(200).json(caregiver);
-  } catch (error: any) {
-    res.status(500).json({ 
-      message: 'Erro ao buscar cuidador', 
-      error: error.message 
-    });
-  }
-});
+router.get('/caregivers', entityController.getAllCaregivers.bind(entityController));
+router.get('/caregivers/:id', entityController.getCaregiverById.bind(entityController));
 
 // Assessment specific routes
 router.get('/:id/report', assessmentController.generateReport.bind(assessmentController));

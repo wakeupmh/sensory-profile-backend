@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { DEFAULT_INSTRUMENT_ID } from '../../../domain/entities/Assessment';
+import { getInstrument } from '../../../instruments';
+import { calculateAgeUTC } from '../../../infrastructure/utils/date';
 
 // Instruments that use the legacy Criança 3-14 validation + scoring stack.
 // Other instrument IDs are accepted but skip the 3-14-specific checks and
@@ -29,17 +31,14 @@ const ZERO_RAW_SCORES = {
   attentionResponses: 0,
 };
 
-// Valid response values based on official Sensory Profile 2 form
-const responseEnum = z.enum([
-  // Official Portuguese responses
+// Open response string — per-instrument value validation is done via
+// superRefine on the responses array (see assessmentSchema / createAssessmentSchema).
+// Legacy SP-2 values are still checked there for backward compatibility.
+const SP2_VALID_RESPONSES = new Set([
   'quase sempre', 'frequentemente', 'metade do tempo', 'ocasionalmente', 'quase nunca', 'não se aplica',
-  // English equivalents
   'almost always', 'frequently', 'half the time', 'occasionally', 'almost never', 'does not apply',
-  // Legacy support (deprecated)
-  'always', 'rarely', 'never'
-], {
-  errorMap: () => ({ message: 'Response must be one of: quase sempre, frequentemente, metade do tempo, ocasionalmente, quase nunca, não se aplica' })
-});
+  'always', 'rarely', 'never',
+]);
 
 // Enhanced child validation
 const childSchema = z.object({
@@ -50,12 +49,14 @@ const childSchema = z.object({
   
   birthDate: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .refine((date) => {
-      const birthDate = new Date(date);
-      const today = new Date();
-      const age = today.getFullYear() - birthDate.getFullYear();
-      return age >= 3 && age <= 14;
-    }, 'Child must be between 3 and 14 years old'),
+      return new Date(`${date}T12:00:00Z`) <= new Date();
+    }, 'Data de nascimento não pode ser futura'),
   
   gender: z.enum(['male', 'female', 'other'], {
     errorMap: () => ({ message: 'Gender must be male, female, or other' })
@@ -99,7 +100,7 @@ const caregiverSchema = z.object({
     .max(50, 'Relationship must not exceed 50 characters')
     .refine((rel) => {
       const validRelationships = ['parent', 'guardian', 'teacher', 'therapist', 'caregiver', 'other'];
-      return validRelationships.includes(rel.toLowerCase()) || rel.length > 0;
+      return validRelationships.includes(rel.toLowerCase());
     }, 'Invalid relationship type'),
   
   contact: z.string()
@@ -107,25 +108,66 @@ const caregiverSchema = z.object({
     .optional()
 }).strict();
 
-// Individual response validation.
-// Item IDs are global across instruments (1–85 for Criança 3–14,
-// 1001–1048 for Criança Pequena, etc); the scoring stack is what
-// scopes them per instrument.
-const responseSchema = z.object({
+// Individual response item schema — response value is an open string.
+// Cross-instrument value validation happens in the responses array superRefine.
+const responseItemSchema = z.object({
   itemId: z.number()
     .int('Item ID must be an integer')
     .positive('Item ID must be a positive integer'),
 
-  response: responseEnum
+  response: z.string().min(1, 'Response value cannot be empty'),
 }).strict();
 
-// Section comment validation
+/**
+ * Build a superRefine validator for a responses array given the instrumentId
+ * from the parent payload.  For legacy instruments the SP-2 allow-list is
+ * enforced; for non-legacy instruments the instrument's own scale.options are
+ * checked (if registered); unknown instruments fall through without error.
+ */
+function buildResponsesRefine(instrumentId: string) {
+  return (
+    responses: Array<{ itemId: number; response: string }>,
+    ctx: z.RefinementCtx,
+  ) => {
+    const instrument = getInstrument(instrumentId);
+    if (instrument && !instrument.legacy) {
+      // Non-legacy instrument registered in the registry — validate against its scale,
+      // narrowing to the section's allowedValues when the item belongs to a section
+      // that restricts the response set (e.g. ATEC Sociability accepts 0-2, not 0-3).
+      const scaleValues = instrument.scale.options.map((o) => o.value);
+      responses.forEach((r, idx) => {
+        const section = instrument.sections.find((s) => s.itemIds.includes(r.itemId));
+        const validValues = section?.allowedValues ?? scaleValues;
+        if (!validValues.includes(r.response)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [idx, 'response'],
+            message: `Invalid response value "${r.response}" for instrument "${instrumentId}"${section ? ` section "${section.key}"` : ''}. Valid values: ${validValues.join(', ')}`,
+          });
+        }
+      });
+    } else if (instrument?.legacy || !instrument) {
+      // Legacy SP-2 instruments (or unknown instruments) — use the SP-2 allow-list.
+      responses.forEach((r, idx) => {
+        if (!SP2_VALID_RESPONSES.has(r.response)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [idx, 'response'],
+            message: `Response must be one of: quase sempre, frequentemente, metade do tempo, ocasionalmente, quase nunca, não se aplica`,
+          });
+        }
+      });
+    }
+  };
+}
+
+// Section comment validation.
+// Section key is an open string so non-SP-2 instruments can send their own
+// section keys without being rejected at the Zod layer.  Instrument-level key
+// validation (against instrument.sections[].key) is the responsibility of the
+// service layer.
 const sectionCommentSchema = z.object({
-  section: z.enum([
-    'auditoryProcessing', 'visualProcessing', 'tactileProcessing',
-    'movementProcessing', 'bodyPositionProcessing', 'oralSensitivityProcessing',
-    'behavioralResponses', 'socialEmotionalResponses', 'attentionResponses'
-  ]),
+  section: z.string().min(1, 'Section key cannot be empty'),
   comments: z.string()
     .min(1, 'Comments cannot be empty if provided')
     .max(2000, 'Comments must not exceed 2000 characters')
@@ -150,7 +192,7 @@ export const assessmentSchema = z.object({
   child: childSchema,
   examiner: examinerSchema.optional(),
   caregiver: caregiverSchema.optional(),
-  responses: z.array(responseSchema)
+  responses: z.array(responseItemSchema)
     .min(1, 'At least one response is required')
     .max(200, 'Cannot have more than 200 responses')
     .refine((responses) => {
@@ -166,9 +208,11 @@ export const assessmentSchema = z.object({
   rawScores: rawScoresSchema.optional(),
 
   sectionComments: z.array(sectionCommentSchema)
-    .max(9, 'Cannot have more than 9 section comments')
+    .max(20, 'Cannot have more than 20 section comments')
     .optional()
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  buildResponsesRefine(data.instrumentId)(data.responses, ctx);
+});
 
 // Simplified schema for creating assessments (auto-calculate scores)
 export const createAssessmentSchema = z.object({
@@ -176,7 +220,7 @@ export const createAssessmentSchema = z.object({
   child: childSchema,
   examiner: examinerSchema.optional(),
   caregiver: caregiverSchema.optional(),
-  responses: z.array(responseSchema)
+  responses: z.array(responseItemSchema)
     .min(1, 'At least one response is required')
     .max(200, 'Cannot have more than 200 responses')
     .refine((responses) => {
@@ -186,12 +230,42 @@ export const createAssessmentSchema = z.object({
     }, 'Duplicate item IDs are not allowed'),
 
   sectionComments: z.array(sectionCommentSchema)
-    .max(9, 'Cannot have more than 9 section comments')
-    .optional()
-}).strict();
+    .max(20, 'Cannot have more than 20 section comments')
+    .optional(),
 
-// Update assessment schema (partial updates allowed)
-export const updateAssessmentSchema = assessmentSchema.partial().strict();
+  parentAssessmentId: z.string().uuid('Parent assessment ID must be a valid UUID').optional(),
+}).strict().superRefine((data, ctx) => {
+  buildResponsesRefine(data.instrumentId)(data.responses, ctx);
+});
+
+// Update assessment schema (partial updates allowed).
+// Built from the raw object shape (without the superRefine effect) so that
+// .partial()/.strict() are available. Response-value validation during updates
+// is handled in the service layer.
+const assessmentObjectShape = z.object({
+  instrumentId: instrumentIdSchema,
+  child: childSchema,
+  examiner: examinerSchema.optional(),
+  caregiver: caregiverSchema.optional(),
+  responses: z.array(responseItemSchema)
+    .min(1, 'At least one response is required')
+    .max(200, 'Cannot have more than 200 responses')
+    .refine((responses) => {
+      const itemIds = responses.map(r => r.itemId);
+      const uniqueIds = new Set(itemIds);
+      return uniqueIds.size === itemIds.length;
+    }, 'Duplicate item IDs are not allowed'),
+  rawScores: rawScoresSchema.optional(),
+  sectionComments: z.array(sectionCommentSchema)
+    .max(20, 'Cannot have more than 20 section comments')
+    .optional(),
+});
+export const updateAssessmentSchema = assessmentObjectShape.partial().strict().superRefine((data, ctx) => {
+  if (data.responses && data.responses.length > 0) {
+    const instrumentId = data.instrumentId ?? LEGACY_INSTRUMENT_ID;
+    buildResponsesRefine(instrumentId)(data.responses, ctx);
+  }
+});
 
 // Query parameter validation
 export const assessmentQuerySchema = z.object({
@@ -217,10 +291,20 @@ export const assessmentQuerySchema = z.object({
   
   dateFrom: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date from must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .optional(),
-  
+
   dateTo: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date to must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .optional()
 }).strict().refine((data) => {
   if (data.dateFrom && data.dateTo) {
@@ -248,6 +332,7 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
     caregiver: payload.caregiver,
     responses: payload.responses,
     sectionComments: payload.sectionComments || [],
+    parentAssessmentId: payload.parentAssessmentId,
   };
 
   if (!isLegacyInstrument(payload.instrumentId)) {
@@ -292,14 +377,9 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
 // Other instruments (e.g. Criança Pequena 7-36 meses) accept any non-future
 // birth date and defer age-appropriateness to the frontend.
 export const validateChildAge = (birthDate: string, instrumentId?: string): number => {
-  const birth = new Date(birthDate);
+  const birth = new Date(birthDate + 'T12:00:00Z');
   const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
+  const age = calculateAgeUTC(birthDate);
 
   if (birth > today) {
     throw new ValidationError('Birth date cannot be in the future');

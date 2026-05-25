@@ -9,6 +9,12 @@ import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import draftRoutes from './interfaces/http/routes/draftRoutes';
 import childRoutes from './interfaces/http/routes/childRoutes';
+import dailyLogRoutes from './interfaces/http/routes/dailyLogRoutes';
+import therapyRoutes from './interfaces/http/routes/therapyRoutes';
+import medicalRoutes from './interfaces/http/routes/medicalRoutes';
+import developmentRoutes from './interfaces/http/routes/developmentRoutes';
+import educationRoutes from './interfaces/http/routes/educationRoutes';
+import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -19,6 +25,20 @@ import {
 import logger from './infrastructure/utils/logger';
 
 dotenv.config();
+
+function validateEnv() {
+  const required: string[] = [];
+  if (!process.env.DATABASE_URL) required.push('DATABASE_URL');
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.SUPABASE_URL) required.push('SUPABASE_URL');
+    if (!process.env.FRONTEND_URL) required.push('FRONTEND_URL');
+  }
+  if (required.length > 0) {
+    console.error(`Missing required env vars: ${required.join(', ')}`);
+    process.exit(1);
+  }
+}
+validateEnv();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,7 +56,11 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Security middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : true,
+  origin: process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL]
+    : process.env.NODE_ENV === 'production'
+      ? []
+      : ['http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
@@ -71,17 +95,10 @@ app.use(limiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  const healthInfo = {
+  res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    version: process.env.npm_package_version || '1.0.0',
-    memory: process.memoryUsage(),
-    requestId: req.headers['x-request-id']
-  };
-  
-  res.status(200).json(healthInfo);
+  });
 });
 
 // API routes
@@ -89,15 +106,18 @@ app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/children', childRoutes);
+app.use('/api/logs', dailyLogRoutes);
+app.use('/api/therapy', therapyRoutes);
+app.use('/api/medical', medicalRoutes);
+app.use('/api/development', developmentRoutes);
+app.use('/api/education', educationRoutes);
+app.use('/api/consolidated', consolidatedReportRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
 
 // Global error handler (must be last)
 app.use(errorHandler);
-
-// Setup graceful shutdown handlers
-setupGracefulShutdown();
 
 // Start server
 const server = app.listen(PORT, () => {
@@ -108,6 +128,8 @@ const server = app.listen(PORT, () => {
     uptime: process.uptime()
   });
 });
+
+setupGracefulShutdown(server);
 
 // Handle server startup errors
 server.on('error', (error: NodeJS.ErrnoException) => {

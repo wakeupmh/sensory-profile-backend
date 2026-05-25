@@ -98,6 +98,16 @@ export class AnamneseAccessDeniedError extends AuthorizationError {
   }
 }
 
+// 410 Gone Errors
+export class GoneError extends BaseError {
+  readonly statusCode = 410;
+  readonly isOperational = true;
+
+  constructor(message: string = 'Resource is no longer available', cause?: Error) {
+    super(message, cause);
+  }
+}
+
 // 409 Conflict Errors
 export class ConflictError extends BaseError {
   readonly statusCode = 409;

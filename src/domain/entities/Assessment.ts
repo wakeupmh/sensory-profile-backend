@@ -18,7 +18,9 @@ export class Assessment {
     private id?: string,
     private createdAt?: Date,
     private updatedAt?: Date,
-    private instrumentId: string = DEFAULT_INSTRUMENT_ID
+    private instrumentId: string = DEFAULT_INSTRUMENT_ID,
+    private scoresJson: Record<string, unknown> | null = null,
+    private parentAssessmentId: string | null = null
   ) {}
 
   getId(): string | undefined {
@@ -137,6 +139,24 @@ export class Assessment {
 
   setAttentionResponsesRawScore(score: number): void {
     this.attentionResponsesRawScore = score;
+    this.updatedAt = new Date();
+  }
+
+  getScoresJson(): Record<string, unknown> | null {
+    return this.scoresJson;
+  }
+
+  setScoresJson(scoresJson: Record<string, unknown> | null): void {
+    this.scoresJson = scoresJson;
+    this.updatedAt = new Date();
+  }
+
+  getParentAssessmentId(): string | null {
+    return this.parentAssessmentId;
+  }
+
+  setParentAssessmentId(parentAssessmentId: string | null): void {
+    this.parentAssessmentId = parentAssessmentId;
     this.updatedAt = new Date();
   }
 }

@@ -9,3 +9,14 @@ export const createChildSchema = z.object({
 });
 
 export const updateChildSchema = createChildSchema.partial();
+
+export const profileQuerySchema = z.object({
+  periodDays: z.coerce.number().int().min(1).max(365).default(30),
+});
+
+export const timelineQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});

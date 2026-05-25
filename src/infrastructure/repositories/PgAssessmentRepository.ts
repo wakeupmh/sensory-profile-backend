@@ -1,21 +1,9 @@
 import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessment';
-import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
+import { AssessmentWithRelations, AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
+import { NotFoundError } from '../utils/errors/CustomErrors';
 import pool from '../database/connection';
+import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
-
-export interface AssessmentWithRelations extends Assessment {
-  childName?: string;
-  childBirthDate?: Date;
-  childGender?: string;
-  childOtherInfo?: string;
-  childAge?: number;
-  examinerName?: string;
-  examinerProfession?: string;
-  examinerContact?: string;
-  caregiverName?: string;
-  caregiverRelationship?: string;
-  caregiverContact?: string;
-}
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
@@ -66,9 +54,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
       LEFT JOIN
         children c ON sa.child_id = c.id
       LEFT JOIN
-        examiners e ON sa.examiner_id = e.id
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
       LEFT JOIN
-        caregivers cg ON sa.caregiver_id = cg.id
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
       WHERE
         ${whereClause}
       ORDER BY
@@ -104,11 +92,11 @@ export class PgAssessmentRepository implements AssessmentRepository {
         sensory_assessments sa
       LEFT JOIN 
         children c ON sa.child_id = c.id
-      LEFT JOIN 
-        examiners e ON sa.examiner_id = e.id
-      LEFT JOIN 
-        caregivers cg ON sa.caregiver_id = cg.id
-      WHERE 
+      LEFT JOIN
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
+      LEFT JOIN
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
+      WHERE
         sa.id = $1 AND sa.user_id = $2
     `;
 
@@ -121,10 +109,11 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async save(assessment: Assessment, userId: string): Promise<Assessment> {
+  async save(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
     const id = assessment.getId() || uuidv7();
+    const queryable = externalClient ?? pool;
 
-    const result = await pool.query(
+    const result = await queryable.query(
       `INSERT INTO sensory_assessments (
         id, child_id, examiner_id, caregiver_id, assessment_date,
         auditory_processing_raw_score, visual_processing_raw_score,
@@ -132,8 +121,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
         body_position_processing_raw_score, oral_sensitivity_processing_raw_score,
         behavioral_responses_raw_score,
         social_emotional_responses_raw_score, attention_responses_raw_score,
-        user_id, instrument_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *`,
+        user_id, instrument_id, scores_json, parent_assessment_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
       [
         id,
         assessment.getChildId(),
@@ -150,15 +139,18 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         userId,
-        assessment.getInstrumentId()
+        assessment.getInstrumentId(),
+        assessment.getScoresJson() ?? null,
+        assessment.getParentAssessmentId() ?? null
       ]
     );
 
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async update(assessment: Assessment, userId: string): Promise<Assessment> {
-    const result = await pool.query(
+  async update(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
+    const queryable = externalClient ?? pool;
+    const result = await queryable.query(
       `UPDATE sensory_assessments SET
         child_id = $1,
         examiner_id = $2,
@@ -174,8 +166,10 @@ export class PgAssessmentRepository implements AssessmentRepository {
         social_emotional_responses_raw_score = $12,
         attention_responses_raw_score = $13,
         instrument_id = $14,
+        scores_json = $15,
+        parent_assessment_id = $16,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $15 AND user_id = $16 RETURNING *`,
+      WHERE id = $17 AND user_id = $18 RETURNING *`,
       [
         assessment.getChildId(),
         assessment.getExaminerId(),
@@ -191,27 +185,31 @@ export class PgAssessmentRepository implements AssessmentRepository {
         assessment.getSocialEmotionalResponsesRawScore(),
         assessment.getAttentionResponsesRawScore(),
         assessment.getInstrumentId(),
+        assessment.getScoresJson() ?? null,
+        assessment.getParentAssessmentId() ?? null,
         assessment.getId(),
         userId
       ]
     );
 
     if (result.rows.length === 0) {
-      throw new Error(`Assessment with ID ${assessment.getId()} not found for this user`);
+      throw new NotFoundError('Assessment', assessment.getId());
     }
 
     return this.mapRowToAssessment(result.rows[0]);
   }
 
-  async delete(id: string, userId: string): Promise<void> {
-    await pool.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
+  async delete(id: string, userId: string, externalClient?: PoolClient): Promise<void> {
+    const queryable = externalClient ?? pool;
+    await queryable.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
-  async findByChildId(childId: string, userId: string): Promise<Assessment[]> {
+  async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<AssessmentWithRelations[]> {
+    const offset = (page - 1) * limit;
     const query = `
-      SELECT 
+      SELECT
         sa.*,
-        c.name as child_name, 
+        c.name as child_name,
         c.birth_date as child_birth_date,
         c.gender as child_gender,
         c.other_info as child_other_info,
@@ -221,21 +219,22 @@ export class PgAssessmentRepository implements AssessmentRepository {
         cg.name as caregiver_name,
         cg.relationship as caregiver_relationship,
         cg.contact as caregiver_contact
-      FROM 
+      FROM
         sensory_assessments sa
-      LEFT JOIN 
+      LEFT JOIN
         children c ON sa.child_id = c.id
-      LEFT JOIN 
-        examiners e ON sa.examiner_id = e.id
-      LEFT JOIN 
-        caregivers cg ON sa.caregiver_id = cg.id
-      WHERE 
+      LEFT JOIN
+        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
+      LEFT JOIN
+        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
+      WHERE
         sa.child_id = $1 AND sa.user_id = $2
-      ORDER BY 
+      ORDER BY
         sa.assessment_date DESC
+      LIMIT $3 OFFSET $4
     `;
 
-    const result = await pool.query(query, [childId, userId]);
+    const result = await pool.query(query, [childId, userId, limit, offset]);
 
     return result.rows.map(row => this.mapRowToAssessment(row));
   }
@@ -258,7 +257,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
       row.id as string,
       row.created_at as Date,
       row.updated_at as Date,
-      (row.instrument_id as string | undefined) ?? DEFAULT_INSTRUMENT_ID
+      (row.instrument_id as string | undefined) ?? DEFAULT_INSTRUMENT_ID,
+      (row.scores_json as Record<string, unknown> | null) ?? null,
+      (row.parent_assessment_id as string | null) ?? null
     ) as AssessmentWithRelations;
 
     if (row.child_name) {
