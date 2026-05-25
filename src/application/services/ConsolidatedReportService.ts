@@ -49,13 +49,16 @@ export class ConsolidatedReportService {
     const child = childResult.rows[0] as { id: string; name: string; birth_date: Date | string | null; notes: string | null };
 
     const now = new Date();
-    const from = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+    const from = new Date(now);
+    from.setDate(from.getDate() - periodDays);
     const to = now;
 
     const [
       assessmentRows,
+      assessmentCountResult,
       logRows,
       sessionRows,
+      therapyAggRows,
       therapistRows,
       medicationRows,
       comorbidityRows,
@@ -81,6 +84,11 @@ export class ConsolidatedReportService {
         LIMIT 5
       `, [userId, childId]),
 
+      // assessment true count
+      this.pool.query(`
+        SELECT COUNT(*)::int AS cnt FROM sensory_assessments WHERE user_id = $1 AND child_id = $2
+      `, [userId, childId]),
+
       // daily_logs
       this.pool.query(`
         SELECT log_type, COUNT(*) as cnt
@@ -97,6 +105,14 @@ export class ConsolidatedReportService {
         WHERE ts.user_id = $1 AND ts.child_id = $2 AND ts.occurred_at >= $3
         ORDER BY ts.occurred_at DESC
         LIMIT 10
+      `, [userId, childId, from.toISOString()]),
+
+      // therapy aggregation (true count + breakdown)
+      this.pool.query(`
+        SELECT therapy_type, COUNT(*)::int AS cnt
+        FROM therapy_sessions
+        WHERE user_id = $1 AND child_id = $2 AND occurred_at >= $3
+        GROUP BY therapy_type
       `, [userId, childId, from.toISOString()]),
 
       // therapists (active = any session in the period)
@@ -175,11 +191,13 @@ export class ConsolidatedReportService {
     }
     const totalLogs = Object.values(logsByType).reduce((a, b) => a + b, 0);
 
-    // Build therapy.byType
+    // Build therapy.byType from aggregation query (not the LIMIT 10 detail rows)
     const therapyByType: Record<string, number> = {};
-    for (const row of sessionRows.rows) {
-      const t = row.therapy_type as string;
-      therapyByType[t] = (therapyByType[t] ?? 0) + 1;
+    let therapySessionCount = 0;
+    for (const row of therapyAggRows.rows) {
+      const cnt = parseInt(row.cnt as string, 10);
+      therapyByType[row.therapy_type as string] = cnt;
+      therapySessionCount += cnt;
     }
 
     // Build milestone stats
@@ -208,7 +226,7 @@ export class ConsolidatedReportService {
           completedAt: row.completed_at ? (row.completed_at as Date).toISOString() : null,
           scoresJson: (row.scores_json ?? row.legacy_scores ?? null) as Record<string, unknown> | null,
         })),
-        count: assessmentRows.rows.length,
+        count: Number(assessmentCountResult.rows[0]?.cnt ?? 0),
       },
       logs: {
         byType: logsByType,
@@ -227,7 +245,7 @@ export class ConsolidatedReportService {
           durationMinutes: row.duration_minutes != null ? parseInt(row.duration_minutes as string, 10) : null,
           therapistName: row.therapist_name as string | null,
         })),
-        sessionCount: sessionRows.rows.length,
+        sessionCount: therapySessionCount,
         byType: therapyByType,
       },
       medical: {

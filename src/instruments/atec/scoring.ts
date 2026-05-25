@@ -20,7 +20,10 @@ export const atecStrategy: ScoringStrategy = (responses, instrument): ScoringRes
     for (const itemId of section.itemIds) {
       const responseValue = responses.get(itemId);
       if (responseValue !== undefined && responseValue !== null) {
-        const numeric = numericMap.get(responseValue) ?? 0;
+        const numeric = numericMap.get(responseValue);
+        if (numeric === undefined) {
+          throw new Error(`Resposta ATEC inválida "${responseValue}" para item ${itemId}`);
+        }
         sectionScore += numeric;
       }
     }

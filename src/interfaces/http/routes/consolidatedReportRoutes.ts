@@ -15,10 +15,10 @@ const shareService = new ReportShareService(reportShareRepo, consolidatedService
 const aiService = new AISummaryService(consolidatedService);
 const controller = new ConsolidatedReportController(consolidatedService, shareService, aiService);
 
-// Rate limiter for the AI summary endpoint: 10 requests per 60 minutes
+// In-memory rate limiter — per-instance only. If scaled to multiple dynos, effective limit is max * dynos.
 const aiSummaryLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => (req as any).user?.id ?? req.ip ?? 'unknown',

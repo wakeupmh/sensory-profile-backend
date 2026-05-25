@@ -126,10 +126,10 @@ export class ChildProfileService {
 
     const sql = `
       WITH timeline_raw AS (
-        SELECT id::text, 'assessment'::text AS type, completed_at AS occurred_at,
+        SELECT id::text, 'assessment'::text AS type, assessment_date AS occurred_at,
                instrument_id AS title, NULL::text AS subtitle
         FROM sensory_assessments
-        WHERE user_id = $1 AND child_id = $2 AND completed_at IS NOT NULL
+        WHERE user_id = $1 AND child_id = $2 AND assessment_date IS NOT NULL
 
         UNION ALL
 

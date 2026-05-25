@@ -48,6 +48,11 @@ const childSchema = z.object({
   
   birthDate: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .refine((date) => {
       const birthDate = new Date(date);
       const today = new Date();
@@ -283,10 +288,20 @@ export const assessmentQuerySchema = z.object({
   
   dateFrom: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date from must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .optional(),
-  
+
   dateTo: z.string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date to must be in YYYY-MM-DD format')
+    .refine((d) => {
+      const [y, m, day] = d.split('-').map(Number);
+      const parsed = new Date(`${d}T12:00:00Z`);
+      return parsed.getUTCFullYear() === y && parsed.getUTCMonth() + 1 === m && parsed.getUTCDate() === day;
+    }, 'Data inválida')
     .optional()
 }).strict().refine((data) => {
   if (data.dateFrom && data.dateTo) {

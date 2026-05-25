@@ -8,7 +8,13 @@ interface BedrockClaudeResponse {
 }
 
 export class AISummaryService {
-  constructor(private readonly consolidatedService: ConsolidatedReportService) {}
+  private readonly client: BedrockRuntimeClient;
+
+  constructor(private readonly consolidatedService: ConsolidatedReportService) {
+    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+    if (!region) throw new Error('AWS_REGION não configurada');
+    this.client = new BedrockRuntimeClient({ region });
+  }
 
   private formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString('pt-BR');
@@ -72,12 +78,7 @@ PLANOS EDUCACIONAIS: ${plansLine}
 
 Gere um resumo trimestral conciso (200-300 palavras) em português brasileiro para compartilhar com a equipe terapêutica. Destaque: progressos observados, áreas que precisam de atenção, consistência no acompanhamento terapêutico, e sugestões gerais. Tom: objetivo, clínico mas acessível.`;
 
-    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-    if (!region) throw new Error('AWS_REGION não configurada');
-
     const modelId = process.env.BEDROCK_MODEL_ID || DEFAULT_MODEL_ID;
-
-    const client = new BedrockRuntimeClient({ region });
 
     const body = {
       anthropic_version: 'bedrock-2023-05-31',
@@ -93,7 +94,7 @@ Gere um resumo trimestral conciso (200-300 palavras) em português brasileiro pa
       body: JSON.stringify(body),
     });
 
-    const response = await client.send(command);
+    const response = await this.client.send(command);
     if (!response.body) throw new Error('Resposta vazia do Bedrock');
     const payload = JSON.parse(new TextDecoder().decode(response.body)) as BedrockClaudeResponse;
 

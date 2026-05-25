@@ -282,11 +282,10 @@ describe('ReportShareService', () => {
 // ---------------------------------------------------------------------------
 
 describe('AISummaryService', () => {
-  // 11. generateSummary throws when AWS_REGION not set
-  test('generateSummary throws when AWS_REGION is not configured', async () => {
+  // 11. constructor throws when AWS_REGION not set
+  test('constructor throws when AWS_REGION is not configured', () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
-    const aiService = new AISummaryService(consolidatedService);
 
     const originalRegion = process.env.AWS_REGION;
     const originalDefaultRegion = process.env.AWS_DEFAULT_REGION;
@@ -294,7 +293,7 @@ describe('AISummaryService', () => {
     delete process.env.AWS_DEFAULT_REGION;
 
     try {
-      await expect(aiService.generateSummary(USER_ID, CHILD_ID, 90)).rejects.toThrow('AWS_REGION');
+      expect(() => new AISummaryService(consolidatedService)).toThrow('AWS_REGION');
     } finally {
       if (originalRegion !== undefined) process.env.AWS_REGION = originalRegion;
       if (originalDefaultRegion !== undefined) process.env.AWS_DEFAULT_REGION = originalDefaultRegion;
@@ -305,15 +304,14 @@ describe('AISummaryService', () => {
   test('generateSummary attempts Bedrock invocation when AWS_REGION is set', async () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
-    const aiService = new AISummaryService(consolidatedService);
 
     const originalRegion = process.env.AWS_REGION;
     process.env.AWS_REGION = 'us-east-1';
 
     try {
+      const aiService = new AISummaryService(consolidatedService);
       await aiService.generateSummary(USER_ID, CHILD_ID, 90);
     } catch (e) {
-      // Expected — no real Bedrock endpoint in test env (auth/network error)
       expect(e).toBeDefined();
     } finally {
       if (originalRegion !== undefined) process.env.AWS_REGION = originalRegion;

@@ -73,7 +73,7 @@ export class ConsolidatedReportController {
 
   getSharedSummary = asyncHandler(async (req: Request, res: Response) => {
     const { token } = req.params;
-    logger.info(`[consolidatedReport.getSharedSummary] token=${token}`);
+    logger.info(`[consolidatedReport.getSharedSummary] token=${token.slice(0, 4)}...${token.slice(-4)}`);
     const summary = await this.shareService.getSharedSummary(token);
     res.status(200).json({
       success: true,
