@@ -50,7 +50,7 @@ export class BaseDomainService<
   }
 
   create(payload: TPayload, userId: string): Promise<TEntity> {
-    const input = { id: uuidv7(), userId, ...payload } as unknown as TCreateInput;
+    const input = { ...payload, id: uuidv7(), userId } as unknown as TCreateInput;
     return this.repo.save(input);
   }
 
