@@ -282,9 +282,11 @@ describe('ReportShareService', () => {
 // AISummaryService
 // ---------------------------------------------------------------------------
 
+import { ServiceUnavailableError } from '../../infrastructure/utils/errors/CustomErrors';
+
 describe('AISummaryService', () => {
-  // 11. constructor throws when AWS_REGION not set
-  test('constructor throws when AWS_REGION is not configured', () => {
+  // 11. generateSummary throws ServiceUnavailableError when AWS_REGION not set
+  test('generateSummary throws ServiceUnavailableError when AWS_REGION is not configured', async () => {
     const pool = makePool();
     const consolidatedService = new ConsolidatedReportService(pool);
 
@@ -294,7 +296,8 @@ describe('AISummaryService', () => {
     delete process.env.AWS_DEFAULT_REGION;
 
     try {
-      expect(() => new AISummaryService(consolidatedService)).toThrow('AWS_REGION');
+      const aiService = new AISummaryService(consolidatedService);
+      await expect(aiService.generateSummary(USER_ID, CHILD_ID, 90)).rejects.toThrow(ServiceUnavailableError);
     } finally {
       if (originalRegion !== undefined) process.env.AWS_REGION = originalRegion;
       if (originalDefaultRegion !== undefined) process.env.AWS_DEFAULT_REGION = originalDefaultRegion;

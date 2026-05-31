@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { ConsolidatedReportService } from './ConsolidatedReportService';
+import { ServiceUnavailableError } from '../../infrastructure/utils/errors/CustomErrors';
 
 const DEFAULT_MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
@@ -8,12 +9,23 @@ interface BedrockClaudeResponse {
 }
 
 export class AISummaryService {
-  private readonly client: BedrockRuntimeClient;
+  private client: BedrockRuntimeClient | null = null;
 
-  constructor(private readonly consolidatedService: ConsolidatedReportService) {
+  constructor(private readonly consolidatedService: ConsolidatedReportService) {}
+
+  // Lazy init: only fails when the AI endpoint is actually used, so a missing
+  // AWS_REGION no longer crashes the whole server at boot.
+  private getClient(): BedrockRuntimeClient {
+    if (this.client) return this.client;
     const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
-    if (!region) throw new Error('AWS_REGION não configurada');
+    if (!region) {
+      throw new ServiceUnavailableError(
+        'Serviço de IA temporariamente indisponível (AWS_REGION não configurada)',
+        'bedrock'
+      );
+    }
     this.client = new BedrockRuntimeClient({ region });
+    return this.client;
   }
 
   private formatDate(iso: string): string {
@@ -98,7 +110,7 @@ Gere um resumo trimestral conciso (200-300 palavras) em português brasileiro pa
       body: JSON.stringify(body),
     });
 
-    const response = await this.client.send(command);
+    const response = await this.getClient().send(command);
     if (!response.body) throw new Error('Resposta vazia do Bedrock');
     const payload = JSON.parse(new TextDecoder().decode(response.body)) as BedrockClaudeResponse;
 
