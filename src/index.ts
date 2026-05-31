@@ -74,7 +74,7 @@ app.use(compression());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 600, // Limit each IP to 600 requests per windowMs (dashboard/consolidated pages fan out to many endpoints per load)
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -87,8 +87,8 @@ const limiter = rateLimit({
     }
   },
   skip: (req) => {
-    // Skip rate limiting for health checks
-    return req.path === '/health';
+    // Skip rate limiting for health checks and in non-production (dev HMR/StrictMode inflate request counts)
+    return req.path === '/health' || process.env.NODE_ENV !== 'production';
   }
 });
 app.use(limiter);
