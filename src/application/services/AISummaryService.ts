@@ -110,14 +110,22 @@ Gere um resumo trimestral conciso (200-300 palavras) em português brasileiro pa
       body: JSON.stringify(body),
     });
 
-    const response = await this.getClient().send(command);
-    if (!response.body) throw new Error('Resposta vazia do Bedrock');
-    const payload = JSON.parse(new TextDecoder().decode(response.body)) as BedrockClaudeResponse;
+    try {
+      const response = await this.getClient().send(command);
+      if (!response.body) throw new Error('Resposta vazia do Bedrock');
+      const payload = JSON.parse(new TextDecoder().decode(response.body)) as BedrockClaudeResponse;
 
-    const block = payload.content?.[0];
-    if (!block || block.type !== 'text' || !block.text) {
-      throw new Error('Resposta inválida da IA');
+      const block = payload.content?.[0];
+      if (!block || block.type !== 'text' || !block.text) {
+        throw new Error('Resposta inválida da IA');
+      }
+      return block.text;
+    } catch (e) {
+      throw new ServiceUnavailableError(
+        'Serviço de IA temporariamente indisponível',
+        'bedrock',
+        e instanceof Error ? e : new Error(String(e))
+      );
     }
-    return block.text;
   }
 }
