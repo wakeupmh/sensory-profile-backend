@@ -5,6 +5,7 @@ import compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 
+import professionalRoutes, { acceptRouter as professionalAcceptRouter } from './interfaces/http/routes/professionalRoutes';
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import draftRoutes from './interfaces/http/routes/draftRoutes';
@@ -15,6 +16,7 @@ import medicalRoutes from './interfaces/http/routes/medicalRoutes';
 import developmentRoutes from './interfaces/http/routes/developmentRoutes';
 import educationRoutes from './interfaces/http/routes/educationRoutes';
 import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
+import sharedAccessRoutes from './interfaces/http/routes/sharedAccessRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -102,6 +104,8 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/professionals', professionalRoutes);
+app.use('/api/professional-invites', professionalAcceptRouter);
 app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
 app.use('/api/drafts', draftRoutes);
@@ -112,6 +116,7 @@ app.use('/api/medical', medicalRoutes);
 app.use('/api/development', developmentRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/consolidated', consolidatedReportRoutes);
+app.use('/api/shared', sharedAccessRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

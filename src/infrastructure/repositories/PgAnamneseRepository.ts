@@ -47,6 +47,15 @@ export class PgAnamneseRepository implements AnamneseRepository {
     return this.mapRow(result.rows[0]);
   }
 
+  async findByIdAnyOwner(id: string): Promise<Anamnese | null> {
+    const result = await pool.query(
+      `SELECT * FROM anamneses WHERE id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) return null;
+    return this.mapRow(result.rows[0]);
+  }
+
   async findByShareToken(token: string): Promise<Anamnese | null> {
     const result = await pool.query(
       `SELECT * FROM anamneses WHERE share_token = $1`,

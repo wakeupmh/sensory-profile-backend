@@ -9,6 +9,11 @@ import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { SectionCommentService } from '../../../application/services/SectionCommentService';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { ResourceShareService } from '../../../application/services/ResourceShareService';
+import { PgAssessmentShareRepository } from '../../../infrastructure/repositories/PgResourceShareRepository';
+import { ResourceShareController } from '../controllers/ResourceShareController';
+import { AssessmentNotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { professionalRepository } from './professionalRoutes';
 
 const assessmentRepository = new PgAssessmentRepository();
 const responseRepository = new PgResponseRepository();
@@ -28,6 +33,26 @@ const assessmentService = new AssessmentService(
 
 const assessmentController = new AssessmentController(assessmentService);
 const entityController = new EntityController(childService, examinerService, caregiverService);
+
+const assessmentShareRepository = new PgAssessmentShareRepository();
+const assessmentShareService = new ResourceShareService(
+  assessmentShareRepository,
+  professionalRepository,
+  {
+    resourceLabel: 'assessment',
+    async assertOwned(resourceId, ownerUserId) {
+      const owned = await assessmentRepository.findById(resourceId, ownerUserId);
+      if (!owned) throw new AssessmentNotFoundError(resourceId);
+    },
+  }
+);
+const assessmentShareController = new ResourceShareController(
+  assessmentShareService,
+  'assessment',
+  'id'
+);
+
+export { assessmentRepository, responseRepository, assessmentShareService };
 
 const router = Router();
 
@@ -54,5 +79,13 @@ router.get('/:id', assessmentController.getAssessmentById.bind(assessmentControl
 router.post('/', assessmentController.createAssessment.bind(assessmentController));
 router.put('/:id', assessmentController.updateAssessment.bind(assessmentController));
 router.delete('/:id', assessmentController.deleteAssessment.bind(assessmentController));
+
+// Per-professional share grants
+router.get('/:id/shares', assessmentShareController.list.bind(assessmentShareController));
+router.post('/:id/shares', assessmentShareController.grant.bind(assessmentShareController));
+router.delete(
+  '/:id/shares/:professionalId',
+  assessmentShareController.revoke.bind(assessmentShareController)
+);
 
 export default router;

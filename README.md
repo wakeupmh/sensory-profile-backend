@@ -164,6 +164,30 @@ cálculo de raw scores) só são aplicadas quando `instrumentId === 'crianca-3-1
 - `DELETE /api/anamneses/:id/share` - Revogar link compartilhável
 - `GET /api/anamneses/shared/:shareToken` - Acesso público somente leitura via token (sem autenticação)
 
+### Profissionais (terapeutas, médicos)
+- `GET /api/professionals` - Listar profissionais cadastrados pelo dono
+- `POST /api/professionals` - Cadastrar profissional e gerar `invitationToken`
+- `GET /api/professionals/:id` - Detalhes
+- `PUT /api/professionals/:id` - Atualizar
+- `DELETE /api/professionals/:id` - Remover (revoga todos os compartilhamentos)
+- `POST /api/professionals/:id/rotate-token` - Reemitir o token de convite (apenas se ainda não aceito)
+- `GET /api/professionals/me/identities` - Identidades de profissional do usuário logado
+- `POST /api/professional-invites/accept` - Body `{ token }`: vincula o profissional ao `userId` Clerk do usuário logado
+
+### Compartilhamentos por profissional
+- `GET /api/anamneses/:id/shares` - Listar profissionais com acesso a uma anamnese
+- `POST /api/anamneses/:id/shares` - Body `{ professionalId }`: conceder acesso
+- `DELETE /api/anamneses/:id/shares/:professionalId` - Revogar acesso
+- `GET /api/assessments/:id/shares` - Idem para avaliações
+- `POST /api/assessments/:id/shares` - Idem para avaliações
+- `DELETE /api/assessments/:id/shares/:professionalId` - Idem para avaliações
+
+### Acesso somente leitura (profissional)
+- `GET /api/shared/anamneses` - Anamneses compartilhadas comigo
+- `GET /api/shared/anamneses/:id` - Anamnese compartilhada comigo (read-only)
+- `GET /api/shared/assessments` - Avaliações compartilhadas comigo
+- `GET /api/shared/assessments/:id` - Avaliação compartilhada comigo (read-only)
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
