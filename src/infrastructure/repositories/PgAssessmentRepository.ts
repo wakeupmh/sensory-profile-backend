@@ -109,6 +109,31 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return this.mapRowToAssessment(result.rows[0]);
   }
 
+  async findByIdAnyOwner(id: string): Promise<Assessment | null> {
+    const query = `
+      SELECT
+        sa.*,
+        c.name as child_name,
+        c.birth_date as child_birth_date,
+        c.gender as child_gender,
+        c.other_info as child_other_info,
+        e.name as examiner_name,
+        e.profession as examiner_profession,
+        e.contact as examiner_contact,
+        cg.name as caregiver_name,
+        cg.relationship as caregiver_relationship,
+        cg.contact as caregiver_contact
+      FROM sensory_assessments sa
+      LEFT JOIN children c ON sa.child_id = c.id AND c.user_id = sa.user_id
+      LEFT JOIN examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
+      LEFT JOIN caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
+      WHERE sa.id = $1
+    `;
+    const result = await pool.query(query, [id]);
+    if (result.rows.length === 0) return null;
+    return this.mapRowToAssessment(result.rows[0]);
+  }
+
   async save(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
     const id = assessment.getId() || uuidv7();
     const queryable = externalClient ?? pool;

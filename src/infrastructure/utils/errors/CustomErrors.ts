@@ -108,6 +108,18 @@ export class GoneError extends BaseError {
   }
 }
 
+export class ProfessionalNotFoundError extends NotFoundError {
+  constructor(id: string, cause?: Error) {
+    super('Professional', id, cause);
+  }
+}
+
+export class InvitationInvalidError extends ValidationError {
+  constructor(message: string = 'Invitation token is invalid or has already been used', cause?: Error) {
+    super(message, undefined, cause);
+  }
+}
+
 // 409 Conflict Errors
 export class ConflictError extends BaseError {
   readonly statusCode = 409;
@@ -121,6 +133,12 @@ export class ConflictError extends BaseError {
 export class DuplicateResourceError extends ConflictError {
   constructor(resource: string, identifier: string, cause?: Error) {
     super(`${resource} with identifier '${identifier}' already exists`, resource, cause);
+  }
+}
+
+export class InvitationAlreadyAcceptedError extends ConflictError {
+  constructor(cause?: Error) {
+    super('This invitation has already been accepted by another user', 'professional', cause);
   }
 }
 

@@ -32,6 +32,13 @@ export interface PaginatedResult<T> {
 export interface AssessmentRepository {
   findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>>;
   findById(id: string, userId: string): Promise<Assessment | null>;
+  /**
+   * Fetch by id with no ownership filter. Use only on paths that have already
+   * authorized the caller via another channel (e.g. share grant to a
+   * professional). Includes the joined child / examiner / caregiver columns
+   * exposed by the normal findById path.
+   */
+  findByIdAnyOwner(id: string): Promise<Assessment | null>;
   save(assessment: Assessment, userId: string): Promise<Assessment>;
   update(assessment: Assessment, userId: string): Promise<Assessment>;
   delete(id: string, userId: string): Promise<void>;
