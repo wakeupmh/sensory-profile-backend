@@ -5,6 +5,7 @@ export interface ProfessionalProps {
   email: string | null;
   profession: string | null;
   invitationToken: string | null;
+  invitationExpiresAt: Date | null;
   acceptedUserId: string | null;
   acceptedAt: Date | null;
   createdAt: Date;
@@ -20,6 +21,7 @@ export class Professional {
   email: string | null;
   profession: string | null;
   invitationToken: string | null;
+  invitationExpiresAt: Date | null;
   acceptedUserId: string | null;
   acceptedAt: Date | null;
   readonly createdAt: Date;
@@ -32,6 +34,7 @@ export class Professional {
     this.email = props.email;
     this.profession = props.profession;
     this.invitationToken = props.invitationToken;
+    this.invitationExpiresAt = props.invitationExpiresAt;
     this.acceptedUserId = props.acceptedUserId;
     this.acceptedAt = props.acceptedAt;
     this.createdAt = props.createdAt;
@@ -50,6 +53,7 @@ export class Professional {
       profession: this.profession,
       status: this.status,
       invitationToken: this.invitationToken,
+      invitationExpiresAt: this.invitationExpiresAt,
       acceptedAt: this.acceptedAt,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,

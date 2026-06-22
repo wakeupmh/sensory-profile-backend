@@ -98,11 +98,13 @@ export class ProfessionalController {
   listMyIdentities = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const items = await this.service.listMyProfessionalIdentities(userId);
+    // Deliberately omits ownerUserId: the recipient sees that an invitation
+    // exists and the label they were invited under, but not the Supabase
+    // userId of the inviter.
     const data = items.map((p) => ({
       id: p.id,
       name: p.name,
       profession: p.profession,
-      ownerUserId: p.ownerUserId,
       acceptedAt: p.acceptedAt,
     }));
     jsonResponse(res, data, 200, { count: data.length });
