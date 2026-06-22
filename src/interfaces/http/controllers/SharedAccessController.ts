@@ -8,8 +8,8 @@ import { ResponseRepository } from '../../../domain/repositories/ResponseReposit
 import { NotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse } from '../utils/response';
 import logger from '../../../infrastructure/utils/logger';
-
 
 /**
  * Read-only endpoints used by professionals to view resources that have been
@@ -36,7 +36,7 @@ export class SharedAccessController {
     const userId = requireUserId(req);
     const profIds = await this.myProfessionalIds(userId);
     if (profIds.length === 0) {
-      res.status(200).json({ success: true, data: [], count: 0, timestamp: new Date().toISOString() });
+      jsonResponse(res, [], 200, { count: 0 });
       return;
     }
 
@@ -55,12 +55,7 @@ export class SharedAccessController {
       })
     );
     const data = items.filter((x): x is NonNullable<typeof x> => x !== null);
-    res.status(200).json({
-      success: true,
-      data,
-      count: data.length,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, data, 200, { count: data.length });
   });
 
   getSharedAnamnese = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -76,19 +71,14 @@ export class SharedAccessController {
     if (!a) throw new NotFoundError('Anamnese', id);
 
     logger.info(`[shared.anamnese.get] id=${id} reader=${userId}`);
-    res.status(200).json({
-      success: true,
-      data: a.toJSON(),
-      readOnly: true,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, a.toJSON(), 200, { readOnly: true });
   });
 
   listSharedAssessments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const profIds = await this.myProfessionalIds(userId);
     if (profIds.length === 0) {
-      res.status(200).json({ success: true, data: [], count: 0, timestamp: new Date().toISOString() });
+      jsonResponse(res, [], 200, { count: 0 });
       return;
     }
 
@@ -112,12 +102,7 @@ export class SharedAccessController {
       })
     );
     const data = items.filter((x): x is NonNullable<typeof x> => x !== null);
-    res.status(200).json({
-      success: true,
-      data,
-      count: data.length,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, data, 200, { count: data.length });
   });
 
   getSharedAssessment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -135,15 +120,15 @@ export class SharedAccessController {
     const responses = await this.responseRepo.findByAssessmentId(id);
 
     logger.info(`[shared.assessment.get] id=${id} reader=${userId}`);
-    res.status(200).json({
-      success: true,
-      data: {
+    jsonResponse(
+      res,
+      {
         assessment,
         responses,
         responseCount: responses.length,
       },
-      readOnly: true,
-      timestamp: new Date().toISOString(),
-    });
+      200,
+      { readOnly: true }
+    );
   });
 }

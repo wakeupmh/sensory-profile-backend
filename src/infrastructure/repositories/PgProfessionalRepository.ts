@@ -28,7 +28,9 @@ export class PgProfessionalRepository implements ProfessionalRepository {
 
   async findByInvitationToken(token: string): Promise<Professional | null> {
     const result = await pool.query(
-      `SELECT * FROM professionals WHERE invitation_token = $1`,
+      `SELECT * FROM professionals
+       WHERE invitation_token = $1
+         AND (invitation_expires_at IS NULL OR invitation_expires_at > CURRENT_TIMESTAMP)`,
       [token]
     );
     if (result.rows.length === 0) return null;
@@ -48,8 +50,8 @@ export class PgProfessionalRepository implements ProfessionalRepository {
   async save(input: ProfessionalCreateInput): Promise<Professional> {
     const result = await pool.query(
       `INSERT INTO professionals
-         (id, owner_user_id, name, email, profession, invitation_token)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (id, owner_user_id, name, email, profession, invitation_token, invitation_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         input.id,
@@ -58,6 +60,7 @@ export class PgProfessionalRepository implements ProfessionalRepository {
         input.email,
         input.profession,
         input.invitationToken,
+        input.invitationExpiresAt,
       ]
     );
     return this.mapRow(result.rows[0]);
@@ -93,11 +96,14 @@ export class PgProfessionalRepository implements ProfessionalRepository {
   async acceptInvitation(id: string, acceptedUserId: string): Promise<Professional | null> {
     const result = await pool.query(
       `UPDATE professionals SET
-         accepted_user_id = $1,
-         accepted_at      = CURRENT_TIMESTAMP,
-         invitation_token = NULL,
-         updated_at       = CURRENT_TIMESTAMP
-       WHERE id = $2 AND accepted_user_id IS NULL
+         accepted_user_id      = $1,
+         accepted_at           = CURRENT_TIMESTAMP,
+         invitation_token      = NULL,
+         invitation_expires_at = NULL,
+         updated_at            = CURRENT_TIMESTAMP
+       WHERE id = $2
+         AND accepted_user_id IS NULL
+         AND (invitation_expires_at IS NULL OR invitation_expires_at > CURRENT_TIMESTAMP)
        RETURNING *`,
       [acceptedUserId, id]
     );
@@ -108,15 +114,17 @@ export class PgProfessionalRepository implements ProfessionalRepository {
   async rotateInvitationToken(
     id: string,
     ownerUserId: string,
-    token: string
+    token: string,
+    expiresAt: Date
   ): Promise<Professional | null> {
     const result = await pool.query(
       `UPDATE professionals SET
-         invitation_token = $1,
-         updated_at       = CURRENT_TIMESTAMP
-       WHERE id = $2 AND owner_user_id = $3 AND accepted_user_id IS NULL
+         invitation_token      = $1,
+         invitation_expires_at = $2,
+         updated_at            = CURRENT_TIMESTAMP
+       WHERE id = $3 AND owner_user_id = $4 AND accepted_user_id IS NULL
        RETURNING *`,
-      [token, id, ownerUserId]
+      [token, expiresAt, id, ownerUserId]
     );
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);
@@ -130,6 +138,7 @@ export class PgProfessionalRepository implements ProfessionalRepository {
       email: (row.email as string | null) ?? null,
       profession: (row.profession as string | null) ?? null,
       invitationToken: (row.invitation_token as string | null) ?? null,
+      invitationExpiresAt: (row.invitation_expires_at as Date | null) ?? null,
       acceptedUserId: (row.accepted_user_id as string | null) ?? null,
       acceptedAt: (row.accepted_at as Date | null) ?? null,
       createdAt: row.created_at as Date,

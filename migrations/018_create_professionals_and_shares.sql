@@ -5,25 +5,26 @@
 --
 -- Lifecycle:
 --   1. Owner creates a row with name/email/profession and gets back a
---      one-shot invitation_token.
+--      one-shot invitation_token that expires 14 days later.
 --   2. Owner shares that token with the recipient (link, email, etc.).
---   3. Recipient signs into Clerk and calls POST /api/professional-invites/accept
+--   3. Recipient signs in and calls POST /api/professional-invites/accept
 --      with the token. The backend sets accepted_user_id to the recipient's
---      Clerk userId and clears the token.
+--      Supabase userId, clears the token, and clears the expiry.
 --   4. Owner can now reference professional_id when sharing records.
 --   5. Professional sees records via /api/shared/* scoped to accepted_user_id.
 
 CREATE TABLE IF NOT EXISTS professionals (
-  id                 UUID PRIMARY KEY,
-  owner_user_id      TEXT NOT NULL,
-  name               TEXT NOT NULL,
-  email              TEXT,
-  profession         TEXT,
-  invitation_token   TEXT,
-  accepted_user_id   TEXT,
-  accepted_at        TIMESTAMPTZ,
-  created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  id                       UUID PRIMARY KEY,
+  owner_user_id            TEXT NOT NULL,
+  name                     TEXT NOT NULL,
+  email                    TEXT,
+  profession               TEXT,
+  invitation_token         TEXT,
+  invitation_expires_at    TIMESTAMPTZ,
+  accepted_user_id         TEXT,
+  accepted_at              TIMESTAMPTZ,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_professionals_owner
@@ -34,6 +35,10 @@ CREATE INDEX IF NOT EXISTS idx_professionals_accepted_user
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_invitation_token
   ON professionals(invitation_token) WHERE invitation_token IS NOT NULL;
+
+CREATE OR REPLACE TRIGGER trg_professionals_updated_at
+  BEFORE UPDATE ON professionals
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 
 CREATE TABLE IF NOT EXISTS anamnese_shares (
