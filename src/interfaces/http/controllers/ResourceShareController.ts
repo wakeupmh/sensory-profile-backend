@@ -4,8 +4,8 @@ import { ResourceShareService } from '../../../application/services/ResourceShar
 import { shareGrantBodySchema } from '../validations/professionalValidation';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import { assertValidId, requireUserId } from './controllerUtils';
+import { jsonResponse, jsonMessage } from '../utils/response';
 import logger from '../../../infrastructure/utils/logger';
-
 
 export class ResourceShareController {
   constructor(
@@ -19,12 +19,7 @@ export class ResourceShareController {
     assertValidId(resourceId, `${this.resourceLabel} ID`);
     const userId = requireUserId(req);
     const grants = await this.service.listForResource(resourceId, userId);
-    res.status(200).json({
-      success: true,
-      data: grants,
-      count: grants.length,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, grants, 200, { count: grants.length });
   });
 
   grant = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -36,12 +31,7 @@ export class ResourceShareController {
       `[share.grant] ${this.resourceLabel}=${resourceId} professional=${professionalId} owner=${userId}`
     );
     const grant = await this.service.grant(resourceId, professionalId, userId);
-    res.status(201).json({
-      success: true,
-      data: grant,
-      message: `${this.resourceLabel} shared`,
-      timestamp: new Date().toISOString(),
-    });
+    jsonResponse(res, grant, 201, { message: `${this.resourceLabel} shared` });
   });
 
   revoke = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -54,10 +44,6 @@ export class ResourceShareController {
       `[share.revoke] ${this.resourceLabel}=${resourceId} professional=${professionalId} owner=${userId}`
     );
     await this.service.revoke(resourceId, professionalId, userId);
-    res.status(200).json({
-      success: true,
-      message: 'Share revoked',
-      timestamp: new Date().toISOString(),
-    });
+    jsonMessage(res, 'Share revoked');
   });
 }

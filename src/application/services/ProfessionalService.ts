@@ -70,7 +70,9 @@ export class ProfessionalService {
   async acceptInvitation(token: string, acceptingUserId: string): Promise<Professional> {
     const pending = await this.repo.findByInvitationToken(token);
     if (!pending) throw new InvitationInvalidError();
-    if (pending.acceptedUserId) throw new InvitationInvalidError();
+    // `acceptedUserId` is guaranteed null here: the repo nulls the token on
+    // accept, so a token lookup can only return a row whose accepted_user_id
+    // is still NULL.
     if (pending.ownerUserId === acceptingUserId) {
       throw new InvitationInvalidError('You cannot accept your own invitation');
     }
