@@ -193,9 +193,9 @@ cálculo de raw scores) só são aplicadas quando `instrumentId === 'crianca-3-1
 - `POST /api/consolidated/shares` / `GET /api/consolidated/shares` / `DELETE /api/consolidated/shares/:id` - Link público (com expiração) do relatório consolidado
 - `GET /api/consolidated/shared/:token` - Acesso público ao relatório consolidado via token (sem autenticação)
 - `POST /api/consolidated/ai-summary` - Gera um resumo trimestral via IA (Bedrock) sem salvar (limite: 5/hora por usuário)
-- `POST /api/consolidated/ai-summaries` - Gera **e salva** um resumo via IA, para comparar entre trimestres (mesmo limite de 5/hora)
-- `GET /api/consolidated/ai-summaries?childId=` - Histórico de resumos salvos de uma criança
-- `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (mesmo limite de 5/hora)
+- `POST /api/consolidated/ai-summaries` - Gera **e salva** um resumo via IA, para comparar entre trimestres (limite: 5/hora por usuário)
+- `GET /api/consolidated/ai-summaries?childId=&page=1&limit=50` - Histórico paginado de resumos salvos de uma criança (máx. 100 por página)
+- `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
 
 ## Cálculo de Pontuações
 

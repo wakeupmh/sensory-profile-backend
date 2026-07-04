@@ -27,10 +27,15 @@ export class AiInsightsController {
 
   list = asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
-    const { childId } = listAiSummariesQuerySchema.parse(req.query);
-    logger.info(`[aiInsights.list] userId=${userId} childId=${childId}`);
-    const summaries = await this.historyService.list(childId, userId);
-    jsonResponse(res, summaries.map((s) => s.toJSON()), 200, { count: summaries.length });
+    const { childId, page, limit } = listAiSummariesQuerySchema.parse(req.query);
+    logger.info(`[aiInsights.list] userId=${userId} childId=${childId} page=${page} limit=${limit}`);
+    const result = await this.historyService.list(childId, userId, page, limit);
+    jsonResponse(res, result.data.map((s) => s.toJSON()), 200, {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      count: result.data.length,
+    });
   });
 
   askQuestion = asyncHandler(async (req: Request, res: Response) => {

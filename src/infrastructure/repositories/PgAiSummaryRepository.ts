@@ -1,6 +1,6 @@
 import pool from '../database/connection';
 import { AiSummary, AiSummaryProps } from '../../domain/entities/AiSummary';
-import { AiSummaryRepository, AiSummaryCreateInput } from '../../domain/repositories/AiSummaryRepository';
+import { AiSummaryRepository, AiSummaryCreateInput, AiSummaryListResult } from '../../domain/repositories/AiSummaryRepository';
 
 export class PgAiSummaryRepository implements AiSummaryRepository {
   private mapRow(row: Record<string, unknown>): AiSummary {
@@ -32,11 +32,23 @@ export class PgAiSummaryRepository implements AiSummaryRepository {
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 
-  async findAllByChild(childId: string, userId: string): Promise<AiSummary[]> {
-    const result = await pool.query(
-      `SELECT * FROM ai_summaries WHERE child_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 50`,
-      [childId, userId],
-    );
-    return result.rows.map((row) => this.mapRow(row));
+  async findAllByChild(childId: string, userId: string, page: number, limit: number): Promise<AiSummaryListResult> {
+    const offset = (page - 1) * limit;
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT * FROM ai_summaries WHERE child_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4`,
+        [childId, userId, limit, offset],
+      ),
+      pool.query(`SELECT COUNT(*)::int AS count FROM ai_summaries WHERE child_id = $1 AND user_id = $2`, [
+        childId,
+        userId,
+      ]),
+    ]);
+    return {
+      data: dataResult.rows.map((row) => this.mapRow(row)),
+      total: countResult.rows[0].count,
+      page,
+      limit,
+    };
   }
 }

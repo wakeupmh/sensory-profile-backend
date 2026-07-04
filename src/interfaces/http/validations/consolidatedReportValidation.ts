@@ -22,6 +22,8 @@ export const generateAISummarySchema = z.object({
 
 export const listAiSummariesQuerySchema = z.object({
   childId: z.string().uuid(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 export const askAiQuestionSchema = z.object({

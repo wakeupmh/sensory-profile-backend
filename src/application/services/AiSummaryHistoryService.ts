@@ -1,6 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { AiSummary } from '../../domain/entities/AiSummary';
-import { AiSummaryRepository } from '../../domain/repositories/AiSummaryRepository';
+import { AiSummaryRepository, AiSummaryListResult } from '../../domain/repositories/AiSummaryRepository';
 import { AISummaryService } from './AISummaryService';
 
 /**
@@ -15,24 +15,24 @@ export class AiSummaryHistoryService {
   ) {}
 
   async generateAndSave(userId: string, childId: string, periodDays: number): Promise<AiSummary> {
-    const content = await this.aiService.generateSummary(userId, childId, periodDays);
-
-    const to = new Date();
-    const from = new Date(to);
-    from.setDate(from.getDate() - periodDays);
+    const { content, periodFrom, periodTo } = await this.aiService.generateSummaryWithMeta(
+      userId,
+      childId,
+      periodDays,
+    );
 
     return this.repo.save({
       id: uuidv7(),
       userId,
       childId,
-      periodFrom: from,
-      periodTo: to,
+      periodFrom,
+      periodTo,
       modelId: this.aiService.getModelId(),
       content,
     });
   }
 
-  list(childId: string, userId: string): Promise<AiSummary[]> {
-    return this.repo.findAllByChild(childId, userId);
+  list(childId: string, userId: string, page: number, limit: number): Promise<AiSummaryListResult> {
+    return this.repo.findAllByChild(childId, userId, page, limit);
   }
 }

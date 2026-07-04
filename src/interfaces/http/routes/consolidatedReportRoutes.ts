@@ -39,6 +39,25 @@ const aiSummaryLimiter = rateLimit({
   },
 });
 
+// Separate budget for free-text Q&A so a caregiver who regenerates quarterly
+// summaries doesn't exhaust their ability to ask follow-up questions in the
+// same window. Higher max since Q&A is expected to be more conversational.
+const aiQuestionLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => (req as any).userId ?? req.ip ?? 'unknown',
+  message: {
+    success: false,
+    error: {
+      type: 'RateLimitError',
+      message: 'Muitas perguntas. Tente novamente em uma hora.',
+      statusCode: 429,
+    },
+  },
+});
+
 const router = Router();
 
 // PUBLIC route — must be before authMiddleware
@@ -57,6 +76,6 @@ router.post('/ai-summaries', aiSummaryLimiter, aiInsightsController.generateAndS
 router.get('/ai-summaries', aiInsightsController.list.bind(aiInsightsController));
 
 // Free-text Q&A grounded in the same consolidated data
-router.post('/ai-question', aiSummaryLimiter, aiInsightsController.askQuestion.bind(aiInsightsController));
+router.post('/ai-question', aiQuestionLimiter, aiInsightsController.askQuestion.bind(aiInsightsController));
 
 export default router;
