@@ -18,6 +18,8 @@ import educationRoutes from './interfaces/http/routes/educationRoutes';
 import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
 import sharedAccessRoutes from './interfaces/http/routes/sharedAccessRoutes';
 import sharedChildRoutes from './interfaces/http/routes/sharedChildRoutes';
+import reminderRoutes from './interfaces/http/routes/reminderRoutes';
+import goalRoutes from './interfaces/http/routes/goalRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -117,8 +119,10 @@ app.use('/api/medical', medicalRoutes);
 app.use('/api/development', developmentRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/consolidated', consolidatedReportRoutes);
-app.use('/api/shared', sharedAccessRoutes);
 app.use('/api/shared/children', sharedChildRoutes);
+app.use('/api/shared', sharedAccessRoutes);
+app.use('/api/reminders', reminderRoutes);
+app.use('/api/goals', goalRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

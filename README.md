@@ -200,6 +200,28 @@ Complementa os compartilhamentos acima: em vez de compartilhar avaliação por a
 - `GET /api/shared/children/:childId/medical` - Medicamentos, comorbidades e consultas da criança (requer escopo `medical`)
 - `GET /api/shared/children/:childId/development` - Marcos de desenvolvimento e registros de comunicação da criança (requer escopo `development`)
 
+### Insights de comportamento (ABC)
+- `GET /api/logs/insights/behavior?childId=&days=30` - Agrega os registros diários do tipo `abc` (antecedente/comportamento/consequência) em: total de ocorrências no período vs período anterior, intensidade média, distribuição por dia da semana e hora do dia, principais antecedentes/comportamentos e as 10 ocorrências mais recentes.
+
+### Lembretes
+- `GET /api/reminders` - Listar lembretes criados manualmente (filtros: `childId`, `status`)
+- `POST /api/reminders` - Criar lembrete (`title`, `dueAt`, `notes?`)
+- `GET /api/reminders/:id` - Detalhes
+- `PATCH /api/reminders/:id` - Atualizar (inclui marcar `status` como `done`/`dismissed`)
+- `DELETE /api/reminders/:id` - Remover
+- `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`) e fim de medicação ativa (`medications.end_date`)
+
+### Metas estruturadas (PEI/terapêuticas)
+- `GET /api/goals` - Listar metas (filtros: `childId`, `domain`, `status`)
+- `POST /api/goals` - Criar meta (`domain`, `title`, `masteryCriteria?`, `baselineValue?`, `targetValue?`, `unit?`, `targetDate?`)
+- `GET /api/goals/:id` - Detalhes
+- `PATCH /api/goals/:id` - Atualizar
+- `DELETE /api/goals/:id` - Remover (remove também os registros de progresso)
+- `GET /api/goals/:goalId/progress` - Listar registros de progresso (mais recente primeiro)
+- `POST /api/goals/:goalId/progress` - Registrar progresso (`recordedAt`, `value?`, `statusSnapshot?`, `therapySessionId?`)
+- `GET /api/goals/:goalId/progress/summary` - Resumo: baseline, meta, último valor registrado e variação em relação ao baseline
+- `DELETE /api/goals/:goalId/progress/:entryId` - Remover um registro de progresso
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
