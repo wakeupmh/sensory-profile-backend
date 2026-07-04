@@ -19,3 +19,15 @@ export const generateAISummarySchema = z.object({
   childId: z.string().uuid(),
   periodDays: z.number().int().min(7).max(365).default(90),
 });
+
+export const listAiSummariesQuerySchema = z.object({
+  childId: z.string().uuid(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const askAiQuestionSchema = z.object({
+  childId: z.string().uuid(),
+  question: z.string().trim().min(3, 'Pergunta muito curta').max(500, 'Pergunta muito longa'),
+  periodDays: z.number().int().min(7).max(365).default(90),
+});

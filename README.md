@@ -233,6 +233,15 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os en
 - `GET /api/goals/:goalId/progress/summary` - Resumo: baseline, meta, último valor registrado e variação em relação ao baseline
 - `DELETE /api/goals/:goalId/progress/:entryId` - Remover um registro de progresso
 
+### Relatório consolidado e IA
+- `GET /api/consolidated/summary?childId=&periodDays=90` - Agrega avaliações, terapia, medicamentos, comorbidades, marcos de desenvolvimento e planos educacionais de um período
+- `POST /api/consolidated/shares` / `GET /api/consolidated/shares` / `DELETE /api/consolidated/shares/:id` - Link público (com expiração) do relatório consolidado
+- `GET /api/consolidated/shared/:token` - Acesso público ao relatório consolidado via token (sem autenticação)
+- `POST /api/consolidated/ai-summary` - Gera um resumo trimestral via IA (Bedrock) sem salvar (limite: 5/hora por usuário)
+- `POST /api/consolidated/ai-summaries` - Gera **e salva** um resumo via IA, para comparar entre trimestres (limite: 5/hora por usuário)
+- `GET /api/consolidated/ai-summaries?childId=&page=1&limit=50` - Histórico paginado de resumos salvos de uma criança (máx. 100 por página)
+- `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
