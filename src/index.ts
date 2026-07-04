@@ -17,6 +17,7 @@ import developmentRoutes from './interfaces/http/routes/developmentRoutes';
 import educationRoutes from './interfaces/http/routes/educationRoutes';
 import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
 import sharedAccessRoutes from './interfaces/http/routes/sharedAccessRoutes';
+import documentRoutes from './interfaces/http/routes/documentRoutes';
 import reminderRoutes from './interfaces/http/routes/reminderRoutes';
 import goalRoutes from './interfaces/http/routes/goalRoutes';
 import { 
@@ -119,6 +120,7 @@ app.use('/api/development', developmentRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/consolidated', consolidatedReportRoutes);
 app.use('/api/shared', sharedAccessRoutes);
+app.use('/api/documents', documentRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/goals', goalRoutes);
 
