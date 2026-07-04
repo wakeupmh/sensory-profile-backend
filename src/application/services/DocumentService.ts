@@ -60,6 +60,12 @@ export class DocumentService extends BaseDomainService<
 
     const uploadUrl = await this.storage.getUploadUrl(storageKey, payload.mimeType);
 
+    // ponytail: orphan-row leak — the metadata row is created before the client
+    // PUTs the file to S3. If the upload never completes, the row points at a
+    // missing object and download-url returns a signed URL that 404s. Upgrade
+    // path: add a nullable `uploaded_at` column + a POST /api/documents/:id/confirm
+    // endpoint that runs an S3 HEAD to mark confirmed, and a sweep that deletes
+    // rows where uploaded_at IS NULL AND created_at < now() - interval '1 hour'.
     const document = await this.repo.save({
       id,
       userId,
@@ -83,7 +89,11 @@ export class DocumentService extends BaseDomainService<
 
   async remove(id: string, userId: string): Promise<void> {
     const document = await this.getById(id, userId);
-    await this.storage.deleteObject(document.getStorageKey());
+    // ponytail: DB-then-S3 ordering — delete the row first; if S3 fails the row
+    // is already gone and a separate S3 sweep can reap the orphan object. The
+    // previous order (S3 first → DB fails) left a row whose download-url pointed
+    // at a deleted object — unrecoverable without manual SQL.
     await super.remove(id, userId);
+    await this.storage.deleteObject(document.getStorageKey());
   }
 }
