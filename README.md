@@ -182,11 +182,23 @@ cálculo de raw scores) só são aplicadas quando `instrumentId === 'crianca-3-1
 - `POST /api/assessments/:id/shares` - Idem para avaliações
 - `DELETE /api/assessments/:id/shares/:professionalId` - Idem para avaliações
 
+### Compartilhamento por criança (todos os domínios de uma vez)
+Complementa os compartilhamentos acima: em vez de compartilhar avaliação por avaliação, concede acesso a domínios inteiros de dados de uma criança (assessments, daily_logs, therapy, medical, development) em um único grant.
+- `GET /api/children/:childId/shares` - Listar profissionais com acesso à criança e os escopos concedidos a cada um
+- `POST /api/children/:childId/shares` - Body `{ professionalId, scopes: string[] }` (`scopes` ∈ `assessments`, `daily_logs`, `therapy`, `medical`, `development`) — concede ou atualiza os escopos
+- `DELETE /api/children/:childId/shares/:professionalId` - Revogar
+
 ### Acesso somente leitura (profissional)
 - `GET /api/shared/anamneses` - Anamneses compartilhadas comigo
 - `GET /api/shared/anamneses/:id` - Anamnese compartilhada comigo (read-only)
 - `GET /api/shared/assessments` - Avaliações compartilhadas comigo
 - `GET /api/shared/assessments/:id` - Avaliação compartilhada comigo (read-only)
+- `GET /api/shared/children` - Crianças compartilhadas comigo por escopo (todas as identidades de profissional aceitas)
+- `GET /api/shared/children/:childId/assessments` - Avaliações da criança (requer escopo `assessments`)
+- `GET /api/shared/children/:childId/daily-logs` - Registros diários da criança (requer escopo `daily_logs`)
+- `GET /api/shared/children/:childId/therapy` - Sessões de terapia da criança (requer escopo `therapy`)
+- `GET /api/shared/children/:childId/medical` - Medicamentos, comorbidades e consultas da criança (requer escopo `medical`)
+- `GET /api/shared/children/:childId/development` - Marcos de desenvolvimento e registros de comunicação da criança (requer escopo `development`)
 
 ## Cálculo de Pontuações
 

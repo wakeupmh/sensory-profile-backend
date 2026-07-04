@@ -17,6 +17,7 @@ import developmentRoutes from './interfaces/http/routes/developmentRoutes';
 import educationRoutes from './interfaces/http/routes/educationRoutes';
 import consolidatedReportRoutes from './interfaces/http/routes/consolidatedReportRoutes';
 import sharedAccessRoutes from './interfaces/http/routes/sharedAccessRoutes';
+import sharedChildRoutes from './interfaces/http/routes/sharedChildRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -117,6 +118,7 @@ app.use('/api/development', developmentRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/consolidated', consolidatedReportRoutes);
 app.use('/api/shared', sharedAccessRoutes);
+app.use('/api/shared/children', sharedChildRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);
