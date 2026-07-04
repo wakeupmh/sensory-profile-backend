@@ -188,6 +188,17 @@ cálculo de raw scores) só são aplicadas quando `instrumentId === 'crianca-3-1
 - `GET /api/shared/assessments` - Avaliações compartilhadas comigo
 - `GET /api/shared/assessments/:id` - Avaliação compartilhada comigo (read-only)
 
+### Documentos e anexos
+Arquivos (laudos, receitas, fotos, vídeos) não passam pelo backend — o fluxo é upload direto ao S3 via URL pré-assinada:
+- `POST /api/documents/upload-url` - Body `{ childId, title, mimeType, sizeBytes?, resourceType?, resourceId? }`. Cria o registro do documento e retorna `{ document, uploadUrl }`; o cliente deve enviar o arquivo via `PUT` para `uploadUrl` em até 5 minutos.
+- `GET /api/documents` - Listar documentos (filtros: `childId`, `resourceType`, `resourceId`)
+- `GET /api/documents/:id` - Metadados do documento
+- `GET /api/documents/:id/download-url` - Gera URL pré-assinada de leitura (válida por 15 minutos)
+- `PATCH /api/documents/:id` - Atualizar título/descrição
+- `DELETE /api/documents/:id` - Remover (apaga também o objeto no S3)
+
+Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os endpoints de upload/download retornam 503.
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
