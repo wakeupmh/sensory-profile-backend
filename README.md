@@ -200,6 +200,17 @@ Complementa os compartilhamentos acima: em vez de compartilhar avaliação por a
 - `GET /api/shared/children/:childId/medical` - Medicamentos, comorbidades e consultas da criança (requer escopo `medical`)
 - `GET /api/shared/children/:childId/development` - Marcos de desenvolvimento e registros de comunicação da criança (requer escopo `development`)
 
+### Documentos e anexos
+Arquivos (laudos, receitas, fotos, vídeos) não passam pelo backend — o fluxo é upload direto ao S3 via URL pré-assinada:
+- `POST /api/documents/upload-url` - Body `{ childId, title, mimeType, sizeBytes?, resourceType?, resourceId? }`. Cria o registro do documento e retorna `{ document, uploadUrl }`; o cliente deve enviar o arquivo via `PUT` para `uploadUrl` em até 5 minutos.
+- `GET /api/documents` - Listar documentos (filtros: `childId`, `resourceType`, `resourceId`)
+- `GET /api/documents/:id` - Metadados do documento
+- `GET /api/documents/:id/download-url` - Gera URL pré-assinada de leitura (válida por 15 minutos)
+- `PATCH /api/documents/:id` - Atualizar título/descrição
+- `DELETE /api/documents/:id` - Remover (apaga também o objeto no S3)
+
+Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os endpoints de upload/download retornam 503.
+
 ### Insights de comportamento (ABC)
 - `GET /api/logs/insights/behavior?childId=&days=30` - Agrega os registros diários do tipo `abc` (antecedente/comportamento/consequência) em: total de ocorrências no período vs período anterior, intensidade média, distribuição por dia da semana e hora do dia, principais antecedentes/comportamentos e as 10 ocorrências mais recentes.
 
