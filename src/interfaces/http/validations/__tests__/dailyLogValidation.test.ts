@@ -70,14 +70,25 @@ describe('createLogSchema — valid logs', () => {
     expect(result.success).toBe(true);
   });
 
-  test('data defaults to empty object when omitted', () => {
-    const payload = makeCreatePayload();
+  test('data defaults to empty object when omitted (non-abc log type)', () => {
+    // 'abc' is intentionally excluded here — it requires antecedent/behavior/
+    // consequence (see the dedicated test below) so BehaviorInsightsService
+    // can aggregate on those fields reliably. Every other log type keeps the
+    // original free-form `data` with a `{}` default.
+    const payload = makeCreatePayload({ logType: 'mood' });
     delete (payload as Record<string, unknown>).data;
     const result = createLogSchema.safeParse(payload);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.data).toEqual({});
     }
+  });
+
+  test('abc log requires antecedent/behavior/consequence — empty data fails', () => {
+    const payload = makeCreatePayload();
+    delete (payload as Record<string, unknown>).data;
+    const result = createLogSchema.safeParse(payload);
+    expect(result.success).toBe(false);
   });
 
   test('notes is optional — omitting it passes', () => {
