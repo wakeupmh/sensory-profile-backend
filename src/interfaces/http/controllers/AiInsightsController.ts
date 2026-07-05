@@ -7,6 +7,7 @@ import {
   generateAISummarySchema,
   listAiSummariesQuerySchema,
   askAiQuestionSchema,
+  consultationBriefSchema,
 } from '../validations/consolidatedReportValidation';
 import { requireUserId } from './controllerUtils';
 import { jsonResponse } from '../utils/response';
@@ -44,5 +45,13 @@ export class AiInsightsController {
     logger.info(`[aiInsights.askQuestion] userId=${userId} childId=${parsed.childId}`);
     const answer = await this.aiService.answerQuestion(userId, parsed.childId, parsed.question, parsed.periodDays);
     jsonResponse(res, { question: parsed.question, answer });
+  });
+
+  getConsultationBrief = asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUserId(req);
+    const parsed = consultationBriefSchema.parse(req.body);
+    logger.info(`[aiInsights.consultationBrief] userId=${userId} childId=${parsed.childId}`);
+    const brief = await this.aiService.generateConsultationBrief(userId, parsed.childId, parsed.periodDays);
+    jsonResponse(res, { brief });
   });
 }

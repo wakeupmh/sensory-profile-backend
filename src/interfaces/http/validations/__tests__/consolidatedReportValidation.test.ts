@@ -29,6 +29,7 @@ import {
   createShareSchema,
   listSharesQuerySchema,
   generateAISummarySchema,
+  consultationBriefSchema,
 } from '../consolidatedReportValidation';
 
 const VALID_UUID = '018f4e8a-1234-7000-8000-000000000001';
@@ -158,6 +159,43 @@ describe('generateAISummarySchema', () => {
   // 14. invalid childId fails
   test('invalid childId fails', () => {
     const result = generateAISummarySchema.safeParse({ childId: 'not-uuid', periodDays: 30 });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// consultationBriefSchema
+// ---------------------------------------------------------------------------
+
+describe('consultationBriefSchema', () => {
+  test('valid childId with no periodDays uses default 60 (shorter than the 90-day quarterly summary)', () => {
+    const result = consultationBriefSchema.safeParse({ childId: VALID_UUID });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.periodDays).toBe(60);
+    }
+  });
+
+  test('valid childId with explicit periodDays parses correctly', () => {
+    const result = consultationBriefSchema.safeParse({ childId: VALID_UUID, periodDays: 30 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.periodDays).toBe(30);
+    }
+  });
+
+  test('invalid childId fails', () => {
+    const result = consultationBriefSchema.safeParse({ childId: 'not-a-uuid' });
+    expect(result.success).toBe(false);
+  });
+
+  test('periodDays below 7 fails', () => {
+    const result = consultationBriefSchema.safeParse({ childId: VALID_UUID, periodDays: 6 });
+    expect(result.success).toBe(false);
+  });
+
+  test('periodDays above 365 fails', () => {
+    const result = consultationBriefSchema.safeParse({ childId: VALID_UUID, periodDays: 366 });
     expect(result.success).toBe(false);
   });
 });

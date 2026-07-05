@@ -78,4 +78,11 @@ router.get('/ai-summaries', aiInsightsController.list.bind(aiInsightsController)
 // Free-text Q&A grounded in the same consolidated data
 router.post('/ai-question', aiQuestionLimiter, aiInsightsController.askQuestion.bind(aiInsightsController));
 
+// Structured brief formatted for an upcoming medical appointment (not persisted)
+router.post(
+  '/consultation-brief',
+  aiSummaryLimiter,
+  aiInsightsController.getConsultationBrief.bind(aiInsightsController),
+);
+
 export default router;
