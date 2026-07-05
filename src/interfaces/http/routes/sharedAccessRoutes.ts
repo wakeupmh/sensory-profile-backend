@@ -12,6 +12,7 @@ import {
   assessmentShareService,
 } from './assessmentRoutes';
 import { professionalService } from './professionalRoutes';
+import { accessLogService } from './childRoutes';
 
 const controller = new SharedAccessController(
   professionalService,
@@ -19,7 +20,8 @@ const controller = new SharedAccessController(
   assessmentShareService,
   anamneseRepository,
   assessmentRepository,
-  responseRepository
+  responseRepository,
+  accessLogService,
 );
 
 const router = Router();
