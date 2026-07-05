@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 import { ProfessionalService } from '../../../application/services/ProfessionalService';
 import { ResourceShareService } from '../../../application/services/ResourceShareService';
+import { AccessLogService } from '../../../application/services/AccessLogService';
 import { AnamneseRepository } from '../../../domain/repositories/AnamneseRepository';
 import { AssessmentRepository } from '../../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../../domain/repositories/ResponseRepository';
@@ -15,7 +16,9 @@ import logger from '../../../infrastructure/utils/logger';
  * Read-only endpoints used by professionals to view resources that have been
  * shared with them. All access is gated by a JOIN on the share tables — a
  * 404 is returned if the calling user has no share grant for the resource,
- * regardless of whether the resource exists.
+ * regardless of whether the resource exists. Single-resource reads are
+ * recorded to access_logs for the owner's audit trail (list endpoints are
+ * not — they expose only names/dates, not clinical content).
  */
 export class SharedAccessController {
   constructor(
@@ -24,7 +27,8 @@ export class SharedAccessController {
     private readonly assessmentShareService: ResourceShareService,
     private readonly anamneseRepo: AnamneseRepository,
     private readonly assessmentRepo: AssessmentRepository,
-    private readonly responseRepo: ResponseRepository
+    private readonly responseRepo: ResponseRepository,
+    private readonly accessLogService: AccessLogService,
   ) {}
 
   private async myProfessionalIds(userId: string): Promise<string[]> {
@@ -71,6 +75,13 @@ export class SharedAccessController {
     if (!a) throw new NotFoundError('Anamnese', id);
 
     logger.info(`[shared.anamnese.get] id=${id} reader=${userId}`);
+    await this.accessLogService.record({
+      actorUserId: userId,
+      childId: null, // anamneses store child data as embedded JSONB, no children.id FK
+      resourceType: 'anamnese',
+      resourceId: id,
+      action: 'read',
+    });
     jsonResponse(res, a.toJSON(), 200, { readOnly: true });
   });
 
@@ -120,6 +131,13 @@ export class SharedAccessController {
     const responses = await this.responseRepo.findByAssessmentId(id);
 
     logger.info(`[shared.assessment.get] id=${id} reader=${userId}`);
+    await this.accessLogService.record({
+      actorUserId: userId,
+      childId: assessment.getChildId(),
+      resourceType: 'assessment',
+      resourceId: id,
+      action: 'read',
+    });
     jsonResponse(
       res,
       {

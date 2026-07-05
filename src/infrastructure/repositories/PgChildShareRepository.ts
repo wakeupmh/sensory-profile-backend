@@ -86,4 +86,26 @@ export class PgChildShareRepository implements ChildShareRepository {
     );
     return (result.rowCount ?? 0) > 0;
   }
+
+  async hasAnyAccess(childId: string, professionalIds: string[]): Promise<boolean> {
+    if (professionalIds.length === 0) return false;
+    const result = await pool.query(
+      `SELECT 1 FROM child_shares
+       WHERE child_id = $1 AND professional_id = ANY($2::uuid[])
+       LIMIT 1`,
+      [childId, professionalIds],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async resolveAccessProfessionalId(childId: string, professionalIds: string[]): Promise<string | null> {
+    if (professionalIds.length === 0) return null;
+    const result = await pool.query(
+      `SELECT professional_id FROM child_shares
+       WHERE child_id = $1 AND professional_id = ANY($2::uuid[])
+       LIMIT 1`,
+      [childId, professionalIds],
+    );
+    return result.rows.length === 0 ? null : (result.rows[0].professional_id as string);
+  }
 }

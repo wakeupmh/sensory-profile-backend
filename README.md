@@ -200,6 +200,17 @@ Complementa os compartilhamentos acima: em vez de compartilhar avaliação por a
 - `GET /api/shared/children/:childId/medical` - Medicamentos, comorbidades e consultas da criança (requer escopo `medical`)
 - `GET /api/shared/children/:childId/development` - Marcos de desenvolvimento e registros de comunicação da criança (requer escopo `development`)
 
+### Notas de profissional (escrita limitada)
+Profissionais nunca alteram os registros do dono — uma nota é uma anotação separada, vinculada à criança e opcionalmente a um recurso específico. Requer um `child_shares` (qualquer escopo) com a criança.
+- `POST /api/shared/children/:childId/notes` - Criar nota (`content`, `resourceType?`, `resourceId?`)
+- `GET /api/shared/children/:childId/notes` - Listar minhas próprias notas sobre essa criança
+- `PATCH /api/shared/notes/:id` - Atualizar (somente o autor)
+- `DELETE /api/shared/notes/:id` - Remover (somente o autor)
+- `GET /api/children/:childId/notes` - **Dono**: ver todas as notas de todos os profissionais sobre a criança
+
+### Trilha de auditoria (LGPD)
+- `GET /api/children/:childId/access-logs` - **Dono**: histórico paginado de quem leu ou escreveu dados da criança (leituras de anamnese/avaliação/domínios compartilhados + escrita de notas), com data/hora e identidade do profissional quando aplicável
+
 ### Documentos e anexos
 Arquivos (laudos, receitas, fotos, vídeos) não passam pelo backend — o fluxo é upload direto ao S3 via URL pré-assinada:
 - `POST /api/documents/upload-url` - Body `{ childId, title, mimeType, sizeBytes?, resourceType?, resourceId? }`. Cria o registro do documento e retorna `{ document, uploadUrl }`; o cliente deve enviar o arquivo via `PUT` para `uploadUrl` em até 5 minutos.

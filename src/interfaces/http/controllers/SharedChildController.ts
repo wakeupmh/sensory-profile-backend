@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { ProfessionalService } from '../../../application/services/ProfessionalService';
 import { ChildShareRepository } from '../../../domain/repositories/ChildShareRepository';
 import { SharedChildDataService } from '../../../application/services/SharedChildDataService';
+import { AccessLogService } from '../../../application/services/AccessLogService';
 import { ChildShareScope } from '../../../domain/entities/ChildShare';
 import { NotFoundError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
@@ -14,13 +15,15 @@ import logger from '../../../infrastructure/utils/logger';
  * the whole-child level (child_shares), as opposed to the per-resource
  * anamnese/assessment shares served by SharedAccessController. A 404 is
  * returned whenever the required scope is missing, hiding whether the child
- * exists at all.
+ * exists at all. Every successful read is recorded to access_logs for the
+ * owner's audit trail.
  */
 export class SharedChildController {
   constructor(
     private readonly professionalService: ProfessionalService,
     private readonly childShareRepo: ChildShareRepository,
     private readonly dataService: SharedChildDataService,
+    private readonly accessLogService: AccessLogService,
   ) {}
 
   private async myProfessionalIds(userId: string): Promise<string[]> {
@@ -31,6 +34,17 @@ export class SharedChildController {
   private async assertScope(childId: string, profIds: string[], scope: ChildShareScope): Promise<void> {
     const ok = await this.childShareRepo.hasScope(childId, profIds, scope);
     if (!ok) throw new NotFoundError('Criança', childId);
+  }
+
+  private async logRead(userId: string, childId: string, profIds: string[], resourceType: string): Promise<void> {
+    const professionalId = await this.childShareRepo.resolveAccessProfessionalId(childId, profIds);
+    await this.accessLogService.record({
+      actorUserId: userId,
+      professionalId,
+      childId,
+      resourceType,
+      action: 'read',
+    });
   }
 
   listSharedChildren = asyncHandler(async (req: Request, res: Response) => {
@@ -63,6 +77,7 @@ export class SharedChildController {
     await this.assertScope(childId, profIds, 'assessments');
     logger.info(`[sharedChild.assessments] childId=${childId} reader=${userId}`);
     const rows = await this.dataService.getAssessments(childId);
+    await this.logRead(userId, childId, profIds, 'child_assessments');
     jsonResponse(res, rows, 200, { count: rows.length });
   });
 
@@ -74,6 +89,7 @@ export class SharedChildController {
     await this.assertScope(childId, profIds, 'daily_logs');
     logger.info(`[sharedChild.dailyLogs] childId=${childId} reader=${userId}`);
     const rows = await this.dataService.getDailyLogs(childId);
+    await this.logRead(userId, childId, profIds, 'child_daily_logs');
     jsonResponse(res, rows, 200, { count: rows.length });
   });
 
@@ -85,6 +101,7 @@ export class SharedChildController {
     await this.assertScope(childId, profIds, 'therapy');
     logger.info(`[sharedChild.therapy] childId=${childId} reader=${userId}`);
     const rows = await this.dataService.getTherapy(childId);
+    await this.logRead(userId, childId, profIds, 'child_therapy');
     jsonResponse(res, rows, 200, { count: rows.length });
   });
 
@@ -96,6 +113,7 @@ export class SharedChildController {
     await this.assertScope(childId, profIds, 'medical');
     logger.info(`[sharedChild.medical] childId=${childId} reader=${userId}`);
     const data = await this.dataService.getMedical(childId);
+    await this.logRead(userId, childId, profIds, 'child_medical');
     jsonResponse(res, data);
   });
 
@@ -107,6 +125,7 @@ export class SharedChildController {
     await this.assertScope(childId, profIds, 'development');
     logger.info(`[sharedChild.development] childId=${childId} reader=${userId}`);
     const data = await this.dataService.getDevelopment(childId);
+    await this.logRead(userId, childId, profIds, 'child_development');
     jsonResponse(res, data);
   });
 }
