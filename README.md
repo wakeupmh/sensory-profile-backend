@@ -188,6 +188,15 @@ Complementa os compartilhamentos acima: em vez de compartilhar avaliação por a
 - `POST /api/children/:childId/shares` - Body `{ professionalId, scopes: string[] }` (`scopes` ∈ `assessments`, `daily_logs`, `therapy`, `medical`, `development`) — concede ou atualiza os escopos
 - `DELETE /api/children/:childId/shares/:professionalId` - Revogar
 
+### Co-cuidadores (leitura-escrita compartilhada)
+Diferente do profissional (sempre somente leitura, com escopos), um cuidador é um co-gestor completo de uma criança específica — pais separados, avós, etc. — com leitura **e escrita** em todos os domínios.
+- `POST /api/children/:childId/caregivers` - Body `{ caregiverName }`: cria convite e gera `invitationToken` (expira em 14 dias)
+- `GET /api/children/:childId/caregivers` - Listar cuidadores (pendentes e aceitos)
+- `DELETE /api/children/:childId/caregivers/:id` - Revogar
+- `POST /api/caregiver-invites/accept` - Body `{ token }`: vincula o cuidador ao seu próprio `userId` Supabase
+
+**Como funciona a delegação**: depois de aceitar, o cuidador envia o header `X-Delegate-Child-Id: <childId>` em qualquer requisição para atuar sobre os dados dessa criança como se fosse o dono — a leitura/escrita afeta os registros do dono, não do cuidador. Sem o header, o comportamento de qualquer endpoint existente é 100% inalterado (a delegação é totalmente opt-in). Se o cuidador enviar o header para uma criança com a qual não tem relação, a requisição é rejeitada (403) — nunca cai silenciosamente nos próprios dados (vazios) do cuidador. Aplica-se a praticamente toda a API (avaliações, registros diários, terapia, médico, desenvolvimento, educação, metas, lembretes, documentos, relatório consolidado); anamnese fica de fora porque não tem vínculo direto com `children.id`.
+
 ### Acesso somente leitura (profissional)
 - `GET /api/shared/anamneses` - Anamneses compartilhadas comigo
 - `GET /api/shared/anamneses/:id` - Anamnese compartilhada comigo (read-only)

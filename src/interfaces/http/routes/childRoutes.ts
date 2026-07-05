@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { createDelegationMiddleware } from '../middleware/delegationMiddleware';
 import { ChildController } from '../controllers/ChildController';
 import { ChildService } from '../../../application/services/ChildService';
 import { ChildProfileService } from '../../../application/services/ChildProfileService';
@@ -17,6 +18,10 @@ import { PgProfessionalNoteRepository } from '../../../infrastructure/repositori
 import { AccessLogController } from '../controllers/AccessLogController';
 import { AccessLogService } from '../../../application/services/AccessLogService';
 import { PgAccessLogRepository } from '../../../infrastructure/repositories/PgAccessLogRepository';
+
+import { CaregiverShareController } from '../controllers/CaregiverShareController';
+import { CaregiverShareService } from '../../../application/services/CaregiverShareService';
+import { PgCaregiverShareRepository } from '../../../infrastructure/repositories/PgCaregiverShareRepository';
 
 const repo = new PgChildRepository();
 const service = new ChildService(repo);
@@ -40,10 +45,23 @@ const professionalNoteController = new ProfessionalNoteController(
 );
 const accessLogController = new AccessLogController(accessLogService);
 
-export { childShareRepository, childShareService, professionalNoteService, accessLogService };
+const caregiverShareRepository = new PgCaregiverShareRepository();
+const caregiverShareService = new CaregiverShareService(caregiverShareRepository, pool);
+const caregiverShareController = new CaregiverShareController(caregiverShareService);
+const delegationMiddleware = createDelegationMiddleware(caregiverShareService);
+
+export {
+  childShareRepository,
+  childShareService,
+  professionalNoteService,
+  accessLogService,
+  caregiverShareService,
+  delegationMiddleware,
+};
 
 const router = Router();
 router.use(authMiddleware);
+router.use(delegationMiddleware);
 
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));
@@ -54,6 +72,9 @@ router.post('/:childId/shares', childShareController.grant.bind(childShareContro
 router.delete('/:childId/shares/:professionalId', childShareController.revoke.bind(childShareController));
 router.get('/:childId/notes', professionalNoteController.listForOwner.bind(professionalNoteController));
 router.get('/:childId/access-logs', accessLogController.list.bind(accessLogController));
+router.post('/:childId/caregivers', caregiverShareController.invite.bind(caregiverShareController));
+router.get('/:childId/caregivers', caregiverShareController.list.bind(caregiverShareController));
+router.delete('/:childId/caregivers/:id', caregiverShareController.revoke.bind(caregiverShareController));
 router.get('/:id', controller.get.bind(controller));
 router.put('/:id', controller.update.bind(controller));
 router.delete('/:id', controller.delete.bind(controller));

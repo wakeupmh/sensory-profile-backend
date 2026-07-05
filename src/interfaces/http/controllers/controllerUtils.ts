@@ -9,7 +9,16 @@ export function assertValidId(id: string | undefined, entityName = 'ID'): assert
   }
 }
 
+/**
+ * Returns req.effectiveUserId when the caller delegated via
+ * X-Delegate-Child-Id (see delegationMiddleware) and it was verified against
+ * caregiver_shares, otherwise the caller's own userId. Every controller
+ * calls this instead of reading req.userId directly, so caregiver
+ * delegation works transparently across the whole app without each
+ * controller needing to know about it.
+ */
 export function requireUserId(req: Request): string {
+  if (req.effectiveUserId) return req.effectiveUserId;
   if (!req.userId) throw new AuthenticationError();
   return req.userId;
 }

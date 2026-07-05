@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { delegationMiddleware } from './childRoutes';
 import pool from '../../../infrastructure/database/connection';
 
 import { DocumentController } from '../controllers/DocumentController';
@@ -15,6 +16,7 @@ const documentController = new DocumentController(documentService);
 const router = Router();
 
 router.use(authMiddleware);
+router.use(delegationMiddleware);
 
 router.get('/', documentController.list.bind(documentController));
 router.post('/upload-url', documentController.requestUpload.bind(documentController));

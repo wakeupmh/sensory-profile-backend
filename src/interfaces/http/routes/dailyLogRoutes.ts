@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { delegationMiddleware } from './childRoutes';
 import pool from '../../../infrastructure/database/connection';
 
 import { DailyLogController } from '../controllers/DailyLogController';
@@ -18,6 +19,7 @@ const behaviorInsightsController = new BehaviorInsightsController(behaviorInsigh
 const router = Router();
 
 router.use(authMiddleware);
+router.use(delegationMiddleware);
 
 // Registered before '/:id' — two path segments, so no collision, but kept
 // first for readability.

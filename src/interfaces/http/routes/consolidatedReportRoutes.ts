@@ -10,6 +10,7 @@ import { AiSummaryHistoryService } from '../../../application/services/AiSummary
 import { ConsolidatedReportController } from '../controllers/ConsolidatedReportController';
 import { AiInsightsController } from '../controllers/AiInsightsController';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { delegationMiddleware } from './childRoutes';
 
 // Module-level DI
 const reportShareRepo = new PgReportShareRepository();
@@ -65,6 +66,7 @@ router.get('/shared/:token', controller.getSharedSummary.bind(controller));
 
 // Auth-protected routes
 router.use(authMiddleware);
+router.use(delegationMiddleware);
 router.get('/summary', controller.getSummary.bind(controller));
 router.post('/shares', controller.createShare.bind(controller));
 router.get('/shares', controller.listShares.bind(controller));

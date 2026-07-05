@@ -6,6 +6,7 @@ import { rateLimit } from 'express-rate-limit';
 import dotenv from 'dotenv';
 
 import professionalRoutes, { acceptRouter as professionalAcceptRouter } from './interfaces/http/routes/professionalRoutes';
+import caregiverInviteRoutes from './interfaces/http/routes/caregiverInviteRoutes';
 import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import draftRoutes from './interfaces/http/routes/draftRoutes';
@@ -111,6 +112,7 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/professionals', professionalRoutes);
 app.use('/api/professional-invites', professionalAcceptRouter);
+app.use('/api/caregiver-invites', caregiverInviteRoutes);
 app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
 app.use('/api/drafts', draftRoutes);
