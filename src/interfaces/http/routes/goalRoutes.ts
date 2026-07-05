@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
+import { delegationMiddleware } from './childRoutes';
 
 import { GoalController } from '../controllers/GoalController';
 import { GoalService } from '../../../application/services/GoalService';
@@ -20,6 +21,7 @@ const goalProgressController = new GoalProgressController(goalProgressService);
 const router = Router();
 
 router.use(authMiddleware);
+router.use(delegationMiddleware);
 
 router.get('/', goalController.list.bind(goalController));
 router.post('/', goalController.create.bind(goalController));
