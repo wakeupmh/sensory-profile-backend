@@ -242,6 +242,14 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os en
 - `DELETE /api/reminders/:id` - Remover
 - `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`) e fim de medicação ativa (`medications.end_date`)
 
+### Entrega ativa de lembretes (e-mail)
+O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail:
+- `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes está ativado
+- `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio
+- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Deve ser chamada periodicamente (ex.: diariamente) por um agendador externo (Render Cron Job, GitHub Actions schedule, etc.). Para cada usuário com e-mail conhecido e notificações ativadas, busca os lembretes que vencem nos próximos 3 dias, envia um e-mail único por usuário e nunca reenvia o mesmo lembrete (idempotente via `reminder_notifications`)
+
+**Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`; sem eles, o disparo retorna 503 (mesmo padrão do Bedrock/S3).
+
 ### Metas estruturadas (PEI/terapêuticas)
 - `GET /api/goals` - Listar metas (filtros: `childId`, `domain`, `status`)
 - `POST /api/goals` - Criar meta (`domain`, `title`, `masteryCriteria?`, `baselineValue?`, `targetValue?`, `unit?`, `targetDate?`)
