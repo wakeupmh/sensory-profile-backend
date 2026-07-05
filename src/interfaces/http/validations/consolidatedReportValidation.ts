@@ -31,3 +31,11 @@ export const askAiQuestionSchema = z.object({
   question: z.string().trim().min(3, 'Pergunta muito curta').max(500, 'Pergunta muito longa'),
   periodDays: z.number().int().min(7).max(365).default(90),
 });
+
+// A consultation brief typically covers what's happened since the last
+// appointment (weeks to a few months), so the default window is shorter
+// than the quarterly summary's 90 days.
+export const consultationBriefSchema = z.object({
+  childId: z.string().uuid(),
+  periodDays: z.number().int().min(7).max(365).default(60),
+});

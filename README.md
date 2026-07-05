@@ -241,6 +241,7 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os en
 - `POST /api/consolidated/ai-summaries` - Gera **e salva** um resumo via IA, para comparar entre trimestres (limite: 5/hora por usuário)
 - `GET /api/consolidated/ai-summaries?childId=&page=1&limit=50` - Histórico paginado de resumos salvos de uma criança (máx. 100 por página)
 - `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
+- `POST /api/consolidated/consultation-brief` - Body `{ childId, periodDays? }` (padrão: 60 dias). Gera uma pauta objetiva em tópicos para levar à consulta médica: o que mudou desde a última consulta, medicamentos/tratamentos atuais, e perguntas sugeridas para o médico. Não é salva (mesmo limite do `/ai-summary`: 5/hora por usuário)
 
 ## Cálculo de Pontuações
 
