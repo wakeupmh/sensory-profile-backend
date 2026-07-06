@@ -25,6 +25,17 @@ import {
   NotFoundError,
   ValidationError,
 } from 'infrastructure/utils/errors/CustomErrors';
+import pool from 'infrastructure/database/connection';
+
+// The "does NOT throw" case below exercises AssessmentService's real save
+// path, which goes through the shared pg Pool (see AssessmentService's
+// pool.connect() calls) rather than a mocked repository. That pool is a
+// module-level singleton this file is the sole importer of within its own
+// Jest module registry, so it must be closed here or the worker process
+// hangs on an open handle after the suite finishes.
+afterAll(async () => {
+  await pool.end();
+});
 
 // ---------------------------------------------------------------------------
 // Mock factories
