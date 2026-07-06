@@ -6,29 +6,43 @@ Este é o backend para a aplicação de Perfil Sensorial 2, desenvolvido para ar
 
 - Node.js com Express.js
 - TypeScript
-- Prisma ORM
+- `pg` (cliente PostgreSQL puro, sem ORM) + SQL parametrizado
 - PostgreSQL
-- JWT para autenticação
+- Supabase Auth (JWT verificado via JWKS remoto, biblioteca `jose`) — não há tabela local de usuários nem rotas de registro/login
+- AWS SDK v3 (Bedrock para resumos por IA, S3 para documentos, SES para e-mails de lembrete)
 - Docker para containerização
 - Render para hospedagem
 
 ## Estrutura do Projeto
 
+Arquitetura em camadas (hexagonal/clean architecture):
+
 ```
 sensory-profile-backend/
 ├── src/
-│   ├── controllers/     # Controladores para cada entidade
-│   ├── models/          # Definições de tipos/interfaces
-│   ├── routes/          # Rotas da API
-│   ├── services/        # Lógica de negócio
-│   ├── utils/           # Funções utilitárias
-│   │   └── scoring/     # Cálculos de pontuação
-│   ├── middleware/      # Middlewares (auth, validação, etc)
-│   ├── prisma/          # Schema e migrações do Prisma
-│   └── app.ts           # Configuração do Express
-├── tests/               # Testes unitários e de integração
-├── Dockerfile           # Configuração do Docker
-├── docker-compose.yml   # Configuração para desenvolvimento local
+│   ├── domain/
+│   │   ├── entities/         # Entidades de domínio
+│   │   └── repositories/     # Interfaces de repositório
+│   ├── application/
+│   │   └── services/         # Lógica de negócio (orquestra domínio + repositórios)
+│   ├── infrastructure/
+│   │   ├── repositories/     # Implementações Pg* dos repositórios (SQL cru)
+│   │   ├── database/         # Pool de conexão pg
+│   │   ├── email/            # Wrapper do SES
+│   │   ├── storage/          # Wrapper do S3
+│   │   └── utils/            # Erros customizados, logger, scoring, etc.
+│   ├── interfaces/
+│   │   └── http/
+│   │       ├── controllers/  # Handlers Express
+│   │       ├── routes/       # Definição das rotas por recurso
+│   │       ├── middleware/   # auth, delegação de cuidador, etc.
+│   │       └── validations/  # Schemas Zod
+│   ├── instruments/           # Definições dos instrumentos clínicos suportados
+│   └── index.ts               # Configuração e bootstrap do Express
+├── migrations/                # Migrações SQL numeradas, aplicadas via `npm run migrate`
+├── scripts/migrate.ts         # Runner de migrações (ver seção Migrações abaixo)
+├── .github/workflows/ci.yml   # CI: typecheck + migrações + testes
+├── Dockerfile
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -63,13 +77,37 @@ sensory-profile-backend/
 
 4. Execute as migrações do banco de dados
    ```bash
-   npx prisma migrate dev
+   npm run migrate
    ```
+   Aplica os arquivos `migrations/*.sql` pendentes em ordem, cada um em sua própria transação, e registra o que já foi aplicado em uma tabela `schema_migrations` (para que rodar de novo seja um no-op). Veja a seção [Migrações](#migrações) para detalhes sobre como adotar isso em um banco já existente.
 
 5. Inicie o servidor de desenvolvimento
    ```bash
    npm run dev
    ```
+
+## Migrações
+
+As migrações são arquivos SQL simples e numerados em `migrations/`, aplicados via `npm run migrate` (`scripts/migrate.ts`). O runner:
+- aplica cada arquivo pendente em sua própria transação, na ordem do nome do arquivo;
+- registra os arquivos já aplicados em uma tabela `schema_migrations`, então rodar novamente é um no-op quando tudo já está em dia;
+- interrompe e reverte (rollback) no primeiro erro, sem marcar aquele arquivo como aplicado — os arquivos seguintes não são executados.
+
+Para criar uma nova migração, adicione um novo arquivo `NNN_descricao.sql` em `migrations/` (número sequencial, três dígitos) e rode `npm run migrate` localmente antes de subir a alteração.
+
+**Banco já existente** (ex.: staging/produção atual, que já tem as migrações 000–026 aplicadas manualmente antes desta tabela existir): rode um backfill único para não tentar reaplicar tudo desde o início:
+```sql
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+-- INSERT (filename) para cada migrations/*.sql já aplicado, com ON CONFLICT DO NOTHING
+```
+Depois disso, `npm run migrate` só aplica o que for novo.
+
+## CI
+
+`.github/workflows/ci.yml` roda em toda PR e push para `main`: typecheck (`tsc --noEmit`), aplicação das migrações e a suíte de testes completa, contra um container de serviço PostgreSQL.
 
 ## Implantação no Render
 
@@ -91,15 +129,18 @@ sensory-profile-backend/
    - Conecte ao repositório GitHub
    - Configure o nome do serviço
 
-2. Configure as variáveis de ambiente
+2. Configure as variáveis de ambiente (veja `.env.example` para a lista completa)
    - DATABASE_URL: URL de conexão do PostgreSQL criado anteriormente
-   - JWT_SECRET: Chave secreta para autenticação
+   - SUPABASE_URL: URL do projeto Supabase (autenticação via JWKS, sem tabela local de usuários)
    - NODE_ENV: production
    - FRONTEND_URL: URL do frontend
+   - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock) e armazenamento de documentos (S3)
+   - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
+   - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
 
 3. Configure o build command
    ```
-   npm install && npx prisma generate && npm run build
+   npm install && npm run build
    ```
 
 4. Configure o start command
@@ -111,9 +152,7 @@ sensory-profile-backend/
 
 ## API Endpoints
 
-### Autenticação
-- `POST /api/auth/register` - Registrar novo usuário
-- `POST /api/auth/login` - Autenticar usuário
+Autenticação é 100% via Supabase: o cliente obtém um JWT do Supabase Auth e envia `Authorization: Bearer <token>` em toda requisição. O backend apenas verifica o token (JWKS remoto) — não há rotas locais de registro/login nem tabela de usuários.
 
 ### Crianças
 - `GET /api/children` - Listar todas as crianças
