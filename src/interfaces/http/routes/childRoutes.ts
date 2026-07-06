@@ -48,7 +48,7 @@ const accessLogController = new AccessLogController(accessLogService);
 const caregiverShareRepository = new PgCaregiverShareRepository();
 const caregiverShareService = new CaregiverShareService(caregiverShareRepository, pool);
 const caregiverShareController = new CaregiverShareController(caregiverShareService);
-const delegationMiddleware = createDelegationMiddleware(caregiverShareService);
+const delegationMiddleware = createDelegationMiddleware(caregiverShareService, accessLogService);
 
 export {
   childShareRepository,

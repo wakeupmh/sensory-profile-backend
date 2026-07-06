@@ -8,7 +8,7 @@ import {
 } from '../../../infrastructure/utils/errors/CustomErrors';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
-import { assertValidId, requireUserId } from './controllerUtils';
+import { assertDelegatedChildMatches, assertValidId, requireUserId } from './controllerUtils';
 import { jsonResponse } from '../utils/response';
 
 export class ChildController {
@@ -28,6 +28,7 @@ export class ChildController {
     const userId = requireUserId(req);
     const { id } = req.params;
     assertValidId(id);
+    assertDelegatedChildMatches(req, id);
     logger.info(`[child.get] userId=${userId} id=${id}`);
     const child = await this.service.get(id, userId);
     if (!child) throw new NotFoundError('Child', id);
@@ -46,6 +47,7 @@ export class ChildController {
     const userId = requireUserId(req);
     const { id } = req.params;
     assertValidId(id);
+    assertDelegatedChildMatches(req, id);
     const body = updateChildSchema.parse(req.body);
     logger.info(`[child.update] userId=${userId} id=${id}`);
     const child = await this.service.update(id, userId, body);
@@ -57,6 +59,7 @@ export class ChildController {
     const userId = requireUserId(req);
     const { id } = req.params;
     assertValidId(id);
+    assertDelegatedChildMatches(req, id);
     logger.info(`[child.delete] userId=${userId} id=${id}`);
     const deleted = await this.service.delete(id, userId);
     if (deleted === false) {
