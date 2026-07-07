@@ -19,6 +19,7 @@ export interface RequestUploadPayload {
   sizeBytes?: number | null;
   resourceType?: string | null;
   resourceId?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface RequestUploadResult {
@@ -77,6 +78,7 @@ export class DocumentService extends BaseDomainService<
       sizeBytes: payload.sizeBytes ?? null,
       resourceType: payload.resourceType ?? null,
       resourceId: payload.resourceId ?? null,
+      expiresAt: payload.expiresAt ?? null,
     });
 
     return { document, uploadUrl };

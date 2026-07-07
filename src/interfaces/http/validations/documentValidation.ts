@@ -25,11 +25,13 @@ export const requestUploadSchema = z.object({
   sizeBytes: z.number().int().positive().max(50 * 1024 * 1024).nullable().optional(),
   resourceType: z.string().max(50).nullable().optional(),
   resourceId: z.string().uuid().nullable().optional(),
+  expiresAt: z.string().date().nullable().optional(),
 });
 
 export const updateDocumentSchema = z.object({
   title: z.string().trim().min(1).max(255).optional(),
   description: z.string().max(2000).nullable().optional(),
+  expiresAt: z.string().date().nullable().optional(),
 });
 
 export const listDocumentFiltersSchema = z.object({

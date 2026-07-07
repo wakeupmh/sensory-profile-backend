@@ -8,7 +8,8 @@ export type DerivedReminderType =
   | 'education_plan_end'
   | 'school_followup'
   | 'milestone_target'
-  | 'medication_ending';
+  | 'medication_ending'
+  | 'document_expiring';
 
 export interface UpcomingReminderItem {
   source: 'custom' | 'derived';
@@ -46,7 +47,7 @@ export class UpcomingReminderService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [custom, medical, eduReview, eduEnd, schoolFollowup, milestones, medications] = await Promise.all([
+    const [custom, medical, eduReview, eduEnd, schoolFollowup, milestones, medications, documents] = await Promise.all([
       this.reminderRepo.findAllByUser(userId, { childId, status: 'pending' }),
       this.queryDerived(
         `SELECT id, child_id, COALESCE('Retorno: ' || specialty, 'Retorno médico') AS title, follow_up_date::timestamptz AS due_at
@@ -90,6 +91,13 @@ export class UpcomingReminderService {
            AND active = true AND end_date IS NOT NULL AND end_date BETWEEN $3 AND $4`,
         userId, childId, today, horizon,
       ),
+      this.queryDerived(
+        `SELECT id, child_id, 'Documento expirando: ' || title AS title, expires_at::timestamptz AS due_at
+         FROM documents
+         WHERE user_id = $1 AND ($2::uuid IS NULL OR child_id = $2)
+           AND expires_at IS NOT NULL AND expires_at BETWEEN $3 AND $4`,
+        userId, childId, today, horizon,
+      ),
     ]);
 
     const derived: UpcomingReminderItem[] = [
@@ -99,6 +107,7 @@ export class UpcomingReminderService {
       ...this.toItems(schoolFollowup, 'school_followup', 'school_communication'),
       ...this.toItems(milestones, 'milestone_target', 'developmental_milestone'),
       ...this.toItems(medications, 'medication_ending', 'medication'),
+      ...this.toItems(documents, 'document_expiring', 'document'),
     ];
 
     const customItems: UpcomingReminderItem[] = custom

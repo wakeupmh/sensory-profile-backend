@@ -11,11 +11,13 @@ export interface DocumentCreateInput {
   sizeBytes?: number | null;
   resourceType?: string | null;
   resourceId?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface DocumentUpdateInput {
   title?: string;
   description?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface DocumentFilters {

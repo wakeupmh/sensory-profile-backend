@@ -9,6 +9,7 @@ export interface DocumentProps {
   sizeBytes: number | null;
   resourceType: string | null;
   resourceId: string | null;
+  expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +34,7 @@ export class Document {
       sizeBytes: this.props.sizeBytes,
       resourceType: this.props.resourceType,
       resourceId: this.props.resourceId,
+      expiresAt: this.props.expiresAt,
       createdAt: this.props.createdAt,
       updatedAt: this.props.updatedAt,
     };
