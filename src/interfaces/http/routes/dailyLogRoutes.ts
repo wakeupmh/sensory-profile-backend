@@ -8,10 +8,20 @@ import { DailyLogService } from '../../../application/services/DailyLogService';
 import { PgDailyLogRepository } from '../../../infrastructure/repositories/PgDailyLogRepository';
 import { BehaviorInsightsController } from '../controllers/BehaviorInsightsController';
 import { BehaviorInsightsService } from '../../../application/services/BehaviorInsightsService';
+import { LogAttachmentController } from '../controllers/LogAttachmentController';
+import { LogAttachmentService } from '../../../application/services/LogAttachmentService';
+import { PgLogAttachmentRepository } from '../../../infrastructure/repositories/PgLogAttachmentRepository';
+import { S3StorageService } from '../../../infrastructure/storage/S3StorageService';
 
 const dailyLogRepository = new PgDailyLogRepository();
 const dailyLogService = new DailyLogService(dailyLogRepository);
-const dailyLogController = new DailyLogController(dailyLogService);
+
+const logAttachmentRepository = new PgLogAttachmentRepository();
+const storageService = new S3StorageService();
+const logAttachmentService = new LogAttachmentService(logAttachmentRepository, dailyLogService, storageService);
+const logAttachmentController = new LogAttachmentController(logAttachmentService);
+
+const dailyLogController = new DailyLogController(dailyLogService, logAttachmentService);
 
 const behaviorInsightsService = new BehaviorInsightsService(pool);
 const behaviorInsightsController = new BehaviorInsightsController(behaviorInsightsService);
@@ -30,5 +40,9 @@ router.get('/:id', dailyLogController.getById.bind(dailyLogController));
 router.post('/', dailyLogController.create.bind(dailyLogController));
 router.patch('/:id', dailyLogController.update.bind(dailyLogController));
 router.delete('/:id', dailyLogController.remove.bind(dailyLogController));
+
+router.post('/:id/attachments', logAttachmentController.requestUpload.bind(logAttachmentController));
+router.get('/:id/attachments', logAttachmentController.list.bind(logAttachmentController));
+router.delete('/:id/attachments/:attachmentId', logAttachmentController.remove.bind(logAttachmentController));
 
 export default router;

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { DailyLogService } from '../../../application/services/DailyLogService';
+import { LogAttachmentService } from '../../../application/services/LogAttachmentService';
+import { DailyLogSummary } from '../../../domain/entities/DailyLog';
 import {
   createLogSchema,
   updateLogSchema,
@@ -11,7 +13,10 @@ import { assertValidId, requireUserId } from './controllerUtils';
 import { jsonResponse, jsonMessage } from '../utils/response';
 
 export class DailyLogController {
-  constructor(private readonly service: DailyLogService) {}
+  constructor(
+    private readonly service: DailyLogService,
+    private readonly attachmentService: LogAttachmentService,
+  ) {}
 
   list = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
@@ -27,7 +32,18 @@ export class DailyLogController {
       limit,
     });
 
-    jsonResponse(res, result.data, 200, {
+    // Batched attachment lookup (+ presigned URLs, which are local signing
+    // operations, not network calls) so the list can show thumbnails
+    // without an N+1 request per log.
+    const attachmentsByLogId = await this.attachmentService.listForLogsBatched(
+      result.data.map((log: DailyLogSummary) => log.id),
+    );
+    const dataWithAttachments = result.data.map((log: DailyLogSummary) => ({
+      ...log,
+      attachments: attachmentsByLogId.get(log.id) ?? [],
+    }));
+
+    jsonResponse(res, dataWithAttachments, 200, {
       total: result.total,
       page: result.page,
       limit: result.limit,
@@ -41,8 +57,9 @@ export class DailyLogController {
     logger.info(`[dailyLog.getById] id=${id} userId=${userId}`);
 
     const log = await this.service.getById(id, userId);
+    const attachments = await this.attachmentService.listForLogWithUrls(id, userId);
 
-    jsonResponse(res, log);
+    jsonResponse(res, { ...log.toJSON(), attachments });
   });
 
   create = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -81,6 +98,7 @@ export class DailyLogController {
     const userId = requireUserId(req);
     logger.info(`[dailyLog.remove] id=${id} userId=${userId}`);
 
+    await this.attachmentService.removeAllForLog(id, userId);
     await this.service.remove(id, userId);
 
     res.status(204).send();
