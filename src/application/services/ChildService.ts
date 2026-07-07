@@ -9,6 +9,9 @@ export interface ChildData {
   gender?: string;
   nationalIdentity?: string;
   otherInfo?: string;
+  sensoryTriggers?: string | null;
+  calmingStrategies?: string | null;
+  emergencyContact?: string | null;
 }
 
 export class ChildService {
@@ -69,6 +72,9 @@ export class ChildService {
       gender: input.gender,
       nationalIdentity: input.nationalIdentity,
       otherInfo: input.otherInfo,
+      sensoryTriggers: input.sensoryTriggers,
+      calmingStrategies: input.calmingStrategies,
+      emergencyContact: input.emergencyContact,
     });
   }
 

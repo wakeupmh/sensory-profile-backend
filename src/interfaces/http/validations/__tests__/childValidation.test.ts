@@ -10,6 +10,11 @@
  *   5. Valid birthDate passes
  *   6. Invalid gender fails
  *   7. Optional fields may be omitted
+ *  16. Care-notes fields (sensoryTriggers/calmingStrategies/emergencyContact):
+ *      valid, null, over-length rejection
+ *
+ *  updateChildSchema:
+ *   - care-notes fields are independently partial/nullable (null clears)
  *
  *  profileQuerySchema:
  *   8. Default periodDays=30 when omitted
@@ -24,7 +29,7 @@
  *  15. from/to are optional strings
  */
 
-import { createChildSchema, profileQuerySchema, timelineQuerySchema } from '../childValidation';
+import { createChildSchema, updateChildSchema, profileQuerySchema, timelineQuerySchema } from '../childValidation';
 
 // ---------------------------------------------------------------------------
 // createChildSchema
@@ -77,6 +82,61 @@ describe('createChildSchema', () => {
   // 7. Optional fields may be omitted
   test('accepts input without optional fields', () => {
     const result = createChildSchema.safeParse({ name: 'Pedro', birthDate: '2019-07-22' });
+    expect(result.success).toBe(true);
+  });
+
+  // 16. Care-notes fields (sensoryTriggers/calmingStrategies/emergencyContact)
+  test('accepts care-notes fields', () => {
+    const result = createChildSchema.safeParse({
+      ...valid,
+      sensoryTriggers: 'Barulhos altos, luzes piscando',
+      calmingStrategies: 'Abraço apertado, música calma',
+      emergencyContact: 'Mãe: 11 99999-0000',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('accepts null care-notes fields', () => {
+    const result = createChildSchema.safeParse({
+      ...valid,
+      sensoryTriggers: null,
+      calmingStrategies: null,
+      emergencyContact: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test('rejects sensoryTriggers over 2000 chars', () => {
+    const result = createChildSchema.safeParse({ ...valid, sensoryTriggers: 'a'.repeat(2001) });
+    expect(result.success).toBe(false);
+  });
+
+  test('rejects emergencyContact over 500 chars', () => {
+    const result = createChildSchema.safeParse({ ...valid, emergencyContact: 'a'.repeat(501) });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateChildSchema — care-notes fields are independently nullable/partial
+// ---------------------------------------------------------------------------
+
+describe('updateChildSchema — care-notes fields', () => {
+  test('partial update of only emergencyContact passes', () => {
+    const result = updateChildSchema.safeParse({ emergencyContact: 'Pai: 11 98888-0000' });
+    expect(result.success).toBe(true);
+  });
+
+  test('null clears calmingStrategies', () => {
+    const result = updateChildSchema.safeParse({ calmingStrategies: null });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.calmingStrategies).toBeNull();
+    }
+  });
+
+  test('empty object passes (no-op)', () => {
+    const result = updateChildSchema.safeParse({});
     expect(result.success).toBe(true);
   });
 });
