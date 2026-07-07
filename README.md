@@ -161,6 +161,8 @@ Autenticação é 100% via Supabase: o cliente obtém um JWT do Supabase Auth e 
 - `PUT /api/children/:id` - Atualizar dados de uma criança
 - `DELETE /api/children/:id` - Remover uma criança
 
+Campos opcionais `sensoryTriggers`, `calmingStrategies`, `emergencyContact` (strings, `null` limpa o campo) guardam notas rápidas de cuidado — gatilhos sensoriais, estratégias de acalmar e contato de emergência — sincronizadas entre dispositivos via `POST`/`PUT` acima (antes eram somente locais no dispositivo, no frontend).
+
 ### Examinadores
 - `GET /api/examiners` - Listar todos os examinadores
 - `GET /api/examiners/:id` - Obter detalhes de um examinador

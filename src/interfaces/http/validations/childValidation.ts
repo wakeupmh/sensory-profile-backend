@@ -6,6 +6,9 @@ export const createChildSchema = z.object({
   gender: z.enum(['male', 'female', 'other']).optional(),
   nationalIdentity: z.string().optional(),
   otherInfo: z.string().optional(),
+  sensoryTriggers: z.string().max(2000).nullable().optional(),
+  calmingStrategies: z.string().max(2000).nullable().optional(),
+  emergencyContact: z.string().max(500).nullable().optional(),
 });
 
 export const updateChildSchema = createChildSchema.partial();

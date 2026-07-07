@@ -23,8 +23,10 @@ export class PgChildRepository implements ChildRepository {
 
   async create(input: ChildCreateInput): Promise<Child> {
     const result = await pool.query(
-      `INSERT INTO children (id, user_id, name, birth_date, gender, national_identity, other_info)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO children
+         (id, user_id, name, birth_date, gender, national_identity, other_info,
+          sensory_triggers, calming_strategies, emergency_contact)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         input.id,
@@ -34,6 +36,9 @@ export class PgChildRepository implements ChildRepository {
         input.gender ?? null,
         input.nationalIdentity ?? null,
         input.otherInfo ?? null,
+        input.sensoryTriggers ?? null,
+        input.calmingStrategies ?? null,
+        input.emergencyContact ?? null,
       ]
     );
     return this.mapRow(result.rows[0]);
@@ -49,6 +54,11 @@ export class PgChildRepository implements ChildRepository {
     if (input.gender !== undefined) { fields.push(`gender = $${idx++}`); values.push(input.gender); }
     if (input.nationalIdentity !== undefined) { fields.push(`national_identity = $${idx++}`); values.push(input.nationalIdentity); }
     if (input.otherInfo !== undefined) { fields.push(`other_info = $${idx++}`); values.push(input.otherInfo); }
+    // Nullable — 'field' in input (not !== undefined) so explicit null clears
+    // the note instead of being indistinguishable from "not sent".
+    if ('sensoryTriggers' in input) { fields.push(`sensory_triggers = $${idx++}`); values.push(input.sensoryTriggers ?? null); }
+    if ('calmingStrategies' in input) { fields.push(`calming_strategies = $${idx++}`); values.push(input.calmingStrategies ?? null); }
+    if ('emergencyContact' in input) { fields.push(`emergency_contact = $${idx++}`); values.push(input.emergencyContact ?? null); }
 
     if (fields.length === 0) return this.findById(id, userId);
 
@@ -143,6 +153,9 @@ export class PgChildRepository implements ChildRepository {
       gender: (row.gender as string | null) ?? null,
       nationalIdentity: (row.national_identity as string | null) ?? null,
       otherInfo: (row.other_info as string | null) ?? null,
+      sensoryTriggers: (row.sensory_triggers as string | null) ?? null,
+      calmingStrategies: (row.calming_strategies as string | null) ?? null,
+      emergencyContact: (row.emergency_contact as string | null) ?? null,
       createdAt: row.created_at as Date,
       updatedAt: row.updated_at as Date,
     });

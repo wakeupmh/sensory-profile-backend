@@ -8,6 +8,9 @@ export interface ChildCreateInput {
   gender?: string;
   nationalIdentity?: string;
   otherInfo?: string;
+  sensoryTriggers?: string | null;
+  calmingStrategies?: string | null;
+  emergencyContact?: string | null;
 }
 
 export type ChildUpdateInput = Partial<Omit<ChildCreateInput, 'id' | 'userId'>>;

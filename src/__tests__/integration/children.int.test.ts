@@ -66,6 +66,9 @@ function makeChild(): Child {
     gender: null,
     nationalIdentity: null,
     otherInfo: null,
+    sensoryTriggers: null,
+    calmingStrategies: null,
+    emergencyContact: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
   });
@@ -295,6 +298,23 @@ describe('ChildService (mock repo)', () => {
     const result = await service.create(USER_ID, { name: 'Ana', birthDate: '2018-03-15' });
     expect(result).toBe(child);
     expect(repo.create).toHaveBeenCalledTimes(1);
+  });
+
+  // 13a. create forwards sensoryTriggers/calmingStrategies/emergencyContact to the repo
+  test('create forwards care-notes fields to repo.create', async () => {
+    const repo = makeRepo();
+    const service = new ChildService(repo);
+    await service.create(USER_ID, {
+      name: 'Ana',
+      birthDate: '2018-03-15',
+      sensoryTriggers: 'Barulhos altos',
+      calmingStrategies: 'Abraço apertado',
+      emergencyContact: 'Mãe: 11 99999-0000',
+    });
+    const createArg = (repo.create as jest.Mock).mock.calls[0][0];
+    expect(createArg.sensoryTriggers).toBe('Barulhos altos');
+    expect(createArg.calmingStrategies).toBe('Abraço apertado');
+    expect(createArg.emergencyContact).toBe('Mãe: 11 99999-0000');
   });
 
   // 14. update returns null when not found
