@@ -254,14 +254,14 @@ describe('listFiltersSchema — coercion', () => {
   });
 });
 
-describe('listFiltersSchema — limit max=100', () => {
-  test('limit 100 passes', () => {
-    const result = listFiltersSchema.safeParse({ limit: 100 });
+describe('listFiltersSchema — limit max=1000', () => {
+  test('limit 1000 passes', () => {
+    const result = listFiltersSchema.safeParse({ limit: 1000 });
     expect(result.success).toBe(true);
   });
 
-  test('limit 101 is rejected', () => {
-    const result = listFiltersSchema.safeParse({ limit: 101 });
+  test('limit 1001 is rejected', () => {
+    const result = listFiltersSchema.safeParse({ limit: 1001 });
     expect(result.success).toBe(false);
   });
 });
