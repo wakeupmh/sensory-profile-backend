@@ -275,6 +275,16 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os en
 ### Insights de comportamento (ABC)
 - `GET /api/logs/insights/behavior?childId=&days=30` - Agrega os registros diários do tipo `abc` (antecedente/comportamento/consequência) em: total de ocorrências no período vs período anterior, intensidade média, distribuição por dia da semana e hora do dia, principais antecedentes/comportamentos e as 10 ocorrências mais recentes.
 
+### Anexos de foto em registros diários
+Assim como documentos, os bytes do arquivo não passam pelo backend — fluxo de upload direto ao S3 via URL pré-assinada. Usa um prefixo próprio no bucket (`log-attachments/...`, distinto de `documents/...`) para permitir uma política/lifecycle de S3 separada, já que fotos de registros (ex.: uma crise) podem ser mais sensíveis que um documento clínico de rotina. Somente imagens são aceitas (`image/*`).
+- `POST /api/logs/:id/attachments` - Body `{ mimeType, sizeBytes? }`. Cria o registro do anexo e retorna `{ attachment, uploadUrl }`; o cliente envia o arquivo via `PUT` para `uploadUrl` em até 5 minutos.
+- `GET /api/logs/:id/attachments` - Lista os anexos do registro, cada um já com uma URL de leitura pré-assinada (`url`, válida por 15 minutos)
+- `DELETE /api/logs/:id/attachments/:attachmentId` - Remove o anexo (registro e objeto no S3)
+
+`GET /api/logs` (lista) e `GET /api/logs/:id` (detalhe) já retornam `attachments: [{ id, mimeType, sizeBytes, createdAt, url }]` embutido em cada registro — a lista busca os anexos de todos os registros retornados em uma única consulta (sem N+1), e as URLs pré-assinadas são geradas localmente (sem round-trip de rede), então isso é seguro mesmo para páginas grandes.
+
+Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET` (mesmas de documentos); sem elas, os endpoints de upload retornam 503.
+
 ### Lembretes
 - `GET /api/reminders` - Listar lembretes criados manualmente (filtros: `childId`, `status`)
 - `POST /api/reminders` - Criar lembrete (`title`, `dueAt`, `notes?`)
