@@ -48,7 +48,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
     filters: DailyLogFilters
   ): Promise<{ data: DailyLogSummary[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, filters.page ?? 1);
-    const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
+    const limit = Math.min(1000, Math.max(1, filters.limit ?? 20));
     const offset = (page - 1) * limit;
 
     const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);

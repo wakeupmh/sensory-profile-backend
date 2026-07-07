@@ -58,7 +58,10 @@ export const listFiltersSchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  // Capped at 1000 (not the usual 100) so a caller fetching a whole month
+  // of logs in one page — e.g. a monthly recap view — doesn't get silently
+  // truncated to the 100 most recent entries.
+  limit: z.coerce.number().int().positive().max(1000).default(20),
 });
 
 export const behaviorInsightsQuerySchema = z.object({
