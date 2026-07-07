@@ -27,6 +27,7 @@ export class PgDocumentRepository implements DocumentRepository {
       sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
       resourceType: (row.resource_type as string | null) ?? null,
       resourceId: (row.resource_id as string | null) ?? null,
+      expiresAt: row.expires_at == null ? null : new Date(row.expires_at as string),
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),
     } satisfies DocumentProps;
@@ -37,8 +38,8 @@ export class PgDocumentRepository implements DocumentRepository {
     const result = await pool.query(
       `INSERT INTO documents
          (id, user_id, child_id, title, description, storage_key, mime_type,
-          size_bytes, resource_type, resource_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          size_bytes, resource_type, resource_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         input.id,
@@ -51,6 +52,7 @@ export class PgDocumentRepository implements DocumentRepository {
         input.sizeBytes ?? null,
         input.resourceType ?? null,
         input.resourceId ?? null,
+        input.expiresAt ?? null,
       ],
     );
     return this.mapRow(result.rows[0]);
@@ -76,6 +78,7 @@ export class PgDocumentRepository implements DocumentRepository {
 
     if (input.title !== undefined) { params.push(input.title); setClauses.push(`title = $${params.length}`); }
     if ('description' in input) { params.push(input.description ?? null); setClauses.push(`description = $${params.length}`); }
+    if ('expiresAt' in input) { params.push(input.expiresAt ?? null); setClauses.push(`expires_at = $${params.length}`); }
 
     if (setClauses.length === 0) return this.findById(id, userId);
 

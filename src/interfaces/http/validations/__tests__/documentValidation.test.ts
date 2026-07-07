@@ -3,8 +3,10 @@
  *
  * Covers:
  *  1. requestUploadSchema — valid payload, bad mimeType, oversized title,
- *     oversized mimeType, oversized sizeBytes, non-uuid childId/resourceId
- *  2. updateDocumentSchema — partial updates, empty object, oversized title
+ *     oversized mimeType, oversized sizeBytes, non-uuid childId/resourceId,
+ *     expiresAt (valid/null/omitted/malformed)
+ *  2. updateDocumentSchema — partial updates, empty object, oversized title,
+ *     expiresAt (partial update/null-clears/malformed)
  *  3. listDocumentFiltersSchema — defaults, invalid childId, invalid resourceId
  *
  * All tests work directly against the exported Zod schemas — no running
@@ -81,6 +83,26 @@ describe('requestUploadSchema', () => {
     );
     expect(result.success).toBe(false);
   });
+
+  test('valid expiresAt date passes', () => {
+    const result = requestUploadSchema.safeParse(makeUploadPayload({ expiresAt: '2025-12-31' }));
+    expect(result.success).toBe(true);
+  });
+
+  test('null expiresAt passes', () => {
+    const result = requestUploadSchema.safeParse(makeUploadPayload({ expiresAt: null }));
+    expect(result.success).toBe(true);
+  });
+
+  test('omitted expiresAt passes', () => {
+    const result = requestUploadSchema.safeParse(makeUploadPayload());
+    expect(result.success).toBe(true);
+  });
+
+  test('malformed expiresAt (not YYYY-MM-DD) is rejected', () => {
+    const result = requestUploadSchema.safeParse(makeUploadPayload({ expiresAt: '31/12/2025' }));
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('updateDocumentSchema', () => {
@@ -106,6 +128,21 @@ describe('updateDocumentSchema', () => {
 
   test('title longer than 255 chars is rejected', () => {
     const result = updateDocumentSchema.safeParse({ title: 'a'.repeat(256) });
+    expect(result.success).toBe(false);
+  });
+
+  test('partial expiresAt update passes', () => {
+    const result = updateDocumentSchema.safeParse({ expiresAt: '2025-12-31' });
+    expect(result.success).toBe(true);
+  });
+
+  test('null expiresAt passes (clears the expiry)', () => {
+    const result = updateDocumentSchema.safeParse({ expiresAt: null });
+    expect(result.success).toBe(true);
+  });
+
+  test('malformed expiresAt is rejected', () => {
+    const result = updateDocumentSchema.safeParse({ expiresAt: 'not-a-date' });
     expect(result.success).toBe(false);
   });
 });

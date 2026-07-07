@@ -261,12 +261,14 @@ Profissionais nunca alteram os registros do dono — uma nota é uma anotação 
 
 ### Documentos e anexos
 Arquivos (laudos, receitas, fotos, vídeos) não passam pelo backend — o fluxo é upload direto ao S3 via URL pré-assinada:
-- `POST /api/documents/upload-url` - Body `{ childId, title, mimeType, sizeBytes?, resourceType?, resourceId? }`. Cria o registro do documento e retorna `{ document, uploadUrl }`; o cliente deve enviar o arquivo via `PUT` para `uploadUrl` em até 5 minutos.
+- `POST /api/documents/upload-url` - Body `{ childId, title, mimeType, sizeBytes?, resourceType?, resourceId?, expiresAt? }`. Cria o registro do documento e retorna `{ document, uploadUrl }`; o cliente deve enviar o arquivo via `PUT` para `uploadUrl` em até 5 minutos.
 - `GET /api/documents` - Listar documentos (filtros: `childId`, `resourceType`, `resourceId`)
 - `GET /api/documents/:id` - Metadados do documento
 - `GET /api/documents/:id/download-url` - Gera URL pré-assinada de leitura (válida por 15 minutos)
-- `PATCH /api/documents/:id` - Atualizar título/descrição
+- `PATCH /api/documents/:id` - Atualizar título/descrição/`expiresAt` (envie `expiresAt: null` para remover a validade)
 - `DELETE /api/documents/:id` - Remover (apaga também o objeto no S3)
+
+`expiresAt` (string `YYYY-MM-DD`, opcional) marca a validade de um documento (ex.: laudo médico, autorização de terapia). Documentos com validade próxima aparecem em `GET /api/reminders/upcoming` (veja abaixo).
 
 Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os endpoints de upload/download retornam 503.
 
@@ -279,7 +281,7 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET`; sem elas, os en
 - `GET /api/reminders/:id` - Detalhes
 - `PATCH /api/reminders/:id` - Atualizar (inclui marcar `status` como `done`/`dismissed`)
 - `DELETE /api/reminders/:id` - Remover
-- `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`) e fim de medicação ativa (`medications.end_date`)
+- `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`), fim de medicação ativa (`medications.end_date`) e validade de documento (`documents.expires_at`)
 
 ### Entrega ativa de lembretes (e-mail)
 O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail:

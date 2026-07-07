@@ -9,6 +9,7 @@
  *  2.  requestUpload builds storageKey as documents/{userId}/{childId}/{id}
  *  3.  requestUpload returns the saved document and the presigned upload URL
  *  4.  requestUpload passes mimeType through to storage.getUploadUrl
+ *  4a. requestUpload forwards expiresAt through to repo.save (present and omitted)
  *  5.  getDownloadUrl returns the URL from storage keyed off the document storageKey
  *  6.  getDownloadUrl throws when document not found
  *  7.  remove deletes the DB row before deleting the S3 object (ordering)
@@ -41,6 +42,7 @@ function makeDocument(overrides: Record<string, unknown> = {}): Document {
     sizeBytes: null,
     resourceType: null,
     resourceId: null,
+    expiresAt: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -121,6 +123,29 @@ describe('DocumentService', () => {
     );
     expect(result.document).toBeInstanceOf(Document);
     expect(result.uploadUrl).toBe(UPLOAD_URL);
+  });
+
+  test('requestUpload forwards expiresAt through to repo.save', async () => {
+    const repo = makeRepo();
+    const service = makeService({ repo });
+    const expiresAt = new Date('2025-12-31T00:00:00.000Z');
+    await service.requestUpload(
+      { childId: CHILD_ID, title: 'Laudo', mimeType: 'application/pdf', expiresAt },
+      USER_ID,
+    );
+    const saveArg = (repo.save as jest.Mock).mock.calls[0][0];
+    expect(saveArg.expiresAt).toBe(expiresAt);
+  });
+
+  test('requestUpload saves expiresAt as null when omitted', async () => {
+    const repo = makeRepo();
+    const service = makeService({ repo });
+    await service.requestUpload(
+      { childId: CHILD_ID, title: 'Laudo', mimeType: 'application/pdf' },
+      USER_ID,
+    );
+    const saveArg = (repo.save as jest.Mock).mock.calls[0][0];
+    expect(saveArg.expiresAt).toBeNull();
   });
 
   test('requestUpload forwards mimeType to storage.getUploadUrl', async () => {

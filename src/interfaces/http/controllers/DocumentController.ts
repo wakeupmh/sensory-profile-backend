@@ -17,7 +17,10 @@ export class DocumentController {
     const userId = requireUserId(req);
     const parsed = requestUploadSchema.parse(req.body);
     logger.info(`[document.requestUpload] userId=${userId} childId=${parsed.childId}`);
-    const { document, uploadUrl } = await this.service.requestUpload(parsed, userId);
+    const { document, uploadUrl } = await this.service.requestUpload(
+      { ...parsed, expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null },
+      userId,
+    );
     jsonResponse(
       res,
       { document: document.toJSON(), uploadUrl },
@@ -55,7 +58,15 @@ export class DocumentController {
     const userId = requireUserId(req);
     const parsed = updateDocumentSchema.parse(req.body);
     logger.info(`[document.update] userId=${userId} id=${req.params.id}`);
-    const result = await this.service.update(req.params.id, parsed, userId);
+    // Only convert/forward expiresAt when the caller actually sent it —
+    // spreading an always-present key here would make every update clear
+    // the expiry date even when the caller only meant to change the title.
+    const { expiresAt, ...rest } = parsed;
+    const payload = {
+      ...rest,
+      ...('expiresAt' in parsed ? { expiresAt: expiresAt ? new Date(expiresAt) : null } : {}),
+    };
+    const result = await this.service.update(req.params.id, payload, userId);
     jsonResponse(res, result.toJSON(), 200, { message: 'Documento atualizado com sucesso' });
   });
 
