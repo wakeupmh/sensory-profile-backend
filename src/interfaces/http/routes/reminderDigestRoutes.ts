@@ -8,6 +8,7 @@ import { EmailService } from '../../../infrastructure/email/EmailService';
 import { PgReminderRepository } from '../../../infrastructure/repositories/PgReminderRepository';
 import { PgReminderNotificationRepository } from '../../../infrastructure/repositories/PgReminderNotificationRepository';
 import { userProfileRepository } from './notificationPreferencesRoutes';
+import { pushSubscriptionRepository, webPushService } from './pushSubscriptionRoutes';
 
 const reminderRepository = new PgReminderRepository();
 const upcomingReminderService = new UpcomingReminderService(pool, reminderRepository);
@@ -19,6 +20,8 @@ const digestService = new ReminderDigestService(
   reminderNotificationRepository,
   upcomingReminderService,
   emailService,
+  pushSubscriptionRepository,
+  webPushService,
 );
 const controller = new ReminderDigestController(digestService);
 
