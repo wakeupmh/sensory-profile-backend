@@ -324,6 +324,9 @@ O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto a
 - `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
 - `POST /api/consolidated/consultation-brief` - Body `{ childId, periodDays? }` (padrão: 60 dias). Gera uma pauta objetiva em tópicos para levar à consulta médica: o que mudou desde a última consulta, medicamentos/tratamentos atuais, e perguntas sugeridas para o médico. Não é salva (mesmo limite do `/ai-summary`: 5/hora por usuário)
 
+### Busca global
+- `GET /api/search?q=` - Busca por texto livre (mínimo 2 caracteres) em crianças (nome), registros diários (campo `notes`) e documentos (`title`/`description`), tudo escopado ao usuário autenticado (ou ao dono, se delegado). Retorna `{ children, logs, documents }`, até 8 resultados por categoria, cada um com o `childId`/nome da criança para dar contexto no resultado. Não busca o campo `data` (JSONB) estruturado dos registros diários — só o texto livre em `notes`.
+
 ## Cálculo de Pontuações
 
 O sistema calcula automaticamente as pontuações brutas para cada seção do questionário:
