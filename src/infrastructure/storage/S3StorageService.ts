@@ -64,4 +64,19 @@ export class S3StorageService {
     });
     await this.getClient().send(command);
   }
+
+  /**
+   * Server-side upload, unlike getUploadUrl's client-side presigned PUT.
+   * Used for content the backend itself generates (e.g. a data export
+   * JSON file) rather than a file the client is sending.
+   */
+  async putObject(key: string, body: string | Buffer, contentType: string): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.getBucket(),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    await this.getClient().send(command);
+  }
 }

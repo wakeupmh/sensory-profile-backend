@@ -2,9 +2,13 @@ import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { createDelegationMiddleware } from '../middleware/delegationMiddleware';
 import { ChildController } from '../controllers/ChildController';
+import { AccountController } from '../controllers/AccountController';
 import { ChildService } from '../../../application/services/ChildService';
 import { ChildProfileService } from '../../../application/services/ChildProfileService';
+import { AccountErasureService } from '../../../application/services/AccountErasureService';
+import { DataExportService } from '../../../application/services/DataExportService';
 import { PgChildRepository } from '../../../infrastructure/repositories/PgChildRepository';
+import { S3StorageService } from '../../../infrastructure/storage/S3StorageService';
 import pool from '../../../infrastructure/database/connection';
 
 import { ChildShareController } from '../controllers/ChildShareController';
@@ -26,7 +30,12 @@ import { PgCaregiverShareRepository } from '../../../infrastructure/repositories
 const repo = new PgChildRepository();
 const service = new ChildService(repo);
 const profileService = new ChildProfileService(pool);
-const controller = new ChildController(service, profileService);
+const storageService = new S3StorageService();
+const erasureService = new AccountErasureService(pool, storageService);
+const controller = new ChildController(service, profileService, erasureService);
+
+const exportService = new DataExportService(pool, storageService);
+const accountController = new AccountController(exportService, erasureService);
 
 const childShareRepository = new PgChildShareRepository();
 const childShareService = new ChildShareService(childShareRepository, professionalRepository, pool);
@@ -57,6 +66,9 @@ export {
   accessLogService,
   caregiverShareService,
   delegationMiddleware,
+  erasureService,
+  storageService,
+  exportService,
 };
 
 const router = Router();
@@ -67,6 +79,7 @@ router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));
 router.get('/:childId/profile', controller.getProfile.bind(controller));
 router.get('/:childId/timeline', controller.getTimeline.bind(controller));
+router.get('/:childId/export', accountController.exportChild.bind(accountController));
 router.get('/:childId/shares', childShareController.list.bind(childShareController));
 router.post('/:childId/shares', childShareController.grant.bind(childShareController));
 router.delete('/:childId/shares/:professionalId', childShareController.revoke.bind(childShareController));
