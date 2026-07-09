@@ -37,6 +37,7 @@
     "morgan": "^1.10.0",
     "pg": "^8.14.1",
     "uuid": "^11.1.0",
+    "web-push": "^3.6.7",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
@@ -49,6 +50,7 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.19",
     "@types/supertest": "^6.0.2",
+    "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
     "eslint": "^8.56.0",

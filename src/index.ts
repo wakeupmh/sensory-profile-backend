@@ -24,6 +24,7 @@ import documentRoutes from './interfaces/http/routes/documentRoutes';
 import reminderRoutes from './interfaces/http/routes/reminderRoutes';
 import goalRoutes from './interfaces/http/routes/goalRoutes';
 import notificationPreferencesRoutes from './interfaces/http/routes/notificationPreferencesRoutes';
+import pushSubscriptionRoutes from './interfaces/http/routes/pushSubscriptionRoutes';
 import reminderDigestRoutes from './interfaces/http/routes/reminderDigestRoutes';
 import searchRoutes from './interfaces/http/routes/searchRoutes';
 import { 
@@ -133,6 +134,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/notifications/preferences', notificationPreferencesRoutes);
+app.use('/api/notifications/push-subscriptions', pushSubscriptionRoutes);
 app.use('/api/system/reminder-digest', reminderDigestRoutes);
 app.use('/api/search', searchRoutes);
 
