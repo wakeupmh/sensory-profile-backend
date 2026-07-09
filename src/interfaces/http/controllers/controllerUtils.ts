@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { AuthenticationError, AuthorizationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,5 +35,28 @@ export function requireUserId(req: Request): string {
 export function assertDelegatedChildMatches(req: Request, id: string): void {
   if (req.delegatedChildId && req.delegatedChildId !== id) {
     throw new AuthorizationError('Delegated access does not cover this child');
+  }
+}
+
+/**
+ * Constant-time comparison for shared-secret-gated system endpoints (cron
+ * jobs — see ReminderDigestController/RetentionCleanupController). A plain
+ * `!==` comparison short-circuits at the first mismatched byte, leaking how
+ * many leading characters of a guess were correct through response timing;
+ * timingSafeEqual takes the same time regardless. Requires equal-length
+ * buffers, so a length mismatch (the common case — an attacker's guess is
+ * essentially never the exact right length) is checked first and rejected
+ * without calling it.
+ */
+export function verifyCronSecret(req: Request, headerName: string): void {
+  const expected = process.env.CRON_SECRET;
+  const provided = req.header(headerName);
+  if (!expected || !provided) {
+    throw new AuthenticationError('Invalid or missing cron secret');
+  }
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(provided);
+  if (expectedBuf.length !== providedBuf.length || !timingSafeEqual(expectedBuf, providedBuf)) {
+    throw new AuthenticationError('Invalid or missing cron secret');
   }
 }

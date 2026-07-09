@@ -11,6 +11,7 @@ import assessmentRoutes from './interfaces/http/routes/assessmentRoutes';
 import anamneseRoutes from './interfaces/http/routes/anamneseRoutes';
 import draftRoutes from './interfaces/http/routes/draftRoutes';
 import childRoutes from './interfaces/http/routes/childRoutes';
+import accountRoutes from './interfaces/http/routes/accountRoutes';
 import dailyLogRoutes from './interfaces/http/routes/dailyLogRoutes';
 import therapyRoutes from './interfaces/http/routes/therapyRoutes';
 import medicalRoutes from './interfaces/http/routes/medicalRoutes';
@@ -25,6 +26,7 @@ import reminderRoutes from './interfaces/http/routes/reminderRoutes';
 import goalRoutes from './interfaces/http/routes/goalRoutes';
 import notificationPreferencesRoutes from './interfaces/http/routes/notificationPreferencesRoutes';
 import reminderDigestRoutes from './interfaces/http/routes/reminderDigestRoutes';
+import retentionCleanupRoutes from './interfaces/http/routes/retentionCleanupRoutes';
 import { 
   errorHandler, 
   notFoundHandler, 
@@ -119,6 +121,7 @@ app.use('/api/assessments', assessmentRoutes);
 app.use('/api/anamneses', anamneseRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/children', childRoutes);
+app.use('/api/account', accountRoutes);
 app.use('/api/logs', dailyLogRoutes);
 app.use('/api/therapy', therapyRoutes);
 app.use('/api/medical', medicalRoutes);
@@ -133,6 +136,7 @@ app.use('/api/reminders', reminderRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/notifications/preferences', notificationPreferencesRoutes);
 app.use('/api/system/reminder-digest', reminderDigestRoutes);
+app.use('/api/system/retention-cleanup', retentionCleanupRoutes);
 
 // 404 handler for undefined routes
 app.use(notFoundHandler);

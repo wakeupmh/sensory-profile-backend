@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { ChildService } from '../../../application/services/ChildService';
 import { ChildProfileService } from '../../../application/services/ChildProfileService';
+import { AccountErasureService } from '../../../application/services/AccountErasureService';
 import { createChildSchema, updateChildSchema, profileQuerySchema, timelineQuerySchema } from '../validations/childValidation';
 import {
   NotFoundError,
@@ -15,6 +16,7 @@ export class ChildController {
   constructor(
     private readonly service: ChildService,
     private readonly profileService: ChildProfileService,
+    private readonly erasureService: AccountErasureService,
   ) {}
 
   list = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -61,6 +63,9 @@ export class ChildController {
     assertValidId(id);
     assertDelegatedChildMatches(req, id);
     logger.info(`[child.delete] userId=${userId} id=${id}`);
+    // Collect S3 keys before deleting — the rows they point at cascade
+    // away with the child, and there's no getting them back after.
+    const storageKeys = await this.erasureService.collectChildStorageKeys(userId, id);
     const deleted = await this.service.delete(id, userId);
     if (deleted === false) {
       // repo returns false when child has assessments
@@ -70,6 +75,9 @@ export class ChildController {
         'Não é possível excluir esta criança pois ela possui avaliações associadas.',
         'Child'
       );
+    }
+    if (storageKeys.length > 0) {
+      await this.erasureService.deleteStorageKeys(storageKeys);
     }
     res.status(204).send();
   });

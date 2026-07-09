@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { ReminderDigestService } from '../../../application/services/ReminderDigestService';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { jsonResponse } from '../utils/response';
 import logger from '../../../infrastructure/utils/logger';
+import { verifyCronSecret } from './controllerUtils';
 
 /**
  * Triggered by an external scheduler (Render Cron Job, GitHub Actions
@@ -17,11 +17,7 @@ export class ReminderDigestController {
   constructor(private readonly service: ReminderDigestService) {}
 
   run = asyncHandler(async (req: Request, res: Response) => {
-    const expected = process.env.CRON_SECRET;
-    const provided = req.header('X-Cron-Secret');
-    if (!expected || !provided || provided !== expected) {
-      throw new AuthenticationError('Invalid or missing cron secret');
-    }
+    verifyCronSecret(req, 'X-Cron-Secret');
 
     logger.info('[reminderDigest.run] starting');
     const result = await this.service.run();
