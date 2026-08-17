@@ -136,6 +136,7 @@ Depois disso, `npm run migrate` só aplica o que for novo.
    - FRONTEND_URL: URL do frontend
    - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock) e armazenamento de documentos (S3)
    - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
+   - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: entrega ativa de lembretes por Web Push
    - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
 
 3. Configure o build command
@@ -306,16 +307,21 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET` (mesmas de docum
 - `DELETE /api/reminders/:id` - Remover
 - `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`), fim de medicação ativa (`medications.end_date`) e validade de documento (`documents.expires_at`)
 
-### Entrega ativa de lembretes (e-mail)
-O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail:
-- `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes está ativado
-- `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio
-- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Deve ser chamada periodicamente (ex.: diariamente) por um agendador externo (Render Cron Job, GitHub Actions schedule, etc.). Para cada usuário com e-mail conhecido e notificações ativadas, busca os lembretes que vencem nos próximos 3 dias, envia um e-mail único por usuário e nunca reenvia o mesmo lembrete (idempotente via `reminder_notifications`)
+### Entrega ativa de lembretes (e-mail + push)
+O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail e por Web Push, cada canal rastreado e reenviado de forma independente:
+- `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes por e-mail está ativado
+- `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio por e-mail
+- `GET /api/notifications/push-subscriptions/public-key` - Chave pública VAPID, usada pelo frontend em `pushManager.subscribe({ applicationServerKey })`
+- `POST /api/notifications/push-subscriptions` - Body igual ao retorno de `PushSubscription.toJSON()` do navegador (`{ endpoint, keys: { p256dh, auth } }`) - Registra/atualiza a inscrição push do dispositivo atual
+- `DELETE /api/notifications/push-subscriptions` - Body `{ endpoint }` - Remove a inscrição (equivalente a "desativar notificações push" neste dispositivo)
+- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Deve ser chamada periodicamente (ex.: diariamente) por um agendador externo (Render Cron Job, GitHub Actions schedule, etc.). Para cada usuário com e-mail conhecido/notificações ativadas e/ou pelo menos um dispositivo inscrito, busca os lembretes que vencem nos próximos 3 dias e envia por cada canal habilitado, nunca reenviando o mesmo lembrete no mesmo canal (idempotente via `reminder_notifications`, agora com uma coluna `channel`)
 
 **Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`; sem eles, o disparo retorna 503 (mesmo padrão do Bedrock/S3).
 
+**Web Push**: requer `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (gerar uma vez com `npx web-push generate-vapid-keys` e manter estável — trocar as chaves invalida toda inscrição já salva). Uma inscrição que o serviço de push reporta como definitivamente inválida (HTTP 404/410 — geralmente o usuário revogou a permissão ou desinstalou o navegador) é removida automaticamente na próxima tentativa de envio.
+
 ### Retenção de dados (LGPD Art. 6º III — minimização)
-`access_logs` (trilha de auditoria) e `reminder_notifications` (guarda de idempotência do digest de e-mail) não tinham nenhuma política de retenção — cresciam para sempre.
+`access_logs` (trilha de auditoria) e `reminder_notifications` (guarda de idempotência do digest) não tinham nenhuma política de retenção — cresciam para sempre.
 - `POST /api/system/retention-cleanup` - **Não é uma rota de usuário**, mesmo padrão do `reminder-digest` acima: protegida pelo `cronAuthMiddleware` (header `X-Cron-Secret` comparado a `CRON_SECRET` em tempo constante), chamada por um agendador externo. Apaga linhas de `access_logs` mais antigas que `ACCESS_LOG_RETENTION_DAYS` (padrão: 180 dias) e de `reminder_notifications` mais antigas que `REMINDER_NOTIFICATION_RETENTION_DAYS` (padrão: 90 dias). Workflow semanal em `.github/workflows/retention-cleanup.yml`, reutilizando os mesmos secrets `BACKEND_URL`/`CRON_SECRET` do digest de lembretes.
 
 ### Metas estruturadas (PEI/terapêuticas)
@@ -338,6 +344,9 @@ O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto a
 - `GET /api/consolidated/ai-summaries?childId=&page=1&limit=50` - Histórico paginado de resumos salvos de uma criança (máx. 100 por página)
 - `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
 - `POST /api/consolidated/consultation-brief` - Body `{ childId, periodDays? }` (padrão: 60 dias). Gera uma pauta objetiva em tópicos para levar à consulta médica: o que mudou desde a última consulta, medicamentos/tratamentos atuais, e perguntas sugeridas para o médico. Não é salva (mesmo limite do `/ai-summary`: 5/hora por usuário)
+
+### Busca global
+- `GET /api/search?q=` - Busca por texto livre (mínimo 2 caracteres) em crianças (nome), registros diários (campo `notes`) e documentos (`title`/`description`), tudo escopado ao usuário autenticado (ou ao dono, se delegado). Retorna `{ children, logs, documents }`, até 8 resultados por categoria, cada um com o `childId`/nome da criança para dar contexto no resultado. Não busca o campo `data` (JSONB) estruturado dos registros diários — só o texto livre em `notes`.
 
 ## Cálculo de Pontuações
 
