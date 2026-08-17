@@ -2,13 +2,19 @@ name: Reminder digest
 
 on:
   schedule:
-    # 12:00 UTC ≈ 09:00 America/Sao_Paulo (UTC-3) — manhã no Brasil
-    - cron: '0 12 * * *'
+    # ~12:00 UTC ≈ 09:00 America/Sao_Paulo (UTC-3) — manhã no Brasil.
+    # Minuto 17 em vez de 00 de propósito: o agendador do GitHub Actions é
+    # best-effort e a hora cheia é o horário mais disputado, onde execuções
+    # atrasam (ou são descartadas) com mais frequência.
+    - cron: '17 12 * * *'
   workflow_dispatch:
 
 jobs:
   trigger-digest:
     runs-on: ubuntu-latest
+    # O caminho feliz leva segundos; isto só evita queimar minutos de Actions
+    # se o runner travar fora do curl (DNS/proxy pendurado, por exemplo).
+    timeout-minutes: 10
     steps:
       - name: POST /api/system/reminder-digest
         env:
@@ -20,16 +26,32 @@ jobs:
             exit 1
           fi
 
-          response=$(curl -sS -w '\n%{http_code}' --max-time 60 \
+          # --max-time generoso: o endpoint é síncrono e percorre todos os
+          # usuários elegíveis em série (uma chamada SES por usuário), então um
+          # timeout curto abortaria o curl no meio de uma execução que está
+          # dando certo — o servidor continuaria enviando e o job ficaria
+          # vermelho à toa. Falha de transporte (DNS, timeout) derruba o passo
+          # aqui mesmo via `set -e`, antes de qualquer comparação numérica.
+          http_code=$(curl -sS --max-time 300 \
+            -o /tmp/digest-response.json -w '%{http_code}' \
             -X POST "${BACKEND_URL%/}/api/system/reminder-digest" \
             -H "X-Cron-Secret: ${CRON_SECRET}")
 
-          http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | sed '$d')
-
-          echo "$body"
+          cat /tmp/digest-response.json
+          echo ""
 
           if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
             echo "::error::reminder-digest respondeu HTTP $http_code"
+            exit 1
+          fi
+
+          # HTTP 200 não basta: falhas de envio (identidade SES não verificada,
+          # cota estourada, EMAIL_FROM_ADDRESS ausente) são capturadas por
+          # usuário e viram apenas um contador na resposta. Sem checar isto o
+          # job ficaria verde todo dia enquanto ninguém recebe lembrete nenhum
+          # — exatamente o silêncio que este workflow existe para acabar.
+          emails_failed=$(jq -r '.data.emailsFailed // 0' /tmp/digest-response.json)
+          if [ "$emails_failed" -gt 0 ]; then
+            echo "::error::reminder-digest falhou ao enviar $emails_failed e-mail(s) — verifique EMAIL_FROM_ADDRESS/AWS_REGION e os logs do serviço. Os lembretes não enviados foram liberados e serão tentados de novo na próxima execução."
             exit 1
           fi

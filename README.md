@@ -41,7 +41,7 @@ sensory-profile-backend/
 │   └── index.ts               # Configuração e bootstrap do Express
 ├── migrations/                # Migrações SQL numeradas, aplicadas via `npm run migrate`
 ├── scripts/migrate.ts         # Runner de migrações (ver seção Migrações abaixo)
-├── .github/workflows/ci.yml   # CI: typecheck + migrações + testes
+├── .github/workflows/         # CI (typecheck + migrações + testes) e jobs agendados
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
@@ -109,11 +109,23 @@ Depois disso, `npm run migrate` só aplica o que for novo.
 
 `.github/workflows/ci.yml` roda em toda PR e push para `main`: typecheck (`tsc --noEmit`), aplicação das migrações e a suíte de testes completa, contra um container de serviço PostgreSQL.
 
-`.github/workflows/reminder-digest.yml` roda diariamente às 12:00 UTC (~09:00 em horário de Brasília) e faz o `POST /api/system/reminder-digest` — sem isso, ninguém recebe e-mail de lembrete mesmo com a preferência ativada no app. Também pode ser disparado manualmente (aba Actions > Reminder digest > Run workflow). Requer dois secrets no repositório (Settings > Secrets and variables > Actions):
+### Jobs agendados
+
+Além do CI, o repositório agenda workflows que chamam endpoints `/api/system/*` do serviço em produção. Todos compartilham os mesmos dois secrets (Settings > Secrets and variables > Actions):
 - `BACKEND_URL`: URL base do serviço web em produção (ex.: `https://sensory-profile-backend.onrender.com`)
 - `CRON_SECRET`: o mesmo valor configurado como variável de ambiente `CRON_SECRET` no serviço do Render
 
-Sem esses dois secrets o workflow falha de propósito (com uma mensagem de erro explicando o que falta) em vez de silenciosamente não fazer nada.
+Sem esses secrets os workflows falham de propósito, com uma mensagem explicando o que falta, em vez de silenciosamente não fazer nada.
+
+| Workflow | Quando | O que faz |
+| --- | --- | --- |
+| `.github/workflows/reminder-digest.yml` | diariamente, ~12:00 UTC (~09:00 em horário de Brasília) | `POST /api/system/reminder-digest` — sem isso, ninguém recebe e-mail de lembrete mesmo com a preferência ativada no app |
+
+Qualquer um deles também pode ser disparado manualmente pela aba Actions (`Run workflow`).
+
+O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio são contabilizadas em `emailsFailed` na resposta (o serviço captura o erro por usuário e libera os lembretes para a próxima execução), então o job também falha quando esse contador é maior que zero — caso contrário ele ficaria verde todo dia com o SES mal configurado e ninguém recebendo nada.
+
+**Limitação conhecida**: o agendador do GitHub Actions é best-effort e desabilita workflows agendados após 60 dias sem atividade no repositório. Nesse caso não há execução — e portanto nenhuma falha para notificar. Se o repositório ficar parado por muito tempo, confira a aba Actions.
 
 ## Implantação no Render
 
@@ -305,9 +317,9 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET` (mesmas de docum
 O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail:
 - `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes está ativado
 - `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio
-- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Chamada diariamente por `.github/workflows/reminder-digest.yml` (ver seção CI acima) — precisa dos secrets `BACKEND_URL`/`CRON_SECRET` configurados para funcionar. Para cada usuário com e-mail conhecido e notificações ativadas, busca os lembretes que vencem nos próximos 3 dias, envia um e-mail único por usuário e nunca reenvia o mesmo lembrete (idempotente via `reminder_notifications`)
+- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Chamada diariamente por `.github/workflows/reminder-digest.yml` (ver "Jobs agendados" acima). Para cada usuário com e-mail conhecido e notificações ativadas, busca os lembretes que vencem nos próximos 3 dias, envia um e-mail único por usuário e nunca reenvia o mesmo lembrete (idempotente via `reminder_notifications`)
 
-**Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`; sem eles, o disparo retorna 503 (mesmo padrão do Bedrock/S3).
+**Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`. Diferente do Bedrock/S3, a falta deles **não** vira um 503: o erro é capturado por usuário dentro do laço do digest e só aparece como `emailsFailed` na resposta (os lembretes afetados são liberados para a próxima execução) — por isso o workflow agendado também falha quando esse contador é maior que zero.
 
 ### Metas estruturadas (PEI/terapêuticas)
 - `GET /api/goals` - Listar metas (filtros: `childId`, `domain`, `status`)
