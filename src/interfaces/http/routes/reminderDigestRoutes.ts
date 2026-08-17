@@ -8,6 +8,7 @@ import { EmailService } from '../../../infrastructure/email/EmailService';
 import { PgReminderRepository } from '../../../infrastructure/repositories/PgReminderRepository';
 import { PgReminderNotificationRepository } from '../../../infrastructure/repositories/PgReminderNotificationRepository';
 import { userProfileRepository } from './notificationPreferencesRoutes';
+import { cronAuthMiddleware } from '../middleware/cronAuthMiddleware';
 import { pushSubscriptionRepository, webPushService } from './pushSubscriptionRoutes';
 
 const reminderRepository = new PgReminderRepository();
@@ -25,9 +26,10 @@ const digestService = new ReminderDigestService(
 );
 const controller = new ReminderDigestController(digestService);
 
-// No authMiddleware — triggered by an external scheduler, gated by
-// CRON_SECRET inside the controller instead of a user session.
 const router = Router();
+// Autenticado por segredo compartilhado (CRON_SECRET), não por sessão de
+// usuário: quem chama é um agendador externo, não uma pessoa logada.
+router.use(cronAuthMiddleware);
 router.post('/', controller.run.bind(controller));
 
 export default router;
