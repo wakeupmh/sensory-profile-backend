@@ -41,7 +41,7 @@ sensory-profile-backend/
 │   └── index.ts               # Configuração e bootstrap do Express
 ├── migrations/                # Migrações SQL numeradas, aplicadas via `npm run migrate`
 ├── scripts/migrate.ts         # Runner de migrações (ver seção Migrações abaixo)
-├── .github/workflows/ci.yml   # CI: typecheck + migrações + testes
+├── .github/workflows/         # CI (typecheck + migrações + testes) e jobs agendados
 ├── Dockerfile
 ├── package.json
 ├── tsconfig.json
@@ -108,6 +108,24 @@ Depois disso, `npm run migrate` só aplica o que for novo.
 ## CI
 
 `.github/workflows/ci.yml` roda em toda PR e push para `main`: typecheck (`tsc --noEmit`), aplicação das migrações e a suíte de testes completa, contra um container de serviço PostgreSQL.
+
+### Jobs agendados
+
+Além do CI, o repositório agenda workflows que chamam endpoints `/api/system/*` do serviço em produção. Todos compartilham os mesmos dois secrets (Settings > Secrets and variables > Actions):
+- `BACKEND_URL`: URL base do serviço web em produção (ex.: `https://sensory-profile-backend.onrender.com`)
+- `CRON_SECRET`: o mesmo valor configurado como variável de ambiente `CRON_SECRET` no serviço do Render
+
+Sem esses secrets os workflows falham de propósito, com uma mensagem explicando o que falta, em vez de silenciosamente não fazer nada.
+
+| Workflow | Quando | O que faz |
+| --- | --- | --- |
+| `.github/workflows/reminder-digest.yml` | diariamente, ~12:00 UTC (~09:00 em horário de Brasília) | `POST /api/system/reminder-digest` — sem isso, ninguém recebe e-mail de lembrete mesmo com a preferência ativada no app |
+
+Qualquer um deles também pode ser disparado manualmente pela aba Actions (`Run workflow`).
+
+O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio são capturadas por usuário e viram só contadores na resposta, então o job também os inspeciona — caso contrário ficaria verde todo dia com o SES mal configurado e ninguém recebendo nada. `emailsFailed > 0` derruba o job (indica problema de configuração/SES). `pushFailed > 0` apenas emite um aviso: esse contador também sobe no caso rotineiro de o usuário ter revogado a permissão ou desinstalado o navegador — a inscrição morta é apagada automaticamente e o próprio serviço se corrige na execução seguinte.
+
+**Limitação conhecida**: o agendador do GitHub Actions é best-effort e desabilita workflows agendados após 60 dias sem atividade no repositório. Nesse caso não há execução — e portanto nenhuma falha para notificar. Se o repositório ficar parado por muito tempo, confira a aba Actions.
 
 ## Implantação no Render
 
@@ -303,9 +321,9 @@ O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto a
 - `GET /api/notifications/push-subscriptions/public-key` - Chave pública VAPID, usada pelo frontend em `pushManager.subscribe({ applicationServerKey })`
 - `POST /api/notifications/push-subscriptions` - Body igual ao retorno de `PushSubscription.toJSON()` do navegador (`{ endpoint, keys: { p256dh, auth } }`) - Registra/atualiza a inscrição push do dispositivo atual
 - `DELETE /api/notifications/push-subscriptions` - Body `{ endpoint }` - Remove a inscrição (equivalente a "desativar notificações push" neste dispositivo)
-- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Deve ser chamada periodicamente (ex.: diariamente) por um agendador externo (Render Cron Job, GitHub Actions schedule, etc.). Para cada usuário com e-mail conhecido/notificações ativadas e/ou pelo menos um dispositivo inscrito, busca os lembretes que vencem nos próximos 3 dias e envia por cada canal habilitado, nunca reenviando o mesmo lembrete no mesmo canal (idempotente via `reminder_notifications`, agora com uma coluna `channel`)
+- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Chamada diariamente por `.github/workflows/reminder-digest.yml` (ver "Jobs agendados" acima). Para cada usuário com e-mail conhecido/notificações ativadas e/ou pelo menos um dispositivo inscrito, busca os lembretes que vencem nos próximos 3 dias e envia por cada canal habilitado, nunca reenviando o mesmo lembrete no mesmo canal (idempotente via `reminder_notifications`, agora com uma coluna `channel`)
 
-**Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`; sem eles, o disparo retorna 503 (mesmo padrão do Bedrock/S3).
+**Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`. Diferente do Bedrock/S3, a falta deles **não** vira um 503: o erro é capturado por usuário dentro do laço do digest e só aparece como `emailsFailed` na resposta (os lembretes afetados são liberados para a próxima execução) — por isso o workflow agendado também falha quando esse contador é maior que zero.
 
 **Web Push**: requer `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (gerar uma vez com `npx web-push generate-vapid-keys` e manter estável — trocar as chaves invalida toda inscrição já salva). Uma inscrição que o serviço de push reporta como definitivamente inválida (HTTP 404/410 — geralmente o usuário revogou a permissão ou desinstalou o navegador) é removida automaticamente na próxima tentativa de envio.
 
