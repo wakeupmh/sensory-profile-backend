@@ -123,7 +123,7 @@ Sem esses secrets os workflows falham de propósito, com uma mensagem explicando
 
 Qualquer um deles também pode ser disparado manualmente pela aba Actions (`Run workflow`).
 
-O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio são contabilizadas em `emailsFailed` na resposta (o serviço captura o erro por usuário e libera os lembretes para a próxima execução), então o job também falha quando esse contador é maior que zero — caso contrário ele ficaria verde todo dia com o SES mal configurado e ninguém recebendo nada.
+O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio são capturadas por usuário e viram só contadores na resposta, então o job também os inspeciona — caso contrário ficaria verde todo dia com o SES mal configurado e ninguém recebendo nada. `emailsFailed > 0` derruba o job (indica problema de configuração/SES). `pushFailed > 0` apenas emite um aviso: esse contador também sobe no caso rotineiro de o usuário ter revogado a permissão ou desinstalado o navegador — a inscrição morta é apagada automaticamente e o próprio serviço se corrige na execução seguinte.
 
 **Limitação conhecida**: o agendador do GitHub Actions é best-effort e desabilita workflows agendados após 60 dias sem atividade no repositório. Nesse caso não há execução — e portanto nenhuma falha para notificar. Se o repositório ficar parado por muito tempo, confira a aba Actions.
 
@@ -154,6 +154,7 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    - FRONTEND_URL: URL do frontend
    - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock) e armazenamento de documentos (S3)
    - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
+   - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: entrega ativa de lembretes por Web Push
    - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
 
 3. Configure o build command
@@ -313,13 +314,18 @@ Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET` (mesmas de docum
 - `DELETE /api/reminders/:id` - Remover
 - `GET /api/reminders/upcoming?childId=&days=14` - Combina os lembretes manuais pendentes com datas já registradas em outras partes do sistema e que ainda não tinham nenhum lembrete associado: retorno médico (`medical_appointments.follow_up_date`), revisão/fim de PEI (`education_plans.review_date`/`end_date`), retorno escolar (`school_communications.follow_up_date`), meta de marco de desenvolvimento (`developmental_milestones.target_date`), fim de medicação ativa (`medications.end_date`) e validade de documento (`documents.expires_at`)
 
-### Entrega ativa de lembretes (e-mail)
-O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail:
-- `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes está ativado
-- `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio
-- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Chamada diariamente por `.github/workflows/reminder-digest.yml` (ver "Jobs agendados" acima). Para cada usuário com e-mail conhecido e notificações ativadas, busca os lembretes que vencem nos próximos 3 dias, envia um e-mail único por usuário e nunca reenvia o mesmo lembrete (idempotente via `reminder_notifications`)
+### Entrega ativa de lembretes (e-mail + push)
+O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto adiciona entrega *push* por e-mail e por Web Push, cada canal rastreado e reenviado de forma independente:
+- `GET /api/notifications/preferences` - Ver e-mail conhecido e se o envio de lembretes por e-mail está ativado
+- `PATCH /api/notifications/preferences` - Body `{ reminderEmailsEnabled: boolean }` - Ativar/desativar o envio por e-mail
+- `GET /api/notifications/push-subscriptions/public-key` - Chave pública VAPID, usada pelo frontend em `pushManager.subscribe({ applicationServerKey })`
+- `POST /api/notifications/push-subscriptions` - Body igual ao retorno de `PushSubscription.toJSON()` do navegador (`{ endpoint, keys: { p256dh, auth } }`) - Registra/atualiza a inscrição push do dispositivo atual
+- `DELETE /api/notifications/push-subscriptions` - Body `{ endpoint }` - Remove a inscrição (equivalente a "desativar notificações push" neste dispositivo)
+- `POST /api/system/reminder-digest` - **Não é uma rota de usuário.** Protegida por header `X-Cron-Secret` (comparado a `CRON_SECRET`), não por sessão. Chamada diariamente por `.github/workflows/reminder-digest.yml` (ver "Jobs agendados" acima). Para cada usuário com e-mail conhecido/notificações ativadas e/ou pelo menos um dispositivo inscrito, busca os lembretes que vencem nos próximos 3 dias e envia por cada canal habilitado, nunca reenviando o mesmo lembrete no mesmo canal (idempotente via `reminder_notifications`, agora com uma coluna `channel`)
 
 **Como o e-mail do usuário é descoberto**: não existe tabela local de usuários (a autenticação é 100% Supabase) e não há credenciais do Supabase Admin API configuradas. O `authMiddleware` captura o claim `email` do JWT de forma oportunista e best-effort a cada requisição autenticada — o e-mail de um usuário só fica conhecido depois que ele usa o app pelo menos uma vez após este recurso entrar no ar. Requer `EMAIL_FROM_ADDRESS` (identidade verificada no SES) e `AWS_REGION`. Diferente do Bedrock/S3, a falta deles **não** vira um 503: o erro é capturado por usuário dentro do laço do digest e só aparece como `emailsFailed` na resposta (os lembretes afetados são liberados para a próxima execução) — por isso o workflow agendado também falha quando esse contador é maior que zero.
+
+**Web Push**: requer `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (gerar uma vez com `npx web-push generate-vapid-keys` e manter estável — trocar as chaves invalida toda inscrição já salva). Uma inscrição que o serviço de push reporta como definitivamente inválida (HTTP 404/410 — geralmente o usuário revogou a permissão ou desinstalou o navegador) é removida automaticamente na próxima tentativa de envio.
 
 ### Metas estruturadas (PEI/terapêuticas)
 - `GET /api/goals` - Listar metas (filtros: `childId`, `domain`, `status`)
@@ -341,6 +347,9 @@ O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto a
 - `GET /api/consolidated/ai-summaries?childId=&page=1&limit=50` - Histórico paginado de resumos salvos de uma criança (máx. 100 por página)
 - `POST /api/consolidated/ai-question` - Body `{ childId, question, periodDays? }`: responde uma pergunta em linguagem livre com base nos mesmos dados do relatório consolidado (limite separado: 20/hora por usuário)
 - `POST /api/consolidated/consultation-brief` - Body `{ childId, periodDays? }` (padrão: 60 dias). Gera uma pauta objetiva em tópicos para levar à consulta médica: o que mudou desde a última consulta, medicamentos/tratamentos atuais, e perguntas sugeridas para o médico. Não é salva (mesmo limite do `/ai-summary`: 5/hora por usuário)
+
+### Busca global
+- `GET /api/search?q=` - Busca por texto livre (mínimo 2 caracteres) em crianças (nome), registros diários (campo `notes`) e documentos (`title`/`description`), tudo escopado ao usuário autenticado (ou ao dono, se delegado). Retorna `{ children, logs, documents }`, até 8 resultados por categoria, cada um com o `childId`/nome da criança para dar contexto no resultado. Não busca o campo `data` (JSONB) estruturado dos registros diários — só o texto livre em `notes`.
 
 ## Cálculo de Pontuações
 

@@ -50,7 +50,21 @@ jobs:
           # usuário e viram apenas um contador na resposta. Sem checar isto o
           # job ficaria verde todo dia enquanto ninguém recebe lembrete nenhum
           # — exatamente o silêncio que este workflow existe para acabar.
+          #
+          # Só o canal de e-mail derruba o job. `pushFailed` também conta o
+          # caso rotineiro de o usuário ter desinstalado o navegador ou
+          # revogado a permissão: a inscrição morta (HTTP 404/410) é apagada,
+          # nenhum device fica alcançável e o contador sobe uma vez — sozinho,
+          # e o próprio serviço se corrige na execução seguinte. Falhar aí
+          # deixaria o job vermelho por um evento normal, que é justamente
+          # como se ensina a ignorar alarme.
           emails_failed=$(jq -r '.data.emailsFailed // 0' /tmp/digest-response.json)
+          push_failed=$(jq -r '.data.pushFailed // 0' /tmp/digest-response.json)
+
+          if [ "$push_failed" -gt 0 ]; then
+            echo "::warning::reminder-digest não alcançou nenhum dispositivo para $push_failed usuário(s). Normal se a inscrição expirou (será recriada quando o usuário reabrir o app); investigue se o número persistir ou crescer."
+          fi
+
           if [ "$emails_failed" -gt 0 ]; then
             echo "::error::reminder-digest falhou ao enviar $emails_failed e-mail(s) — verifique EMAIL_FROM_ADDRESS/AWS_REGION e os logs do serviço. Os lembretes não enviados foram liberados e serão tentados de novo na próxima execução."
             exit 1

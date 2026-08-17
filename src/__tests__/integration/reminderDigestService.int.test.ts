@@ -2,25 +2,33 @@
  * Integration tests for ReminderDigestService.
  *
  * Tests exercise the service against mock UserProfileRepository,
- * ReminderNotificationRepository, UpcomingReminderService, and EmailService
- * — no real database or SES connection required.
+ * ReminderNotificationRepository, PushSubscriptionRepository,
+ * UpcomingReminderService, EmailService, and WebPushService — no real
+ * database, SES, or push service connection required.
  *
  * Covers:
- *  1.  run() sends nothing when there are no eligible profiles
- *  2.  run() skips a profile with no upcoming reminders (no email sent)
- *  3.  run() sends one email per user with unsent reminders, reserving each key first
- *  4.  run() does not re-send a reminder whose key reservation was already claimed
- *  5.  run() releases the reservation and does not count success when sending fails
+ *  1.  run() sends nothing when there are no eligible profiles or push subscriptions
+ *  2.  run() skips a user with no upcoming reminders (no email/push sent)
+ *  3.  run() sends one email per user with unsent reminders, reserving each key first (email channel)
+ *  4.  run() does not re-send an email whose (channel-scoped) reservation was already claimed
+ *  5.  run() releases the email reservation and does not count success when sending fails
  *  6.  a failure processing one user does not stop the digest for other users
  *  7.  digest email lists reminder titles and formatted dates
+ *  8.  run() sends push to every device a user has subscribed
+ *  9.  a user with both email and an active push subscription gets both — independent reservations
+ *  10. a subscription reported gone (410) is deleted and does not block the other device
+ *  11. push send failure releases the push-channel reservation for retry
  */
 
 import { ReminderDigestService } from 'application/services/ReminderDigestService';
 import { UserProfile } from 'domain/entities/UserProfile';
+import { PushSubscription } from 'domain/entities/PushSubscription';
 import type { UserProfileRepository } from 'domain/repositories/UserProfileRepository';
-import type { ReminderNotificationRepository } from 'domain/repositories/ReminderNotificationRepository';
+import type { ReminderChannel, ReminderNotificationRepository } from 'domain/repositories/ReminderNotificationRepository';
+import type { PushSubscriptionRepository } from 'domain/repositories/PushSubscriptionRepository';
 import type { UpcomingReminderService, UpcomingReminderItem } from 'application/services/UpcomingReminderService';
 import type { EmailService } from 'infrastructure/email/EmailService';
+import { PushSubscriptionGoneError, WebPushService } from 'infrastructure/push/WebPushService';
 
 const NOW_ISO = '2024-06-15T10:00:00.000Z';
 
@@ -31,6 +39,18 @@ function makeProfile(overrides: Record<string, unknown> = {}): UserProfile {
     reminderEmailsEnabled: true,
     createdAt: new Date(NOW_ISO),
     updatedAt: new Date(NOW_ISO),
+    ...overrides,
+  });
+}
+
+function makeSubscription(overrides: Record<string, unknown> = {}): PushSubscription {
+  return new PushSubscription({
+    id: 'sub-001',
+    userId: 'user-001',
+    endpoint: 'https://push.example.com/ep-1',
+    p256dhKey: 'p256dh-key',
+    authKey: 'auth-key',
+    createdAt: new Date(NOW_ISO),
     ...overrides,
   });
 }
@@ -67,6 +87,16 @@ function makeNotificationRepo(overrides: Partial<ReminderNotificationRepository>
   };
 }
 
+function makePushSubscriptionRepo(overrides: Partial<PushSubscriptionRepository> = {}): PushSubscriptionRepository {
+  return {
+    upsert: jest.fn(),
+    deleteByEndpoint: jest.fn(),
+    deleteById: jest.fn().mockResolvedValue(undefined),
+    findAll: jest.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
 function makeUpcomingService(items: UpcomingReminderItem[] = [makeItem()]): UpcomingReminderService {
   return { getUpcoming: jest.fn().mockResolvedValue(items) } as unknown as UpcomingReminderService;
 }
@@ -75,31 +105,55 @@ function makeEmailService(overrides: Partial<EmailService> = {}): EmailService {
   return { sendEmail: jest.fn().mockResolvedValue(undefined), ...overrides } as unknown as EmailService;
 }
 
+function makeWebPushService(overrides: Partial<WebPushService> = {}): WebPushService {
+  return { send: jest.fn().mockResolvedValue(undefined), ...overrides } as unknown as WebPushService;
+}
+
+function buildService(opts: {
+  userProfileRepo?: UserProfileRepository;
+  notificationRepo?: ReminderNotificationRepository;
+  upcomingService?: UpcomingReminderService;
+  emailService?: EmailService;
+  pushSubscriptionRepo?: PushSubscriptionRepository;
+  webPushService?: WebPushService;
+} = {}): ReminderDigestService {
+  return new ReminderDigestService(
+    opts.userProfileRepo ?? makeUserProfileRepo(),
+    opts.notificationRepo ?? makeNotificationRepo(),
+    opts.upcomingService ?? makeUpcomingService(),
+    opts.emailService ?? makeEmailService(),
+    opts.pushSubscriptionRepo ?? makePushSubscriptionRepo(),
+    opts.webPushService ?? makeWebPushService(),
+  );
+}
+
 describe('ReminderDigestService', () => {
-  test('sends nothing when there are no eligible profiles', async () => {
-    const userProfileRepo = makeUserProfileRepo({ findAllEligibleForReminders: jest.fn().mockResolvedValue([]) });
+  test('sends nothing when there are no eligible profiles or push subscriptions', async () => {
     const emailService = makeEmailService();
-    const service = new ReminderDigestService(
-      userProfileRepo,
-      makeNotificationRepo(),
-      makeUpcomingService(),
+    const webPushService = makeWebPushService();
+    const service = buildService({
+      userProfileRepo: makeUserProfileRepo({ findAllEligibleForReminders: jest.fn().mockResolvedValue([]) }),
       emailService,
-    );
+      webPushService,
+    });
 
     const result = await service.run();
 
     expect(emailService.sendEmail).not.toHaveBeenCalled();
-    expect(result).toEqual({ usersChecked: 0, usersNotified: 0, emailsSent: 0, emailsFailed: 0 });
+    expect(webPushService.send).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      usersChecked: 0,
+      usersNotified: 0,
+      emailsSent: 0,
+      emailsFailed: 0,
+      pushSent: 0,
+      pushFailed: 0,
+    });
   });
 
-  test('skips a profile with no upcoming reminders — no email sent', async () => {
+  test('skips a user with no upcoming reminders — no email or push sent', async () => {
     const emailService = makeEmailService();
-    const service = new ReminderDigestService(
-      makeUserProfileRepo(),
-      makeNotificationRepo(),
-      makeUpcomingService([]),
-      emailService,
-    );
+    const service = buildService({ upcomingService: makeUpcomingService([]), emailService });
 
     const result = await service.run();
 
@@ -108,21 +162,16 @@ describe('ReminderDigestService', () => {
     expect(result.emailsSent).toBe(0);
   });
 
-  test('sends one email per user with unsent reminders, reserving each key first', async () => {
+  test('sends one email per user with unsent reminders, reserving each key on the email channel', async () => {
     const notificationRepo = makeNotificationRepo();
     const emailService = makeEmailService();
     const items = [makeItem({ id: 'r1' }), makeItem({ id: 'r2', title: 'Fim da medicação' })];
-    const service = new ReminderDigestService(
-      makeUserProfileRepo(),
-      notificationRepo,
-      makeUpcomingService(items),
-      emailService,
-    );
+    const service = buildService({ notificationRepo, upcomingService: makeUpcomingService(items), emailService });
 
     const result = await service.run();
 
-    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r1');
-    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r2');
+    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'email');
+    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r2', 'email');
     expect(emailService.sendEmail).toHaveBeenCalledTimes(1);
     expect(emailService.sendEmail).toHaveBeenCalledWith(
       'user@example.com',
@@ -133,34 +182,28 @@ describe('ReminderDigestService', () => {
     expect(result.emailsSent).toBe(1);
   });
 
-  test('does not re-send a reminder whose key reservation was already claimed', async () => {
+  test('does not re-send an email whose reservation was already claimed', async () => {
     const notificationRepo = makeNotificationRepo({ reserve: jest.fn().mockResolvedValue(false) });
     const emailService = makeEmailService();
-    const service = new ReminderDigestService(
-      makeUserProfileRepo(),
-      notificationRepo,
-      makeUpcomingService([makeItem()]),
-      emailService,
-    );
+    const service = buildService({ notificationRepo, upcomingService: makeUpcomingService([makeItem()]), emailService });
 
     await service.run();
 
     expect(emailService.sendEmail).not.toHaveBeenCalled();
   });
 
-  test('releases the reservation and does not count success when sending fails', async () => {
+  test('releases the email reservation and does not count success when sending fails', async () => {
     const notificationRepo = makeNotificationRepo();
     const emailService = makeEmailService({ sendEmail: jest.fn().mockRejectedValue(new Error('SES down')) });
-    const service = new ReminderDigestService(
-      makeUserProfileRepo(),
+    const service = buildService({
       notificationRepo,
-      makeUpcomingService([makeItem({ id: 'r1' })]),
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
       emailService,
-    );
+    });
 
     const result = await service.run();
 
-    expect(notificationRepo.release).toHaveBeenCalledWith('user-001', 'custom:custom:r1');
+    expect(notificationRepo.release).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'email');
     expect(result.emailsSent).toBe(0);
     expect(result.emailsFailed).toBe(1);
     expect(result.usersNotified).toBe(0);
@@ -181,12 +224,7 @@ describe('ReminderDigestService', () => {
         .mockResolvedValueOnce([makeItem()]),
     } as unknown as UpcomingReminderService;
     const emailService = makeEmailService();
-    const service = new ReminderDigestService(
-      userProfileRepo,
-      makeNotificationRepo(),
-      upcomingService,
-      emailService,
-    );
+    const service = buildService({ userProfileRepo, upcomingService, emailService });
 
     const result = await service.run();
 
@@ -198,19 +236,117 @@ describe('ReminderDigestService', () => {
 
   test('digest email lists reminder titles and formatted dates', async () => {
     const emailService = makeEmailService();
-    const service = new ReminderDigestService(
-      makeUserProfileRepo(),
-      makeNotificationRepo(),
-      makeUpcomingService([
+    const service = buildService({
+      upcomingService: makeUpcomingService([
         makeItem({ id: 'r1', title: 'Consulta com neuropediatra', dueAt: '2024-06-17T00:00:00.000Z' }),
       ]),
       emailService,
-    );
+    });
 
     await service.run();
 
     const body = (emailService.sendEmail as jest.Mock).mock.calls[0][2] as string;
     expect(body).toContain('Consulta com neuropediatra');
     expect(body).toContain('17/06/2024');
+  });
+
+  test('sends push to every device a user has subscribed, reserving on the push channel', async () => {
+    const notificationRepo = makeNotificationRepo();
+    const webPushService = makeWebPushService();
+    const subscriptions = [
+      makeSubscription({ id: 'sub-a', endpoint: 'https://push.example.com/a' }),
+      makeSubscription({ id: 'sub-b', endpoint: 'https://push.example.com/b' }),
+    ];
+    const service = buildService({
+      userProfileRepo: makeUserProfileRepo({ findAllEligibleForReminders: jest.fn().mockResolvedValue([]) }),
+      notificationRepo,
+      pushSubscriptionRepo: makePushSubscriptionRepo({ findAll: jest.fn().mockResolvedValue(subscriptions) }),
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
+      webPushService,
+    });
+
+    const result = await service.run();
+
+    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'push');
+    expect(webPushService.send).toHaveBeenCalledTimes(2);
+    expect(webPushService.send).toHaveBeenCalledWith(
+      { endpoint: 'https://push.example.com/a', keys: { p256dh: 'p256dh-key', auth: 'auth-key' } },
+      expect.objectContaining({ title: expect.any(String), body: expect.any(String) }),
+    );
+    expect(result.pushSent).toBe(1);
+    expect(result.usersNotified).toBe(1);
+  });
+
+  test('a user with both email and an active push subscription gets both, independently reserved', async () => {
+    const reserveCalls: Array<[string, string, ReminderChannel]> = [];
+    const notificationRepo = makeNotificationRepo({
+      reserve: jest.fn((userId: string, key: string, channel: ReminderChannel) => {
+        reserveCalls.push([userId, key, channel]);
+        return Promise.resolve(true);
+      }),
+    });
+    const emailService = makeEmailService();
+    const webPushService = makeWebPushService();
+    const service = buildService({
+      notificationRepo,
+      pushSubscriptionRepo: makePushSubscriptionRepo({ findAll: jest.fn().mockResolvedValue([makeSubscription()]) }),
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
+      emailService,
+      webPushService,
+    });
+
+    const result = await service.run();
+
+    expect(emailService.sendEmail).toHaveBeenCalledTimes(1);
+    expect(webPushService.send).toHaveBeenCalledTimes(1);
+    expect(reserveCalls).toContainEqual(['user-001', 'custom:custom:r1', 'email']);
+    expect(reserveCalls).toContainEqual(['user-001', 'custom:custom:r1', 'push']);
+    expect(result.usersNotified).toBe(1);
+  });
+
+  test('deletes a subscription the push service reports as gone, without blocking other devices', async () => {
+    const pushSubscriptionRepo = makePushSubscriptionRepo({
+      findAll: jest.fn().mockResolvedValue([
+        makeSubscription({ id: 'sub-gone', endpoint: 'https://push.example.com/gone' }),
+        makeSubscription({ id: 'sub-live', endpoint: 'https://push.example.com/live' }),
+      ]),
+    });
+    const webPushService = makeWebPushService({
+      send: jest.fn((sub: { endpoint: string }) => {
+        if (sub.endpoint === 'https://push.example.com/gone') return Promise.reject(new PushSubscriptionGoneError());
+        return Promise.resolve(undefined);
+      }),
+    });
+    const service = buildService({
+      userProfileRepo: makeUserProfileRepo({ findAllEligibleForReminders: jest.fn().mockResolvedValue([]) }),
+      pushSubscriptionRepo,
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
+      webPushService,
+    });
+
+    const result = await service.run();
+
+    expect(pushSubscriptionRepo.deleteById).toHaveBeenCalledWith('sub-gone');
+    expect(pushSubscriptionRepo.deleteById).not.toHaveBeenCalledWith('sub-live');
+    expect(result.pushSent).toBe(1);
+  });
+
+  test('releases the push reservation for retry when every device fails to send', async () => {
+    const notificationRepo = makeNotificationRepo();
+    const webPushService = makeWebPushService({ send: jest.fn().mockRejectedValue(new Error('push service down')) });
+    const service = buildService({
+      userProfileRepo: makeUserProfileRepo({ findAllEligibleForReminders: jest.fn().mockResolvedValue([]) }),
+      notificationRepo,
+      pushSubscriptionRepo: makePushSubscriptionRepo({ findAll: jest.fn().mockResolvedValue([makeSubscription()]) }),
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
+      webPushService,
+    });
+
+    const result = await service.run();
+
+    expect(notificationRepo.release).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'push');
+    expect(result.pushSent).toBe(0);
+    expect(result.pushFailed).toBe(1);
+    expect(result.usersNotified).toBe(0);
   });
 });
