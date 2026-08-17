@@ -76,9 +76,7 @@ export class ChildController {
         'Child'
       );
     }
-    if (storageKeys.length > 0) {
-      await this.erasureService.deleteStorageKeys(storageKeys);
-    }
+    await this.erasureService.deleteStorageKeys(storageKeys);
     res.status(204).send();
   });
 

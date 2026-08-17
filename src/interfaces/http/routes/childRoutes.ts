@@ -35,7 +35,7 @@ const erasureService = new AccountErasureService(pool, storageService);
 const controller = new ChildController(service, profileService, erasureService);
 
 const exportService = new DataExportService(pool, storageService);
-const accountController = new AccountController(exportService, erasureService);
+export const accountController = new AccountController(exportService, erasureService);
 
 const childShareRepository = new PgChildShareRepository();
 const childShareService = new ChildShareService(childShareRepository, professionalRepository, pool);
@@ -67,8 +67,6 @@ export {
   caregiverShareService,
   delegationMiddleware,
   erasureService,
-  storageService,
-  exportService,
 };
 
 const router = Router();

@@ -1,9 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
-import { AccountController } from '../controllers/AccountController';
-import { exportService, erasureService } from './childRoutes';
-
-const controller = new AccountController(exportService, erasureService);
+import { accountController as controller } from './childRoutes';
 
 // Deliberately no delegationMiddleware — account-level export/erasure must
 // only ever operate on the caller's own identity (see requireOwnUserId in

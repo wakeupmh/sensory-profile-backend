@@ -3,7 +3,6 @@ import { RetentionCleanupService } from '../../../application/services/Retention
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import { jsonResponse } from '../utils/response';
 import logger from '../../../infrastructure/utils/logger';
-import { verifyCronSecret } from './controllerUtils';
 
 /**
  * Same shape as ReminderDigestController: triggered by an external
@@ -12,9 +11,7 @@ import { verifyCronSecret } from './controllerUtils';
 export class RetentionCleanupController {
   constructor(private readonly service: RetentionCleanupService) {}
 
-  run = asyncHandler(async (req: Request, res: Response) => {
-    verifyCronSecret(req, 'X-Cron-Secret');
-
+  run = asyncHandler(async (_req: Request, res: Response) => {
     logger.info('[retentionCleanup.run] starting');
     const result = await this.service.run();
     logger.info('[retentionCleanup.run] finished', result);

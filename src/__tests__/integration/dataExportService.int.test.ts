@@ -29,10 +29,7 @@ function makePool(childExists = true) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const mockQuery = jest.fn().mockImplementation((sql: string, params: unknown[] = []) => {
     calls.push({ sql, params });
-    if (sql.includes('FROM children WHERE id')) {
-      return Promise.resolve(makeQueryResult(childExists ? [{ id: CHILD_ID, name: 'Ana' }] : []));
-    }
-    if (sql.includes('FROM children WHERE user_id')) {
+    if (sql.includes('FROM children')) {
       return Promise.resolve(makeQueryResult(childExists ? [{ id: CHILD_ID, name: 'Ana' }] : []));
     }
     // every other query used by gatherChildLinkedTables / exportAccount's extras
@@ -94,8 +91,11 @@ describe('DataExportService', () => {
       await service.exportChild(USER_ID, CHILD_ID);
 
       const scopedCalls = calls.filter((c) => c.params.length >= 2 && c.params[0] === USER_ID && c.params[1] === CHILD_ID);
-      // 17 tables queried by gatherChildLinkedTables, plus the initial ownership check
-      expect(scopedCalls.length).toBeGreaterThanOrEqual(17);
+      // Exact, not a lower bound: the old `toBeGreaterThanOrEqual` still
+      // passed with tables silently missing from the export, which is the one
+      // thing this assertion exists to catch. Bump it deliberately when a
+      // table is added to CHILD_LINKED_QUERIES.
+      expect(scopedCalls.length).toBe(23);
     });
   });
 

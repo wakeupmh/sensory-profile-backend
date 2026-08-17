@@ -14,6 +14,11 @@
  *  7.  eraseAccount() scopes every DELETE to the given userId
  *  8.  eraseAccount() collects and deletes S3 keys across every child the user owns
  *  9.  eraseAccount() returns childrenDeleted from the DELETE FROM children rowCount
+ * 10.  eraseAccount() erases the user-scoped tables no cascade reaches
+ *      (therapists/examiners/caregivers/push_subscriptions)
+ * 11.  eraseAccount() nulls accepted_user_id on another account's professional row
+ * 12.  eraseAccount() wraps the wipe in one transaction and releases the client
+ * 13.  eraseAccount() rolls back and leaves S3 untouched when a delete fails
  */
 
 import { Pool } from 'pg';
@@ -33,6 +38,8 @@ interface MockPoolConfig {
   documentsByChild?: Record<string, Record<string, unknown>[]>;
   attachmentsByChild?: Record<string, Record<string, unknown>[]>;
   childrenDeleteRowCount?: number;
+  /** Faz qualquer DELETE falhar, para exercitar o ROLLBACK. */
+  failOnDelete?: boolean;
 }
 
 function makePool(config: MockPoolConfig = {}) {
@@ -48,13 +55,24 @@ function makePool(config: MockPoolConfig = {}) {
       const childId = params[1] as string;
       return Promise.resolve(makeQueryResult(config.attachmentsByChild?.[childId] ?? []));
     }
-    if (sql.includes('DELETE FROM sensory_assessments')) return Promise.resolve(makeQueryResult([]));
-    if (sql.includes('DELETE FROM children')) return Promise.resolve(makeQueryResult([], config.childrenDeleteRowCount ?? 0));
-    if (sql.startsWith('DELETE FROM')) return Promise.resolve(makeQueryResult([]));
+    if (sql.startsWith('DELETE FROM')) {
+      if (config.failOnDelete) return Promise.reject(new Error('constraint violation'));
+      if (sql.includes('DELETE FROM children')) return Promise.resolve(makeQueryResult([], config.childrenDeleteRowCount ?? 0));
+      return Promise.resolve(makeQueryResult([]));
+    }
+    if (sql.startsWith('UPDATE ')) return Promise.resolve(makeQueryResult([]));
+    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return Promise.resolve(makeQueryResult([]));
     throw new Error(`Unexpected query: ${sql}`);
   });
-  const pool = { query: mockQuery } as unknown as Pool;
-  return { pool, calls };
+  // eraseAccount runs its deletes on a single checked-out client so the whole
+  // wipe is one transaction. The client shares `mockQuery`, so `calls` still
+  // records every statement regardless of which handle issued it.
+  const release = jest.fn();
+  const pool = {
+    query: mockQuery,
+    connect: jest.fn().mockResolvedValue({ query: mockQuery, release }),
+  } as unknown as Pool;
+  return { pool, calls, release };
 }
 
 function makeStorage(deleteBehavior?: (key: string) => Promise<void>) {
@@ -180,6 +198,67 @@ describe('AccountErasureService', () => {
       const result = await service.eraseAccount(USER_ID);
 
       expect(result.childrenDeleted).toBe(2);
+    });
+
+    test('erases the user-scoped tables that no cascade reaches', async () => {
+      const { pool, calls } = makePool({ children: [{ id: CHILD_A }] });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      // These have a user_id but no child_id, so deleting the children does
+      // not touch them — they hold contact details of real people and push
+      // endpoints, and were silently surviving erasure before.
+      const sql = calls.map((c) => c.sql).join('\n');
+      for (const table of ['therapists', 'examiners', 'caregivers', 'push_subscriptions']) {
+        expect(sql).toContain(`DELETE FROM ${table} WHERE user_id = $1`);
+      }
+    });
+
+    test('stops pointing another account\'s professional row at the erased user', async () => {
+      const { pool, calls } = makePool({ children: [] });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      const update = calls.find((c) => c.sql.startsWith('UPDATE professionals'));
+      expect(update?.sql).toContain('SET accepted_user_id = NULL');
+      expect(update?.params).toEqual([USER_ID]);
+    });
+
+    test('runs the whole wipe in one transaction and releases the client', async () => {
+      const { pool, calls, release } = makePool({ children: [{ id: CHILD_A }] });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      const statements = calls.map((c) => c.sql);
+      expect(statements).toContain('BEGIN');
+      expect(statements).toContain('COMMIT');
+      expect(statements.indexOf('BEGIN')).toBeLessThan(statements.findIndex((s) => s.includes('DELETE FROM children')));
+      expect(release).toHaveBeenCalled();
+    });
+
+    test('rolls back and rethrows if a delete fails, leaving S3 untouched', async () => {
+      const { pool, calls, release } = makePool({
+        children: [{ id: CHILD_A }],
+        documentsByChild: { [CHILD_A]: [{ storage_key: 'documents/a.pdf' }] },
+        failOnDelete: true,
+      });
+      const { storage, deleteObject } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await expect(service.eraseAccount(USER_ID)).rejects.toThrow('constraint violation');
+
+      expect(calls.map((c) => c.sql)).toContain('ROLLBACK');
+      expect(calls.map((c) => c.sql)).not.toContain('COMMIT');
+      expect(release).toHaveBeenCalled();
+      // The rows survived, so the files must too — otherwise the account is
+      // intact but its documents are gone.
+      expect(deleteObject).not.toHaveBeenCalled();
     });
   });
 });
