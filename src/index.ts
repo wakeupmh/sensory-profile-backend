@@ -1,4 +1,5 @@
 import express from 'express';
+import { isRelaxedEnvironment } from './interfaces/http/middleware/rateLimiters';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -82,7 +83,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
 }));
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  // Ligada por padrão: só um ambiente declaradamente de desenvolvimento a desliga.
+  contentSecurityPolicy: isRelaxedEnvironment() ? false : undefined,
   crossOriginEmbedderPolicy: false
 }));
 app.use(compression());
@@ -103,8 +105,10 @@ const limiter = rateLimit({
     }
   },
   skip: (req) => {
-    // Skip rate limiting for health checks and in non-production (dev HMR/StrictMode inflate request counts)
-    return req.path === '/health' || process.env.NODE_ENV !== 'production';
+    // Health check sempre; e em desenvolvimento/teste, onde o HMR e o
+    // StrictMode inflam a contagem. Um NODE_ENV ausente ou errado NÃO
+    // desliga mais o limitador.
+    return req.path === '/health' || isRelaxedEnvironment();
   }
 });
 app.use(limiter);

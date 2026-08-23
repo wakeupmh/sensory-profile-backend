@@ -4,9 +4,21 @@ import { z } from 'zod';
 // formats (PDF reports, JPEG/PNG photos, MP4 behavior clips, DOCX).
 const ALLOWED_MIME_PREFIXES = ['application/pdf', 'image/', 'video/', 'application/msword', 'application/vnd.'];
 
+/**
+ * SVG passa pelo prefixo `image/` mas não é uma imagem inerte: pode conter
+ * script, e o arquivo é servido depois por uma URL pré-assinada do S3. Abrir
+ * essa URL executaria o script na origem do bucket — não na origem do app,
+ * então não alcança a sessão do usuário, mas é uma superfície de phishing num
+ * domínio que o próprio app entrega. Nenhum documento clínico precisa de SVG.
+ */
+const BLOCKED_MIME_TYPES = ['image/svg+xml', 'image/svg'];
+
 const mimeTypeSchema = z
   .string()
   .max(150)
+  .refine((val) => !BLOCKED_MIME_TYPES.includes(val.split(';')[0].trim().toLowerCase()), {
+    message: 'Tipo de arquivo não suportado',
+  })
   .refine((val) => ALLOWED_MIME_PREFIXES.some((prefix) => val.startsWith(prefix)), {
     message: 'Tipo de arquivo não suportado',
   });

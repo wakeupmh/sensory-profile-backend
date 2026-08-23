@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { accountExportLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { accountController as controller } from './childRoutes';
 
@@ -8,7 +9,7 @@ import { accountController as controller } from './childRoutes';
 const router = Router();
 router.use(authMiddleware);
 
-router.get('/export', controller.exportAccount.bind(controller));
+router.get('/export', accountExportLimiter, controller.exportAccount.bind(controller));
 router.delete('/', controller.eraseAccount.bind(controller));
 
 export default router;

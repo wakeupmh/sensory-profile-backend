@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { transcriptionLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import pool from '../../../infrastructure/database/connection';
 
@@ -20,7 +21,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.post('/', controller.create.bind(controller));
-router.post('/:id/transcribe', controller.start.bind(controller));
+router.post('/:id/transcribe', transcriptionLimiter, controller.start.bind(controller));
 router.get('/:id', controller.getById.bind(controller));
 
 export default router;

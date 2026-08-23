@@ -1,4 +1,15 @@
 import pool from '../database/connection';
+
+/**
+ * Janela de validade do link público de anamnese. Generosa porque o caso de
+ * uso real é um profissional consultando ao longo de um acompanhamento, não
+ * uma visita única.
+ */
+export function anamneseShareValidityDays(): number {
+  const raw = process.env.ANAMNESE_SHARE_VALIDITY_DAYS;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 180;
+}
 import {
   Anamnese,
   AnamneseChild,
@@ -56,10 +67,25 @@ export class PgAnamneseRepository implements AnamneseRepository {
     return this.mapRow(result.rows[0]);
   }
 
+  /**
+   * O link público não tinha prazo: `share_token` sem coluna de expiração e a
+   * consulta sem nenhum predicado de tempo. Um profissional que recebesse o
+   * link mantinha acesso à anamnese inteira — identificação da criança,
+   * cuidador, histórico clínico — para sempre, sem autenticação. Sob a LGPD é
+   * uma divulgação por prazo indeterminado.
+   *
+   * A validade é medida contra `shared_at`, que já existia, em vez de uma
+   * coluna nova: assim vale também para os links já emitidos, que são
+   * exatamente os que estão abertos há mais tempo. O dono regenera quando
+   * precisar — `generateShareLink` emite um token novo se o atual venceu.
+   */
   async findByShareToken(token: string): Promise<Anamnese | null> {
     const result = await pool.query(
-      `SELECT * FROM anamneses WHERE share_token = $1`,
-      [token]
+      `SELECT * FROM anamneses
+        WHERE share_token = $1
+          AND shared_at IS NOT NULL
+          AND shared_at > NOW() - ($2 || ' days')::interval`,
+      [token, anamneseShareValidityDays()]
     );
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);
