@@ -2,9 +2,8 @@ import { Request, Response } from 'express';
 import { DataExportService } from '../../../application/services/DataExportService';
 import { AccountErasureService } from '../../../application/services/AccountErasureService';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { AuthenticationError, AuthorizationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../../infrastructure/utils/logger';
-import { assertDelegatedChildMatches, assertValidId, requireUserId } from './controllerUtils';
+import { assertDelegatedChildMatches, assertValidId, requireOwnUserId, requireUserId } from './controllerUtils';
 import { jsonResponse } from '../utils/response';
 
 /**
@@ -16,14 +15,6 @@ import { jsonResponse } from '../utils/response';
  * this is asserted directly too, so the invariant holds even if that ever
  * changes.
  */
-function requireOwnUserId(req: Request): string {
-  if (req.effectiveUserId) {
-    throw new AuthorizationError('Account-level operations are not available through delegated access');
-  }
-  if (!req.userId) throw new AuthenticationError();
-  return req.userId;
-}
-
 export class AccountController {
   constructor(
     private readonly exportService: DataExportService,
