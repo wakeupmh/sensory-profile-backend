@@ -36,3 +36,17 @@ export function assertDelegatedChildMatches(req: Request, id: string): void {
     throw new AuthorizationError('Delegated access does not cover this child');
   }
 }
+
+/**
+ * Para operações que são do TITULAR da conta, não da criança: exportação,
+ * eliminação, e a gestão de quem mais tem acesso. Recusa se a requisição
+ * chegou por delegação — um cuidador convidado para uma criança não pode
+ * agir como o dono da conta, nem sobre a criança dele.
+ */
+export function requireOwnUserId(req: Request): string {
+  if (req.effectiveUserId) {
+    throw new AuthorizationError('Account-level operations are not available through delegated access');
+  }
+  if (!req.userId) throw new AuthenticationError();
+  return req.userId;
+}

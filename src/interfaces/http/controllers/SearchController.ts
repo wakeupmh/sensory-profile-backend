@@ -13,7 +13,7 @@ export class SearchController {
     const userId = requireUserId(req);
     const { q } = searchQuerySchema.parse(req.query);
     logger.info(`[search] userId=${userId} q.length=${q.length}`);
-    const results = await this.service.search(userId, q);
+    const results = await this.service.search(userId, q, req.delegatedChildId);
     jsonResponse(res, results);
   });
 }

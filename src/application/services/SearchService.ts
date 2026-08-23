@@ -48,35 +48,48 @@ function escapeLikePattern(input: string): string {
 export class SearchService {
   constructor(private readonly pool: Pool) {}
 
-  async search(userId: string, query: string): Promise<SearchResults> {
+  /**
+   * `childId` recorta a busca a uma única criança. É o que a delegação usa:
+   * a busca não tem dimensão de criança nenhuma, então sob delegação ela
+   * varria a conta inteira do dono — nomes de crianças, trechos de registros
+   * e títulos de documentos de filhos que o cuidador não pode ver.
+   */
+  async search(userId: string, query: string, childId?: string): Promise<SearchResults> {
     const pattern = `%${escapeLikePattern(query)}%`;
+    // Um predicado a mais em cada consulta, com o placeholder já ocupado por
+    // um valor que casa com tudo quando não há recorte — mais simples que
+    // montar três SQLs condicionalmente e errar a numeração dos parâmetros.
+    const childFilter = childId ?? null;
 
     const [childrenResult, logsResult, documentsResult] = await Promise.all([
       this.pool.query(
         `SELECT id, name
          FROM children
          WHERE user_id = $1 AND name ILIKE $2 ESCAPE '\\'
+           AND ($4::uuid IS NULL OR id = $4)
          ORDER BY name
          LIMIT $3`,
-        [userId, pattern, RESULTS_PER_CATEGORY],
+        [userId, pattern, RESULTS_PER_CATEGORY, childFilter],
       ),
       this.pool.query(
         `SELECT dl.id, dl.child_id, c.name AS child_name, dl.log_type, dl.occurred_at, dl.notes
          FROM daily_logs dl
          JOIN children c ON c.id = dl.child_id
          WHERE dl.user_id = $1 AND dl.notes ILIKE $2 ESCAPE '\\'
+           AND ($4::uuid IS NULL OR dl.child_id = $4)
          ORDER BY dl.occurred_at DESC
          LIMIT $3`,
-        [userId, pattern, RESULTS_PER_CATEGORY],
+        [userId, pattern, RESULTS_PER_CATEGORY, childFilter],
       ),
       this.pool.query(
         `SELECT d.id, d.child_id, c.name AS child_name, d.title, d.created_at
          FROM documents d
          JOIN children c ON c.id = d.child_id
          WHERE d.user_id = $1 AND (d.title ILIKE $2 ESCAPE '\\' OR d.description ILIKE $2 ESCAPE '\\')
+           AND ($4::uuid IS NULL OR d.child_id = $4)
          ORDER BY d.created_at DESC
          LIMIT $3`,
-        [userId, pattern, RESULTS_PER_CATEGORY],
+        [userId, pattern, RESULTS_PER_CATEGORY, childFilter],
       ),
     ]);
 

@@ -23,7 +23,14 @@ export class ChildController {
     const userId = requireUserId(req);
     logger.info(`[child.list] userId=${userId}`);
     const children = await this.service.list(userId);
-    jsonResponse(res, children.map(c => c.toJSON()));
+    // Sob delegação `userId` é o do dono, então esta lista traria TODAS as
+    // crianças dele — inclusive as que o cuidador não pode ver, entregando os
+    // ids delas de bandeja. A lista não tem filtro por criança para o
+    // middleware preencher, então o recorte é aqui.
+    const visible = req.delegatedChildId
+      ? children.filter((c) => c.getId() === req.delegatedChildId)
+      : children;
+    jsonResponse(res, visible.map(c => c.toJSON()));
   });
 
   get = asyncHandler(async (req: Request, res: Response): Promise<void> => {

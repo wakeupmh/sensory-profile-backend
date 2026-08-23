@@ -12,10 +12,15 @@
  *  4. header present but caller has no relationship to the child — next(AuthorizationError), effectiveUserId untouched
  *  5. header present and caller owns/is an accepted caregiver of the child — sets req.effectiveUserId/delegatedChildId, calls next() with no error
  *  6. a resolution error from the service is forwarded to next(), not swallowed
- *  7. requested childId (body/query/params) mismatching the delegated one is rejected with AuthorizationError
+ *  7. requested childId (body/query/URL path) mismatching the delegated one is rejected with AuthorizationError
  *  8. requested childId matching the delegated one is allowed
  *  9. a successful delegated request is recorded to the access log under the caller's (actor's) userId
  *  10. a failed (>=400) delegated request is NOT recorded to the access log
+ *  11. childId in the URL path is honoured — req.params is EMPTY in a router.use
+ *      layer, so the path is the only place a /children/:childId/... route id
+ *      is visible from here
+ *  12. a request that names no child is pinned to the delegated child instead of
+ *      being left unscoped (which resolved to the whole owner account)
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -141,13 +146,19 @@ describe('createDelegationMiddleware', () => {
     expect((next as jest.Mock).mock.calls[0][0]).toBe(boom);
   });
 
-  test('requested childId (params) mismatching the delegated one is rejected', async () => {
+  // Este teste montava `params: { childId }` à mão. O Express nunca produz
+  // isso numa camada `router.use` (params só existe na camada de rota), então
+  // ele passava enquanto a produção não verificava nada. Reescrito com a forma
+  // real: a criança vem na URL.
+  test('requested childId (URL path) mismatching the delegated one is rejected', async () => {
     const resolve = jest.fn().mockResolvedValue(OWNER_ID);
     const record = jest.fn();
     const middleware = createDelegationMiddleware(makeService(resolve), makeAccessLogService(record));
     const req = makeReq({
       header: jest.fn().mockReturnValue(VALID_CHILD_ID),
-      params: { childId: OTHER_CHILD_ID },
+      baseUrl: '/api/children',
+      path: `/${OTHER_CHILD_ID}/notes`,
+      params: {},
     });
     const next = jest.fn() as unknown as NextFunction;
 
@@ -238,5 +249,128 @@ describe('createDelegationMiddleware', () => {
     fireFinish(res);
 
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+function makeServices() {
+  return {
+    service: makeService(jest.fn().mockResolvedValue(OWNER_ID)),
+    accessLog: makeAccessLogService(),
+  };
+}
+
+describe('createDelegationMiddleware — child scoping (regressions)', () => {
+  /**
+   * Este é o buraco de verdade: o middleware é montado com `router.use`, e numa
+   * camada `use` o Express deixa `req.params` VAZIO — ele só é preenchido na
+   * camada de rota. Os testes antigos montavam `params` à mão, uma forma que o
+   * runtime nunca produz, então passavam enquanto a produção não verificava nada.
+   */
+  test('rejects another child addressed through the URL path, with req.params empty as at runtime', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      method: 'GET',
+      baseUrl: '/api/children',
+      path: `/${OTHER_CHILD_ID}/profile`,
+      params: {},
+    });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith(expect.any(AuthorizationError));
+    expect(req.effectiveUserId).toBeUndefined();
+  });
+
+  test('allows the delegated child addressed through the URL path', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      baseUrl: '/api/children',
+      path: `/${VALID_CHILD_ID}/profile`,
+      params: {},
+    });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.effectiveUserId).toBe(OWNER_ID);
+  });
+
+  /**
+   * `childId` é filtro OPCIONAL em várias listagens. Sem nomear criança, a
+   * consulta ficava escopada só por `user_id` — que sob delegação é o do DONO —
+   * e devolvia a conta inteira dele.
+   */
+  test('pins an unscoped GET to the delegated child instead of the whole account', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      method: 'GET',
+      baseUrl: '/api/logs',
+      path: '/',
+      query: {},
+    });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.query.childId).toBe(VALID_CHILD_ID);
+  });
+
+  test('pins an unscoped write to the delegated child', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      method: 'POST',
+      baseUrl: '/api/logs',
+      path: '/',
+      body: { logType: 'mood' },
+    });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+    expect((req.body as Record<string, unknown>).childId).toBe(VALID_CHILD_ID);
+  });
+
+  test('does not overwrite an explicitly requested child that already matches', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      method: 'GET',
+      baseUrl: '/api/logs',
+      path: '/',
+      query: { childId: VALID_CHILD_ID, logType: 'mood' },
+    });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.query.childId).toBe(VALID_CHILD_ID);
+    expect(req.query.logType).toBe('mood');
+  });
+
+  test('leaves a non-delegated request completely alone', async () => {
+    const { service, accessLog } = makeServices();
+    const middleware = createDelegationMiddleware(service, accessLog);
+    const req = makeReq({ method: 'GET', baseUrl: '/api/logs', path: '/', query: {} });
+    const next = jest.fn();
+
+    await middleware(req, makeRes(), next as unknown as NextFunction);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.query.childId).toBeUndefined();
+    expect(req.effectiveUserId).toBeUndefined();
   });
 });

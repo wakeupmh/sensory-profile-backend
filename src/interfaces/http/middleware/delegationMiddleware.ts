@@ -30,11 +30,29 @@ declare global {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Este middleware é montado com `router.use`, e numa camada `use` do Express o
+ * `req.params` está **vazio** — ele só é preenchido quando a camada de *rota*
+ * casa. Ou seja: ler `req.params.childId` aqui nunca funcionou em produção, e
+ * toda rota `/api/children/:childId/...` passava sem verificação nenhuma.
+ * (O teste que cobria esse caminho montava `params` à mão num req falso, uma
+ * forma que o runtime nunca produz — por isso passava.)
+ *
+ * A URL, essa sim, está disponível. `/api/children/<uuid>/...` é a única forma
+ * de rota em que um segmento identifica uma criança, então é o que se lê aqui.
+ */
+function childIdFromPath(req: Request): string | undefined {
+  const segments = `${req.baseUrl}${req.path}`.split('/').filter(Boolean);
+  const childrenAt = segments.indexOf('children');
+  if (childrenAt === -1) return undefined;
+  const candidate = segments[childrenAt + 1];
+  return candidate && UUID_REGEX.test(candidate) ? candidate : undefined;
+}
+
 function extractRequestedChildId(req: Request): string | undefined {
   const fromBody = req.body && typeof req.body.childId === 'string' ? req.body.childId : undefined;
   const fromQuery = typeof req.query.childId === 'string' ? req.query.childId : undefined;
-  const fromParams = typeof req.params.childId === 'string' ? req.params.childId : undefined;
-  return fromParams ?? fromBody ?? fromQuery;
+  return childIdFromPath(req) ?? fromBody ?? fromQuery;
 }
 
 /**
@@ -91,6 +109,20 @@ export function createDelegationMiddleware(
 
       req.effectiveUserId = ownerUserId;
       req.delegatedChildId = childId;
+
+      // Falha fechada. Toda consulta do domínio é escopada por `user_id`, e
+      // sob delegação esse `user_id` é o do DONO — então uma requisição que
+      // não nomeia criança nenhuma (`GET /api/logs` sem `childId`, que é um
+      // filtro opcional) devolvia a conta inteira do dono, não só a criança
+      // delegada. Preencher o filtro com a criança delegada mantém as telas
+      // de lista funcionando e fecha o vazamento na origem.
+      if (!requestedChildId) {
+        if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'DELETE') {
+          req.query.childId = childId;
+        } else if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+          req.body.childId = childId;
+        }
+      }
 
       const actorUserId = req.userId;
       res.on('finish', () => {
