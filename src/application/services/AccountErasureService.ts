@@ -66,7 +66,7 @@ export class AccountErasureService {
   ) {}
 
   async collectChildStorageKeys(userId: string, childId: string): Promise<string[]> {
-    const [documentsResult, attachmentsResult] = await Promise.all([
+    const [documentsResult, attachmentsResult, dailyReportsResult] = await Promise.all([
       this.pool.query(`SELECT storage_key FROM documents WHERE user_id = $1 AND child_id = $2`, [userId, childId]),
       this.pool.query(
         `SELECT la.storage_key FROM log_attachments la
@@ -74,10 +74,22 @@ export class AccountErasureService {
          WHERE dl.user_id = $1 AND dl.child_id = $2`,
         [userId, childId],
       ),
+      // Two keys per row (the recording and the transcript JSON the
+      // Transcribe job wrote), either of which may be NULL depending on how
+      // far the report got before it was abandoned.
+      this.pool.query(
+        `SELECT audio_storage_key, transcript_key FROM daily_reports WHERE user_id = $1 AND child_id = $2`,
+        [userId, childId],
+      ),
     ]);
     return [
       ...documentsResult.rows.map((r) => r.storage_key as string),
       ...attachmentsResult.rows.map((r) => r.storage_key as string),
+      ...dailyReportsResult.rows.flatMap((r) =>
+        [r.audio_storage_key as string | null, r.transcript_key as string | null].filter(
+          (k): k is string => k !== null,
+        ),
+      ),
     ];
   }
 

@@ -44,6 +44,11 @@ const CHILD_LINKED_QUERIES = {
   assessmentSectionComments: `SELECT sc.* FROM section_comments sc JOIN sensory_assessments sa ON sa.id = sc.assessment_id
      WHERE sa.user_id = $1 AND sa.child_id = $2 ORDER BY sc.created_at`,
   dailyLogs: `SELECT * FROM daily_logs WHERE user_id = $1 AND child_id = $2 ORDER BY occurred_at`,
+  // As chaves de S3 (áudio/transcrição) ficam de fora: são referências
+  // internas de armazenamento, não conteúdo do titular, e não abrem nada
+  // sem uma URL assinada.
+  dailyReports: `SELECT id, child_id, report_date, status, transcript, structured, error, created_at, updated_at
+     FROM daily_reports WHERE user_id = $1 AND child_id = $2 ORDER BY report_date`,
   logAttachments: `SELECT la.* FROM log_attachments la JOIN daily_logs dl ON dl.id = la.log_id
      WHERE dl.user_id = $1 AND dl.child_id = $2 ORDER BY la.created_at`,
   therapySessions: `SELECT * FROM therapy_sessions WHERE user_id = $1 AND child_id = $2 ORDER BY occurred_at`,

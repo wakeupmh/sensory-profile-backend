@@ -82,4 +82,20 @@ export class S3StorageService {
     });
     await this.getClient().send(command);
   }
+
+  /**
+   * Reads an object the backend itself needs to look at — as opposed to
+   * getDownloadUrl, which hands the bytes straight to the client. Used for
+   * the JSON the Transcribe job writes into our bucket. Only for small,
+   * backend-generated objects: it buffers the whole body in memory.
+   */
+  async getObjectText(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.getBucket(),
+      Key: key,
+    });
+    const response = await this.getClient().send(command);
+    if (!response.Body) throw new Error(`Empty S3 object: ${key}`);
+    return response.Body.transformToString();
+  }
 }

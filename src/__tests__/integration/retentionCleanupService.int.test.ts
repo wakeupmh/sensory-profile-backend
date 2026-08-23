@@ -10,6 +10,7 @@
  *  3.  run() honors ACCESS_LOG_RETENTION_DAYS / REMINDER_NOTIFICATION_RETENTION_DAYS overrides
  *  4.  run() falls back to defaults for a non-numeric or non-positive env var
  *  5.  run() returns the rowCount from each DELETE
+ *  6.  run() expires daily report audio only after the S3 object is really gone
  */
 
 import { Pool } from 'pg';
@@ -21,6 +22,7 @@ function makePool(accessLogsDeleted = 0, reminderNotificationsDeleted = 0) {
     calls.push({ sql, params });
     if (sql.includes('FROM access_logs')) return Promise.resolve({ rows: [], rowCount: accessLogsDeleted });
     if (sql.includes('FROM reminder_notifications')) return Promise.resolve({ rows: [], rowCount: reminderNotificationsDeleted });
+    if (sql.includes('FROM daily_reports')) return Promise.resolve({ rows: [], rowCount: 0 });
     throw new Error(`Unexpected query: ${sql}`);
   });
   const pool = { query: mockQuery } as unknown as Pool;
@@ -98,6 +100,63 @@ describe('RetentionCleanupService', () => {
 
     const result = await service.run();
 
-    expect(result).toEqual({ accessLogsDeleted: 42, reminderNotificationsDeleted: 7 });
+    expect(result).toEqual({ accessLogsDeleted: 42, reminderNotificationsDeleted: 7, dailyReportAudiosExpired: 0 });
+  });
+});
+
+describe('RetentionCleanupService — daily report audio expiry', () => {
+  function makeAudioPool(rows: Array<{ id: string; audio_storage_key: string | null; transcript_key: string | null }>) {
+    const calls: Array<{ sql: string; params: unknown[] }> = [];
+    const mockQuery = jest.fn().mockImplementation((sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      if (sql.includes('FROM access_logs')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('FROM reminder_notifications')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('SELECT id, audio_storage_key')) return Promise.resolve({ rows, rowCount: rows.length });
+      if (sql.includes('UPDATE daily_reports')) return Promise.resolve({ rows: [], rowCount: 1 });
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    return { pool: { query: mockQuery } as unknown as Pool, calls };
+  }
+
+  function makeStorage(deleteObject: jest.Mock) {
+    return { deleteObject } as unknown as import('infrastructure/storage/S3StorageService').S3StorageService;
+  }
+
+  test('deletes both the audio and the transcript JSON, then clears the columns', async () => {
+    const { pool, calls } = makeAudioPool([
+      { id: 'r1', audio_storage_key: 'daily-reports/u/r1/audio.webm', transcript_key: 'daily-reports/u/r1/t.json' },
+    ]);
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new RetentionCleanupService(pool, makeStorage(deleteObject));
+
+    const result = await service.run();
+
+    expect(deleteObject).toHaveBeenCalledWith('daily-reports/u/r1/audio.webm');
+    expect(deleteObject).toHaveBeenCalledWith('daily-reports/u/r1/t.json');
+    expect(calls.some((c) => c.sql.includes('UPDATE daily_reports') && c.params[0] === 'r1')).toBe(true);
+    expect(result.dailyReportAudiosExpired).toBe(1);
+  });
+
+  test('leaves the row untouched when S3 deletion fails, so the key is retried instead of orphaned', async () => {
+    const { pool, calls } = makeAudioPool([
+      { id: 'r1', audio_storage_key: 'daily-reports/u/r1/audio.webm', transcript_key: null },
+    ]);
+    const deleteObject = jest.fn().mockRejectedValue(new Error('S3 down'));
+    const service = new RetentionCleanupService(pool, makeStorage(deleteObject));
+
+    const result = await service.run();
+
+    expect(calls.some((c) => c.sql.includes('UPDATE daily_reports'))).toBe(false);
+    expect(result.dailyReportAudiosExpired).toBe(0);
+  });
+
+  test('skips rows still transcribing', async () => {
+    const { pool, calls } = makeAudioPool([]);
+    const service = new RetentionCleanupService(pool, makeStorage(jest.fn()));
+
+    await service.run();
+
+    const select = calls.find((c) => c.sql.includes('SELECT id, audio_storage_key'));
+    expect(select?.sql).toContain("status <> 'transcribing'");
   });
 });
