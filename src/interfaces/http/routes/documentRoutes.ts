@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { uploadUrlLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
 import pool from '../../../infrastructure/database/connection';
@@ -19,7 +20,7 @@ router.use(authMiddleware);
 router.use(delegationMiddleware);
 
 router.get('/', documentController.list.bind(documentController));
-router.post('/upload-url', documentController.requestUpload.bind(documentController));
+router.post('/upload-url', uploadUrlLimiter, documentController.requestUpload.bind(documentController));
 router.get('/:id', documentController.getById.bind(documentController));
 router.get('/:id/download-url', documentController.getDownloadUrl.bind(documentController));
 router.patch('/:id', documentController.update.bind(documentController));

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { transcriptionLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
 import pool from '../../../infrastructure/database/connection';
@@ -27,7 +28,7 @@ router.use(delegationMiddleware);
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));
 router.get('/:id', controller.getById.bind(controller));
-router.post('/:id/transcribe', controller.start.bind(controller));
+router.post('/:id/transcribe', transcriptionLimiter, controller.start.bind(controller));
 router.get('/:id/audio', controller.getAudioUrl.bind(controller));
 router.delete('/:id', controller.remove.bind(controller));
 

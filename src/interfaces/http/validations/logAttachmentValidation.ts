@@ -3,6 +3,11 @@ import { z } from 'zod';
 const mimeTypeSchema = z
   .string()
   .max(150)
+  // SVG passa pelo prefixo `image/` mas pode conter script, e o anexo é
+  // servido por URL pré-assinada do S3 — ver documentValidation.
+  .refine((val) => !['image/svg+xml', 'image/svg'].includes(val.split(';')[0].trim().toLowerCase()), {
+    message: 'Tipo de arquivo não suportado',
+  })
   .refine((val) => val.startsWith('image/'), {
     message: 'Apenas imagens são suportadas como anexo',
   });

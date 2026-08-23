@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { uploadUrlLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
 import pool from '../../../infrastructure/database/connection';
@@ -41,7 +42,7 @@ router.post('/', dailyLogController.create.bind(dailyLogController));
 router.patch('/:id', dailyLogController.update.bind(dailyLogController));
 router.delete('/:id', dailyLogController.remove.bind(dailyLogController));
 
-router.post('/:id/attachments', logAttachmentController.requestUpload.bind(logAttachmentController));
+router.post('/:id/attachments', uploadUrlLimiter, logAttachmentController.requestUpload.bind(logAttachmentController));
 router.get('/:id/attachments', logAttachmentController.list.bind(logAttachmentController));
 router.delete('/:id/attachments/:attachmentId', logAttachmentController.remove.bind(logAttachmentController));
 

@@ -1,4 +1,10 @@
 import crypto from 'crypto';
+import { anamneseShareValidityDays } from '../../infrastructure/repositories/PgAnamneseRepository';
+
+function isShareExpired(sharedAt: Date): boolean {
+  const ageDays = (Date.now() - new Date(sharedAt).getTime()) / (24 * 60 * 60 * 1000);
+  return ageDays >= anamneseShareValidityDays();
+}
 import { v7 as uuidv7 } from 'uuid';
 
 import { Anamnese, AnamneseSummary } from '../../domain/entities/Anamnese';
@@ -62,7 +68,10 @@ export class AnamneseService {
     const existing = await this.repo.findById(id, userId);
     if (!existing) throw new AnamneseNotFoundError(id);
 
-    if (existing.shareToken && existing.sharedAt) {
+    // Reaproveita o token atual só enquanto ele ainda vale — senão
+    // `generateShareLink` devolveria para sempre um link que a consulta
+    // pública já recusa, sem caminho para o dono renovar.
+    if (existing.shareToken && existing.sharedAt && !isShareExpired(existing.sharedAt)) {
       return { shareToken: existing.shareToken, sharedAt: existing.sharedAt };
     }
 
