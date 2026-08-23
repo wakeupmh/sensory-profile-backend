@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import {
+  ConflictError,
   BaseError,
   ValidationError,
   InternalServerError,
@@ -23,29 +24,37 @@ const handleZodError = (error: ZodError): ValidationError => {
   return new ValidationError(message, details);
 };
 
-// Convert database errors to custom errors
+/**
+ * Erros do node-postgres carregam o SQLSTATE em `.code` (cinco caracteres).
+ * Detectar por aí, e não pelo nome da classe: o `name` que o driver define é
+ * só `'error'`, e a checagem anterior comparava com `QueryFailedError`, que é
+ * o nome do TypeORM — um ORM que este projeto não usa. Na prática o mapeador
+ * nunca executou, e toda violação de constraint virava 500 (com alerta) em
+ * vez do 4xx que ela é.
+ */
+function pgErrorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
+}
+
 const handleDatabaseError = (error: Error): BaseError => {
-  const message = (error.message ?? '').toLowerCase();
-  
-  // PostgreSQL specific error handling
-  if (message.includes('duplicate key')) {
-    return new ValidationError('Duplicate entry found', { originalError: error.message });
+  switch (pgErrorCode(error)) {
+    case '23505': // unique_violation
+      return new ConflictError('Este registro já existe');
+    case '23503': // foreign_key_violation
+      return new ValidationError('Referenced resource does not exist', { originalError: error.message });
+    case '23502': // not_null_violation
+      return new ValidationError('Required field is missing', { originalError: error.message });
+    case '23514': // check_violation
+      return new ValidationError('Valor fora do permitido para este campo', { originalError: error.message });
+    case '22P02': // invalid_text_representation (ex.: uuid malformado)
+      return new ValidationError('Formato de valor inválido', { originalError: error.message });
+    case '40001': // serialization_failure
+    case '40P01': // deadlock_detected
+      return new ConflictError('Conflito de concorrência, tente novamente');
+    default:
+      return new InternalServerError('Database operation failed', error);
   }
-  
-  if (message.includes('foreign key constraint')) {
-    return new ValidationError('Referenced resource does not exist', { originalError: error.message });
-  }
-  
-  if (message.includes('not null constraint')) {
-    return new ValidationError('Required field is missing', { originalError: error.message });
-  }
-  
-  if (message.includes('connection') || message.includes('timeout')) {
-    return new InternalServerError('Database connection error', error);
-  }
-  
-  // Generic database error
-  return new InternalServerError('Database operation failed', error);
 };
 
 // Main error handling middleware
@@ -62,7 +71,7 @@ export const errorHandler = (
     customError = error;
   } else if (error instanceof ZodError) {
     customError = handleZodError(error);
-  } else if (error.name === 'QueryFailedError' || (error.message ?? '').includes('pg_')) {
+  } else if (pgErrorCode(error) !== undefined) {
     customError = handleDatabaseError(error);
   } else {
     // Unknown error - treat as internal server error

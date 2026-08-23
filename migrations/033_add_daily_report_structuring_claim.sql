@@ -1,0 +1,14 @@
+-- O cliente consulta o relato em loop enquanto ele está `transcribing`, e o
+-- estado avança como efeito da leitura. O problema: entre ver o job pronto e
+-- gravar o resultado passam segundos (a estruturação no Bedrock leva 2-5s), e
+-- durante essa janela a linha continua `transcribing` — então a consulta
+-- seguinte entrava em `advance()` de novo e invocava o Bedrock outra vez.
+-- Duas a três invocações cobradas por relato, no caminho normal.
+--
+-- Esta coluna é a reserva: quem consegue gravá-la assume o trabalho. Uma marca
+-- antiga é reassumível, então uma reserva que morreu no meio (processo caiu)
+-- se cura sozinha em vez de travar o relato para sempre.
+--
+-- Coluna em vez de um status novo de propósito: o status é contrato com o
+-- cliente, e `transcribing` continua sendo a verdade que ele precisa saber.
+ALTER TABLE daily_reports ADD COLUMN structuring_started_at TIMESTAMPTZ NULL;
