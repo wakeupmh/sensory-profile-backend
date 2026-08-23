@@ -52,6 +52,8 @@ function baseRow(overrides: Row = {}): Row {
 
 interface PoolConfig {
   childOwned?: boolean;
+  /** Simula uma consulta concorrente que já assumiu a estruturação. */
+  claimTaken?: boolean;
   previousKeys?: Row[];
   selectRow?: Row | null;
   updatedRow?: Row;
@@ -59,6 +61,7 @@ interface PoolConfig {
 
 function makePool(config: PoolConfig = {}) {
   const { childOwned = true, previousKeys = [], selectRow = null, updatedRow } = config;
+  void config.claimTaken;
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const query = jest.fn().mockImplementation((sql: string, params: unknown[] = []) => {
     calls.push({ sql, params });
@@ -72,6 +75,11 @@ function makePool(config: PoolConfig = {}) {
     }
     if (sql.includes('SELECT * FROM daily_reports WHERE user_id')) {
       return Promise.resolve({ rows: selectRow ? [selectRow] : [] });
+    }
+    if (sql.includes('SET structuring_started_at = NOW()')) {
+      // rowCount 0 = outra consulta já reservou a estruturação.
+      const claimed = config.claimTaken ? 0 : 1;
+      return Promise.resolve({ rows: claimed ? [selectRow ?? baseRow()] : [], rowCount: claimed });
     }
     if (sql.startsWith('UPDATE daily_reports') || sql.includes('UPDATE daily_reports')) {
       return Promise.resolve({ rows: [updatedRow ?? baseRow()] });
@@ -316,5 +324,70 @@ describe('sanitizeStructured — a saída do modelo é dado de terceiro, não co
     const update = calls.find((c) => c.sql.includes("status = 'ready'"));
     expect(update?.params[0]).toBe('Hoje ele dormiu bem e comeu tudo no almoço.');
     expect(update?.params[1]).toBeNull();
+  });
+});
+
+describe('DailyReportService — reserva da estruturação (custo de IA)', () => {
+  const transcribingRow = () =>
+    baseRow({ status: 'transcribing', transcribe_job_name: 'job-1', audio_storage_key: 'k' });
+
+  function completedCollaborators(structure = jest.fn().mockResolvedValue('{"summary":"ok"}')) {
+    return makeCollaborators({
+      getJob: jest.fn().mockResolvedValue({ status: 'completed', outputKey: 'out.json' }),
+      getObjectText: jest.fn().mockResolvedValue(TRANSCRIBE_OUTPUT),
+      structureDailyReport: structure,
+    });
+  }
+
+  test('claims the row before invoking the AI, not after', async () => {
+    const { pool, calls } = makePool({ selectRow: transcribingRow(), updatedRow: baseRow({ status: 'ready' }) });
+    const { storage, transcription, ai } = completedCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await service.get(USER, REPORT);
+
+    const claimAt = calls.findIndex((c) => c.sql.includes('SET structuring_started_at = NOW()'));
+    expect(claimAt).toBeGreaterThanOrEqual(0);
+    // A reserva tem que preceder a chamada cara; reservar depois não impede nada.
+    expect((ai.structureDailyReport as jest.Mock).mock.calls.length).toBe(1);
+    const readyAt = calls.findIndex((c) => c.sql.includes("status = 'ready'"));
+    expect(claimAt).toBeLessThan(readyAt);
+  });
+
+  test('a concurrent poll that loses the claim does not invoke the AI again', async () => {
+    const { pool } = makePool({ selectRow: transcribingRow(), claimTaken: true });
+    const { storage, transcription, ai } = completedCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    const report = await service.get(USER, REPORT);
+
+    // Este é o custo que o bug gerava: 2-3 invocações cobradas por relato,
+    // porque a linha seguia 'transcribing' durante os 2-5s do Bedrock.
+    expect(ai.structureDailyReport).not.toHaveBeenCalled();
+    expect(storage.getObjectText).not.toHaveBeenCalled();
+    expect(report.status).toBe('transcribing');
+  });
+
+  test('the claim only takes rows still transcribing, and expires so a crash cannot wedge it', async () => {
+    const { pool, calls } = makePool({ selectRow: transcribingRow(), updatedRow: baseRow({ status: 'ready' }) });
+    const { storage, transcription, ai } = completedCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await service.get(USER, REPORT);
+
+    const claim = calls.find((c) => c.sql.includes('SET structuring_started_at = NOW()'));
+    expect(claim?.sql).toContain("status = 'transcribing'");
+    expect(claim?.sql).toContain('structuring_started_at IS NULL');
+    expect(claim?.sql).toContain('INTERVAL');
+  });
+
+  test('releases the claim when it finishes, so a later reprocess is not blocked', async () => {
+    const { pool, calls } = makePool({ selectRow: transcribingRow(), updatedRow: baseRow({ status: 'ready' }) });
+    const { storage, transcription, ai } = completedCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await service.get(USER, REPORT);
+
+    expect(calls.find((c) => c.sql.includes("status = 'ready'"))?.sql).toContain('structuring_started_at = NULL');
   });
 });

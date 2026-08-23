@@ -52,6 +52,14 @@ export function sanitizeStructured(parsed: unknown): Record<string, unknown> | n
 /** Quanto tempo o áudio original fica guardado antes do job de retenção apagá-lo. */
 const AUDIO_RETENTION_DAYS = 30;
 
+/**
+ * Depois deste tempo uma reserva de estruturação é considerada abandonada
+ * (o processo caiu no meio) e outra consulta pode assumir o trabalho.
+ * Folgado o bastante para a chamada mais lenta do Bedrock, curto o bastante
+ * para o cuidador não ficar preso olhando "Transcrevendo…".
+ */
+const STRUCTURING_CLAIM_TIMEOUT = '5 minutes';
+
 export type DailyReportStatus = 'draft' | 'transcribing' | 'ready' | 'failed';
 
 export interface DailyReport {
@@ -215,7 +223,8 @@ export class DailyReportService {
 
     const result = await this.pool.query(
       `UPDATE daily_reports
-          SET status = 'transcribing', transcribe_job_name = $1, transcript_key = $2, error = NULL
+          SET status = 'transcribing', transcribe_job_name = $1, transcript_key = $2, error = NULL,
+              structuring_started_at = NULL
         WHERE id = $3 AND user_id = $4
         RETURNING *`,
       [jobName, transcriptKey, reportId, userId],
@@ -241,6 +250,20 @@ export class DailyReportService {
       return this.fail(row, `Transcrição falhou: ${job.failureReason ?? 'motivo desconhecido'}`);
     }
 
+    // Reserva ANTES de qualquer trabalho caro. O cliente consulta a cada 4s e
+    // a estruturação leva 2-5s, então sem isto a consulta seguinte entrava
+    // aqui de novo e invocava o Bedrock uma segunda vez — cobrada, no caminho
+    // normal, não numa corrida rara.
+    const claim = await this.pool.query(
+      `UPDATE daily_reports SET structuring_started_at = NOW()
+        WHERE id = $1 AND status = 'transcribing'
+          AND (structuring_started_at IS NULL
+               OR structuring_started_at < NOW() - INTERVAL '${STRUCTURING_CLAIM_TIMEOUT}')
+        RETURNING *`,
+      [row.id],
+    );
+    if (claim.rowCount === 0) return toDailyReport(row);
+
     try {
       const key = job.outputKey ?? row.transcript_key;
       if (!key) throw new Error('Transcrição concluída sem arquivo de saída');
@@ -265,7 +288,8 @@ export class DailyReportService {
       }
 
       const result = await this.pool.query(
-        `UPDATE daily_reports SET status = 'ready', transcript = $1, structured = $2, error = NULL
+        `UPDATE daily_reports SET status = 'ready', transcript = $1, structured = $2, error = NULL,
+                structuring_started_at = NULL
           WHERE id = $3 RETURNING *`,
         [transcript, structured, row.id],
       );
@@ -278,7 +302,8 @@ export class DailyReportService {
 
   private async fail(row: DailyReportRow, message: string): Promise<DailyReport> {
     const result = await this.pool.query(
-      `UPDATE daily_reports SET status = 'failed', error = $1 WHERE id = $2 RETURNING *`,
+      `UPDATE daily_reports SET status = 'failed', error = $1, structuring_started_at = NULL
+        WHERE id = $2 RETURNING *`,
       [message, row.id],
     );
     return toDailyReport(result.rows[0] as DailyReportRow);
