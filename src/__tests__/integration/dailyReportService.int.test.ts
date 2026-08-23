@@ -20,7 +20,7 @@
  */
 
 import { Pool } from 'pg';
-import { DailyReportService, extractTranscript } from 'application/services/DailyReportService';
+import { DailyReportService, extractTranscript, sanitizeStructured } from 'application/services/DailyReportService';
 import { S3StorageService } from 'infrastructure/storage/S3StorageService';
 import { TranscriptionService } from 'infrastructure/transcription/TranscriptionService';
 import { AISummaryService } from 'application/services/AISummaryService';
@@ -191,7 +191,9 @@ describe('DailyReportService', () => {
     const update = calls.find((c) => c.sql.includes("status = 'ready'"));
     expect(update?.params[0]).toBe('Hoje ele dormiu bem e comeu tudo no almoço.');
     // Code fences around the JSON must not cost us the structuring.
-    expect(update?.params[1]).toEqual({ summary: 'Dia tranquilo' });
+    // `suggestedLogs` sai normalizado para lista vazia — o front-end nunca
+    // precisa distinguir "sem sugestões" de "campo ausente".
+    expect(update?.params[1]).toEqual({ summary: 'Dia tranquilo', suggestedLogs: [] });
   });
 
   test('a failing structuring step still keeps the transcript', async () => {
@@ -247,5 +249,72 @@ describe('DailyReportService', () => {
     expect(extractTranscript(TRANSCRIBE_OUTPUT)).toBe('Hoje ele dormiu bem e comeu tudo no almoço.');
     expect(extractTranscript('not json at all')).toBe('');
     expect(extractTranscript('{}')).toBe('');
+  });
+});
+
+describe('sanitizeStructured — a saída do modelo é dado de terceiro, não contrato', () => {
+  test('keeps a well-formed payload as-is', () => {
+    const result = sanitizeStructured({
+      summary: 'Dia tranquilo',
+      highlights: ['comeu bem'],
+      concerns: [],
+      suggestedLogs: [{ logType: 'sleep', notes: 'dormiu cedo', data: { quality: 2 } }],
+    });
+    expect(result).toEqual({
+      summary: 'Dia tranquilo',
+      highlights: ['comeu bem'],
+      concerns: [],
+      suggestedLogs: [{ logType: 'sleep', notes: 'dormiu cedo', data: { quality: 2 } }],
+    });
+  });
+
+  test('drops a suggestion with an invented logType but keeps the valid ones', () => {
+    // Sem isto, a sugestão inválida virava um badge com texto cru e um botão
+    // "Salvar registro" que o backend recusa — um beco sem saída na tela.
+    const result = sanitizeStructured({
+      summary: 'Dia',
+      suggestedLogs: [
+        { logType: 'humor_geral' },
+        { logType: 'mood', data: { level: 4 } },
+      ],
+    });
+    expect(result?.suggestedLogs).toEqual([{ logType: 'mood', data: { level: 4 } }]);
+  });
+
+  test('normalizes suggestedLogs that came back as something other than a list', () => {
+    // O caso que derrubaria a tela: `.map` em não-lista.
+    const result = sanitizeStructured({ summary: 'Dia', suggestedLogs: { logType: 'mood' } });
+    expect(result).toBeNull();
+  });
+
+  test('missing suggestedLogs becomes an empty list, not undefined', () => {
+    expect(sanitizeStructured({ summary: 'Só o resumo' })).toEqual({
+      summary: 'Só o resumo',
+      suggestedLogs: [],
+    });
+  });
+
+  test('rejects a payload that is not an object at all', () => {
+    expect(sanitizeStructured('texto solto')).toBeNull();
+    expect(sanitizeStructured(null)).toBeNull();
+    expect(sanitizeStructured([1, 2, 3])).toBeNull();
+  });
+
+  test('a report whose structuring is malformed still keeps the transcript', async () => {
+    const row = baseRow({ status: 'transcribing', transcribe_job_name: 'job-1', audio_storage_key: 'k' });
+    const { pool, calls } = makePool({ selectRow: row, updatedRow: baseRow({ status: 'ready' }) });
+    const { storage, transcription, ai } = makeCollaborators({
+      getJob: jest.fn().mockResolvedValue({ status: 'completed', outputKey: 'out.json' }),
+      getObjectText: jest.fn().mockResolvedValue(TRANSCRIBE_OUTPUT),
+      structureDailyReport: jest.fn().mockResolvedValue('{"suggestedLogs": "isso nao e uma lista"}'),
+    });
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    const report = await service.get(USER, REPORT);
+
+    expect(report.status).toBe('ready');
+    const update = calls.find((c) => c.sql.includes("status = 'ready'"));
+    expect(update?.params[0]).toBe('Hoje ele dormiu bem e comeu tudo no almoço.');
+    expect(update?.params[1]).toBeNull();
   });
 });

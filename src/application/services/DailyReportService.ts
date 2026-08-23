@@ -1,10 +1,53 @@
 import { Pool } from 'pg';
+import { z } from 'zod';
 import { v7 as uuidv7 } from 'uuid';
 import { NotFoundError, ValidationError } from '../../infrastructure/utils/errors/CustomErrors';
 import { S3StorageService } from '../../infrastructure/storage/S3StorageService';
 import { TranscriptionService } from '../../infrastructure/transcription/TranscriptionService';
 import { AISummaryService } from './AISummaryService';
+import { LOG_TYPES } from '../../interfaces/http/validations/dailyLogValidation';
 import logger from '../../infrastructure/utils/logger';
+
+/**
+ * A saída do modelo é texto de um terceiro, não um contrato: pode vir com um
+ * `logType` que não existe, `suggestedLogs` como objeto em vez de lista, ou
+ * campos faltando. Guardar isso cru no JSONB empurra o problema para o
+ * front-end, onde um `.map` em não-lista derruba a tela inteira e um
+ * `logType` inventado vira um botão "Salvar registro" que sempre falha.
+ *
+ * `logType` reusa LOG_TYPES do validador de registros diários de propósito:
+ * é a lista canônica, e um tipo novo lá passa a ser sugerível aqui sem
+ * ninguém precisar lembrar de sincronizar duas cópias.
+ */
+const suggestedLogSchema = z.object({
+  logType: z.enum(LOG_TYPES),
+  notes: z.string().max(2000).optional(),
+  data: z.record(z.unknown()).optional(),
+});
+
+const structuredSchema = z.object({
+  summary: z.string().max(5000).optional(),
+  highlights: z.array(z.string().max(1000)).optional(),
+  concerns: z.array(z.string().max(1000)).optional(),
+  suggestedLogs: z.array(z.unknown()).optional(),
+});
+
+/**
+ * Descarta o que não bate com o formato e mantém o resto. Uma sugestão
+ * inválida entre cinco não deve custar as outras quatro nem o resumo — o
+ * relato do cuidador continua sendo a parte que importa.
+ */
+export function sanitizeStructured(parsed: unknown): Record<string, unknown> | null {
+  const base = structuredSchema.safeParse(parsed);
+  if (!base.success) return null;
+
+  const suggestedLogs = (base.data.suggestedLogs ?? [])
+    .map((item) => suggestedLogSchema.safeParse(item))
+    .filter((r): r is z.SafeParseSuccess<z.infer<typeof suggestedLogSchema>> => r.success)
+    .map((r) => r.data);
+
+  return { ...base.data, suggestedLogs };
+}
 
 /** Quanto tempo o áudio original fica guardado antes do job de retenção apagá-lo. */
 const AUDIO_RETENTION_DAYS = 30;
@@ -249,7 +292,10 @@ export class DailyReportService {
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
     if (start === -1 || end <= start) throw new Error('Resposta da IA não continha JSON');
-    return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+
+    const sanitized = sanitizeStructured(JSON.parse(raw.slice(start, end + 1)));
+    if (!sanitized) throw new Error('Resposta da IA não tinha o formato esperado');
+    return sanitized;
   }
 
   async list(userId: string, childId: string, limit = 30): Promise<DailyReport[]> {
