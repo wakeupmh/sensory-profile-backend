@@ -9,7 +9,7 @@ Este é o backend para a aplicação de Perfil Sensorial 2, desenvolvido para ar
 - `pg` (cliente PostgreSQL puro, sem ORM) + SQL parametrizado
 - PostgreSQL
 - Supabase Auth (JWT verificado via JWKS remoto, biblioteca `jose`) — não há tabela local de usuários nem rotas de registro/login
-- AWS SDK v3 (Bedrock para resumos por IA, S3 para documentos, SES para e-mails de lembrete)
+- AWS SDK v3 (Bedrock para resumos por IA, S3 para documentos e áudio, Transcribe para o relato falado do dia e o ditado, SES para e-mails de lembrete)
 - Docker para containerização
 - Render para hospedagem
 
@@ -120,6 +120,7 @@ Sem esses secrets os workflows falham de propósito, com uma mensagem explicando
 | Workflow | Quando | O que faz |
 | --- | --- | --- |
 | `.github/workflows/reminder-digest.yml` | diariamente, ~12:00 UTC (~09:00 em horário de Brasília) | `POST /api/system/reminder-digest` — sem isso, ninguém recebe e-mail de lembrete mesmo com a preferência ativada no app |
+| `.github/workflows/retention-cleanup.yml` | semanalmente, domingo ~06:23 UTC | `POST /api/system/retention-cleanup` — apaga logs de acesso, histórico de notificações e ditados vencidos, e expira os áudios dos relatos falados (ver "Retenção de dados" abaixo) |
 
 Qualquer um deles também pode ser disparado manualmente pela aba Actions (`Run workflow`).
 
@@ -152,7 +153,7 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    - SUPABASE_URL: URL do projeto Supabase (autenticação via JWKS, sem tabela local de usuários)
    - NODE_ENV: production
    - FRONTEND_URL: URL do frontend
-   - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock) e armazenamento de documentos (S3)
+   - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock), armazenamento de documentos e áudio (S3) e transcrição do relato falado (Transcribe)
    - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
    - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: entrega ativa de lembretes por Web Push
    - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
@@ -317,6 +318,37 @@ Assim como documentos, os bytes do arquivo não passam pelo backend — fluxo de
 
 Requer as variáveis de ambiente `AWS_REGION` e `AWS_S3_BUCKET` (mesmas de documentos); sem elas, os endpoints de upload retornam 503.
 
+### Relato falado do dia
+O cuidador grava um áudio contando como foi o dia da criança; o áudio é transcrito pelo AWS Transcribe (pt-BR) e o texto é organizado pelo Bedrock num relatório do dia, com registros diários (`mood`/`sleep`/`food`/`toileting`/`abc`) **sugeridos** para o cuidador confirmar. Nada é gravado em `daily_logs` automaticamente: um modelo entendendo "dormiu mal" como uma noite nota 5 corromperia em silêncio justamente o histórico em que os relatórios se baseiam.
+
+Uma linha por criança por data (`UNIQUE (child_id, report_date)`): regravar substitui o relato do dia em vez de empilhar um segundo.
+
+O fluxo é assíncrono porque o Transcribe é assíncrono, e é dirigido por polling do cliente em vez de fila/EventBridge — são poucos jobs por usuário por dia, e uma fila real seria infraestrutura nova para um problema que ainda não existe.
+
+1. `POST /api/daily-reports` - Body `{ childId, reportDate: "YYYY-MM-DD", mimeType }`. Retorna `{ report, uploadUrl }`; o cliente envia o áudio via `PUT` para `uploadUrl` em até 5 minutos. Aceita os formatos que o `MediaRecorder` do navegador realmente produz (`audio/webm` no Chrome/Firefox, `audio/mp4` no Safari) e mais alguns que o Transcribe suporta; o parâmetro `;codecs=...` é ignorado.
+2. `POST /api/daily-reports/:id/transcribe` - Upload concluído; dispara o job. Status vai para `transcribing`.
+3. `GET /api/daily-reports/:id` - Consultado em loop enquanto o status for `transcribing`. O estado avança como efeito de ser lido (job pronto → busca o texto, estrutura via IA, finaliza), então não existe um endpoint "checar job" separado para manter em sincronia com este.
+- `GET /api/daily-reports?childId=...&limit=30` - Lista os relatos da criança, mais recentes primeiro
+- `GET /api/daily-reports/:id/audio` - URL pré-assinada para reouvir a própria gravação, enquanto o áudio existir
+- `DELETE /api/daily-reports/:id` - Remove o relato e seus objetos no S3
+
+Status: `draft` (linha criada, áudio ainda não enviado) → `transcribing` → `ready` | `failed`. Se a estruturação por IA falhar, o relato ainda vira `ready` com `structured: null` — perder o que o cuidador falou por causa de um serviço indisponível seria pior que entregar só a transcrição. Uma gravação muda vira `failed` com uma explicação, em vez de um relatório vazio.
+
+O JSON de saída do Transcribe é escrito no **nosso** bucket (`OutputBucketName`), não no bucket gerenciado pela AWS, para ficar sujeito às mesmas regras de ciclo de vida, exportação e eliminação (LGPD) do resto. Áudio e JSON bruto expiram em 30 dias (ver "Retenção de dados"); ambos entram na coleta de chaves da eliminação de conta, e a transcrição e o `structured` entram na exportação de dados.
+
+Requer `AWS_REGION` e `AWS_S3_BUCKET`; sem elas os endpoints retornam 503.
+
+### Ditado (falar em vez de digitar)
+O mesmo maquinário do relato do dia, exposto como uma ferramenta genérica: qualquer campo de texto do app pode oferecer um botão de microfone que grava, transcreve e devolve o texto. Não é ligado a nenhuma criança — o ditado é da conta de quem falou — e por isso as rotas **não** passam pelo `delegationMiddleware`: não há escopo de criança a verificar, e resolver a delegação aqui só criaria a chance de gravar o ditado na conta errada.
+
+1. `POST /api/voice-notes` - Body `{ mimeType }`. Retorna `{ note, uploadUrl }`.
+2. `POST /api/voice-notes/:id/transcribe` - Upload concluído; dispara o job.
+3. `GET /api/voice-notes/:id` - Consultado em loop enquanto o status for `transcribing`; devolve `{ status, transcript, error }`.
+
+A diferença de propósito em relação ao relato do dia dita a diferença de retenção: **o áudio de um ditado é apagado no instante em que a transcrição sai** (e também quando o job falha — sem texto ele não serve para nada, e regravar são segundos). No relato do dia a gravação *é* o registro e o cuidador pode querer reouvi-la; num ditado ela é insumo descartável, e guardá-la seria acumular a voz da pessoa sem motivo.
+
+As linhas em si são apagadas por `VOICE_NOTE_RETENTION_DAYS` (padrão: 7 dias) no job de retenção, o que também limpa os `draft` abandonados cujo áudio nunca chegou a ser transcrito. Ao contrário do relato do dia, uma falha do S3 não adia o `DELETE`: a chave é derivada do id (`voice-notes/<userId>/<id>/...`) e continua encontrável, enquanto manter a linha guardaria a transcrição por mais tempo — exatamente o que essa limpeza existe para evitar.
+
 ### Lembretes
 - `GET /api/reminders` - Listar lembretes criados manualmente (filtros: `childId`, `status`)
 - `POST /api/reminders` - Criar lembrete (`title`, `dueAt`, `notes?`)
@@ -339,8 +371,8 @@ O feed acima é *pull* — o app precisa ser aberto para ver o que vence. Isto a
 **Web Push**: requer `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (gerar uma vez com `npx web-push generate-vapid-keys` e manter estável — trocar as chaves invalida toda inscrição já salva). Uma inscrição que o serviço de push reporta como definitivamente inválida (HTTP 404/410 — geralmente o usuário revogou a permissão ou desinstalou o navegador) é removida automaticamente na próxima tentativa de envio.
 
 ### Retenção de dados (LGPD Art. 6º III — minimização)
-`access_logs` (trilha de auditoria) e `reminder_notifications` (guarda de idempotência do digest) não tinham nenhuma política de retenção — cresciam para sempre.
-- `POST /api/system/retention-cleanup` - **Não é uma rota de usuário**, mesmo padrão do `reminder-digest` acima: protegida pelo `cronAuthMiddleware` (header `X-Cron-Secret` comparado a `CRON_SECRET` em tempo constante), chamada por um agendador externo. Apaga linhas de `access_logs` mais antigas que `ACCESS_LOG_RETENTION_DAYS` (padrão: 180 dias) e de `reminder_notifications` mais antigas que `REMINDER_NOTIFICATION_RETENTION_DAYS` (padrão: 90 dias). Workflow semanal em `.github/workflows/retention-cleanup.yml`, reutilizando os mesmos secrets `BACKEND_URL`/`CRON_SECRET` do digest de lembretes.
+`access_logs` (trilha de auditoria) e `reminder_notifications` (guarda de idempotência do digest) não tinham nenhuma política de retenção — cresciam para sempre. O áudio dos relatos falados entra na mesma rotina, com uma janela própria.
+- `POST /api/system/retention-cleanup` - **Não é uma rota de usuário**, mesmo padrão do `reminder-digest` acima: protegida pelo `cronAuthMiddleware` (header `X-Cron-Secret` comparado a `CRON_SECRET` em tempo constante), chamada por um agendador externo. Apaga linhas de `access_logs` mais antigas que `ACCESS_LOG_RETENTION_DAYS` (padrão: 180 dias) e de `reminder_notifications` mais antigas que `REMINDER_NOTIFICATION_RETENTION_DAYS` (padrão: 90 dias). Também apaga ditados (`voice_notes`) mais antigos que `VOICE_NOTE_RETENTION_DAYS` (padrão: 7 dias), junto com qualquer áudio abandonado deles, e expira o áudio dos relatos falados (ver abaixo): 30 dias após a gravação, o arquivo de áudio e o JSON bruto do Transcribe são apagados do S3 e as colunas correspondentes são zeradas — a transcrição e o relatório estruturado, que são o registro durável, permanecem. As colunas só são zeradas depois que o objeto realmente sai do bucket; se o S3 falhar, a linha fica como está e a próxima execução tenta de novo, em vez de perder a única referência ao arquivo. Linhas ainda em `transcribing` são puladas. Workflow semanal em `.github/workflows/retention-cleanup.yml`, reutilizando os mesmos secrets `BACKEND_URL`/`CRON_SECRET` do digest de lembretes.
 
 ### Metas estruturadas (PEI/terapêuticas)
 - `GET /api/goals` - Listar metas (filtros: `childId`, `domain`, `status`)

@@ -37,6 +37,8 @@ interface MockPoolConfig {
   children?: Record<string, unknown>[];
   documentsByChild?: Record<string, Record<string, unknown>[]>;
   attachmentsByChild?: Record<string, Record<string, unknown>[]>;
+  dailyReportsByChild?: Record<string, Record<string, unknown>[]>;
+  voiceNotes?: Record<string, unknown>[];
   childrenDeleteRowCount?: number;
   /** Faz qualquer DELETE falhar, para exercitar o ROLLBACK. */
   failOnDelete?: boolean;
@@ -54,6 +56,11 @@ function makePool(config: MockPoolConfig = {}) {
     if (sql.includes('FROM log_attachments')) {
       const childId = params[1] as string;
       return Promise.resolve(makeQueryResult(config.attachmentsByChild?.[childId] ?? []));
+    }
+    if (sql.includes('FROM voice_notes')) return Promise.resolve(makeQueryResult(config.voiceNotes ?? []));
+    if (sql.includes('FROM daily_reports')) {
+      const childId = params[1] as string;
+      return Promise.resolve(makeQueryResult(config.dailyReportsByChild?.[childId] ?? []));
     }
     if (sql.startsWith('DELETE FROM')) {
       if (config.failOnDelete) return Promise.reject(new Error('constraint violation'));
@@ -170,6 +177,48 @@ describe('AccountErasureService', () => {
       for (const call of deleteCalls) {
         expect(call.params).toContain(USER_ID);
       }
+    });
+
+    test('collects abandoned dictation audio, which hangs off the account and no cascade reaches', async () => {
+      const { pool } = makePool({
+        voiceNotes: [
+          { audio_storage_key: 'voice-notes/u/v1/audio.webm', transcript_key: 'voice-notes/u/v1/t.json' },
+          // Ditado já transcrito: o áudio foi descartado na hora, nada a apagar.
+          { audio_storage_key: null, transcript_key: null },
+        ],
+      });
+      const { storage, deleteObject } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      const deleted = deleteObject.mock.calls.map((c) => c[0]);
+      expect(deleted).toContain('voice-notes/u/v1/audio.webm');
+      expect(deleted).toContain('voice-notes/u/v1/t.json');
+      expect(deleted).not.toContain(null);
+    });
+
+    test('collects the spoken daily report audio and transcript, which cascade away with the child', async () => {
+      const { pool } = makePool({
+        children: [{ id: 'child-1' }],
+        dailyReportsByChild: {
+          'child-1': [
+            { audio_storage_key: 'daily-reports/u/r1/audio.webm', transcript_key: 'daily-reports/u/r1/t.json' },
+            // Um relato abandonado antes do upload: sem áudio, sem transcrição.
+            { audio_storage_key: null, transcript_key: null },
+          ],
+        },
+      });
+      const { storage, deleteObject } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      const deleted = deleteObject.mock.calls.map((c) => c[0]);
+      expect(deleted).toContain('daily-reports/u/r1/audio.webm');
+      expect(deleted).toContain('daily-reports/u/r1/t.json');
+      // A linha sem áudio não pode virar uma chamada de delete com `null`.
+      expect(deleted).not.toContain(null);
     });
 
     test('collects and deletes S3 keys across every child the user owns', async () => {

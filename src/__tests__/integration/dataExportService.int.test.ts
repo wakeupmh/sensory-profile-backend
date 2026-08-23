@@ -95,7 +95,7 @@ describe('DataExportService', () => {
       // passed with tables silently missing from the export, which is the one
       // thing this assertion exists to catch. Bump it deliberately when a
       // table is added to CHILD_LINKED_QUERIES.
-      expect(scopedCalls.length).toBe(23);
+      expect(scopedCalls.length).toBe(24);
     });
   });
 

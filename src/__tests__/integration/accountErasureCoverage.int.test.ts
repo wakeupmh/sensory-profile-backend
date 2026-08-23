@@ -43,6 +43,7 @@ const ERASED_DIRECTLY = new Set([
   'examiners',
   'caregivers',
   'user_profiles',
+  'voice_notes',
 ]);
 
 /**
@@ -55,6 +56,7 @@ const ERASED_BY_CASCADE = new Map([
   ['communication_logs', 'children'],
   ['comorbidities', 'children'],
   ['daily_logs', 'children'],
+  ['daily_reports', 'children'],
   ['developmental_milestones', 'children'],
   ['documents', 'children'],
   ['education_plans', 'children'],
