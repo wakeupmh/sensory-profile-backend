@@ -20,7 +20,7 @@ const ALLOWED_AUDIO_TYPES = [
 // MediaRecorder reports `audio/webm;codecs=opus`. The codec parameter is
 // irrelevant to us and to Transcribe, so it's dropped before the allowlist
 // check rather than being enumerated in it.
-const audioMimeSchema = z
+export const audioMimeSchema = z
   .string()
   .max(150)
   .transform((val) => val.split(';')[0].trim().toLowerCase())

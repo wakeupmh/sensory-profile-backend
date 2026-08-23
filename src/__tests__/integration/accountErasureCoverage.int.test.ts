@@ -43,6 +43,7 @@ const ERASED_DIRECTLY = new Set([
   'examiners',
   'caregivers',
   'user_profiles',
+  'voice_notes',
 ]);
 
 /**

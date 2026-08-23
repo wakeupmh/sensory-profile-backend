@@ -88,6 +88,10 @@ const ACCOUNT_LEVEL_QUERIES = {
   examiners: `SELECT * FROM examiners WHERE user_id = $1`,
   caregivers: `SELECT * FROM caregivers WHERE user_id = $1`,
   pushSubscriptions: `SELECT * FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`,
+  // Ditados avulsos ainda não expirados. As chaves de S3 ficam de fora pelo
+  // mesmo motivo do relato do dia: referência interna, não conteúdo do titular.
+  voiceNotes: `SELECT id, status, transcript, error, created_at, updated_at
+     FROM voice_notes WHERE user_id = $1 ORDER BY created_at`,
 } as const;
 
 export class DataExportService {

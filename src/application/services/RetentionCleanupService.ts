@@ -4,11 +4,15 @@ import logger from '../../infrastructure/utils/logger';
 
 const DEFAULT_ACCESS_LOG_RETENTION_DAYS = 180;
 const DEFAULT_REMINDER_NOTIFICATION_RETENTION_DAYS = 90;
+// Um ditado existe para virar texto num campo e ser esquecido. Uma semana já é
+// folga generosa para um cliente que ficou offline no meio do processo.
+const DEFAULT_VOICE_NOTE_RETENTION_DAYS = 7;
 
 export interface RetentionCleanupResult {
   accessLogsDeleted: number;
   reminderNotificationsDeleted: number;
   dailyReportAudiosExpired: number;
+  voiceNotesDeleted: number;
 }
 
 function retentionDays(envVar: string, fallback: number): number {
@@ -53,7 +57,46 @@ export class RetentionCleanupService {
       accessLogsDeleted: accessLogsResult.rowCount ?? 0,
       reminderNotificationsDeleted: reminderNotificationsResult.rowCount ?? 0,
       dailyReportAudiosExpired: await this.expireDailyReportAudio(),
+      voiceNotesDeleted: await this.deleteExpiredVoiceNotes(),
     };
+  }
+
+  /**
+   * Ditados avulsos são descartáveis por construção: o áudio já foi apagado
+   * quando a transcrição saiu, e o texto já foi para o campo que o pediu.
+   * O que sobra aqui é rastro — inclusive os `draft` abandonados, cujo áudio
+   * nunca chegou a ser transcrito e por isso ainda está no bucket.
+   */
+  private async deleteExpiredVoiceNotes(): Promise<number> {
+    const days = retentionDays('VOICE_NOTE_RETENTION_DAYS', DEFAULT_VOICE_NOTE_RETENTION_DAYS);
+    const { rows } = await this.pool.query<{
+      id: string;
+      audio_storage_key: string | null;
+      transcript_key: string | null;
+    }>(
+      `SELECT id, audio_storage_key, transcript_key FROM voice_notes
+        WHERE created_at < NOW() - ($1 || ' days')::interval`,
+      [days],
+    );
+    if (rows.length === 0) return 0;
+
+    // Ao contrário do relato do dia, um objeto que não sai do S3 não impede o
+    // DELETE: a linha não é a única referência — a chave é derivada do id
+    // (`voice-notes/<userId>/<id>/...`) e a varredura do bucket a encontra.
+    // Manter a linha só para tentar de novo guardaria a transcrição por mais
+    // tempo, que é justamente o que esta limpeza existe para evitar.
+    const keys = rows.flatMap((r) =>
+      [r.audio_storage_key, r.transcript_key].filter((k): k is string => k !== null),
+    );
+    const results = await Promise.allSettled(keys.map((key) => this.storage.deleteObject(key)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) logger.warn('[RetentionCleanup] some voice note objects could not be deleted', { failed });
+
+    const deleted = await this.pool.query(
+      `DELETE FROM voice_notes WHERE created_at < NOW() - ($1 || ' days')::interval`,
+      [days],
+    );
+    return deleted.rowCount ?? 0;
   }
 
   /**

@@ -23,6 +23,7 @@ function makePool(accessLogsDeleted = 0, reminderNotificationsDeleted = 0) {
     if (sql.includes('FROM access_logs')) return Promise.resolve({ rows: [], rowCount: accessLogsDeleted });
     if (sql.includes('FROM reminder_notifications')) return Promise.resolve({ rows: [], rowCount: reminderNotificationsDeleted });
     if (sql.includes('FROM daily_reports')) return Promise.resolve({ rows: [], rowCount: 0 });
+    if (sql.includes('FROM voice_notes')) return Promise.resolve({ rows: [], rowCount: 0 });
     throw new Error(`Unexpected query: ${sql}`);
   });
   const pool = { query: mockQuery } as unknown as Pool;
@@ -100,7 +101,7 @@ describe('RetentionCleanupService', () => {
 
     const result = await service.run();
 
-    expect(result).toEqual({ accessLogsDeleted: 42, reminderNotificationsDeleted: 7, dailyReportAudiosExpired: 0 });
+    expect(result).toEqual({ accessLogsDeleted: 42, reminderNotificationsDeleted: 7, dailyReportAudiosExpired: 0, voiceNotesDeleted: 0 });
   });
 });
 
@@ -111,6 +112,7 @@ describe('RetentionCleanupService — daily report audio expiry', () => {
       calls.push({ sql, params });
       if (sql.includes('FROM access_logs')) return Promise.resolve({ rows: [], rowCount: 0 });
       if (sql.includes('FROM reminder_notifications')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('FROM voice_notes')) return Promise.resolve({ rows: [], rowCount: 0 });
       if (sql.includes('SELECT id, audio_storage_key')) return Promise.resolve({ rows, rowCount: rows.length });
       if (sql.includes('UPDATE daily_reports')) return Promise.resolve({ rows: [], rowCount: 1 });
       throw new Error(`Unexpected query: ${sql}`);
@@ -158,5 +160,71 @@ describe('RetentionCleanupService — daily report audio expiry', () => {
 
     const select = calls.find((c) => c.sql.includes('SELECT id, audio_storage_key'));
     expect(select?.sql).toContain("status <> 'transcribing'");
+  });
+});
+
+describe('RetentionCleanupService — voice note cleanup', () => {
+  function makeVoicePool(rows: Array<{ id: string; audio_storage_key: string | null; transcript_key: string | null }>) {
+    const calls: Array<{ sql: string; params: unknown[] }> = [];
+    const mockQuery = jest.fn().mockImplementation((sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      if (sql.includes('FROM access_logs')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('FROM reminder_notifications')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('FROM daily_reports')) return Promise.resolve({ rows: [], rowCount: 0 });
+      if (sql.includes('DELETE FROM voice_notes')) return Promise.resolve({ rows: [], rowCount: rows.length });
+      if (sql.includes('FROM voice_notes')) return Promise.resolve({ rows, rowCount: rows.length });
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    return { pool: { query: mockQuery } as unknown as Pool, calls };
+  }
+
+  function makeStorage(deleteObject: jest.Mock) {
+    return { deleteObject } as unknown as import('infrastructure/storage/S3StorageService').S3StorageService;
+  }
+
+  const originalDays = process.env.VOICE_NOTE_RETENTION_DAYS;
+  afterEach(() => {
+    if (originalDays === undefined) delete process.env.VOICE_NOTE_RETENTION_DAYS;
+    else process.env.VOICE_NOTE_RETENTION_DAYS = originalDays;
+  });
+
+  test('deletes abandoned dictations along with any audio still in the bucket', async () => {
+    delete process.env.VOICE_NOTE_RETENTION_DAYS;
+    const { pool, calls } = makeVoicePool([
+      { id: 'v1', audio_storage_key: 'voice-notes/u/v1/audio.webm', transcript_key: null },
+      // Já transcrito: o áudio saiu na hora, só a linha sobrou.
+      { id: 'v2', audio_storage_key: null, transcript_key: null },
+    ]);
+    const deleteObject = jest.fn().mockResolvedValue(undefined);
+    const service = new RetentionCleanupService(pool, makeStorage(deleteObject));
+
+    const result = await service.run();
+
+    expect(deleteObject).toHaveBeenCalledWith('voice-notes/u/v1/audio.webm');
+    expect(deleteObject).toHaveBeenCalledTimes(1);
+    expect(result.voiceNotesDeleted).toBe(2);
+    expect(calls.find((c) => c.sql.includes('DELETE FROM voice_notes'))?.params[0]).toBe(7);
+  });
+
+  test('deletes the rows even when S3 refuses, so a transcript is not kept indefinitely', async () => {
+    const { pool, calls } = makeVoicePool([
+      { id: 'v1', audio_storage_key: 'voice-notes/u/v1/audio.webm', transcript_key: null },
+    ]);
+    const service = new RetentionCleanupService(pool, makeStorage(jest.fn().mockRejectedValue(new Error('S3 down'))));
+
+    const result = await service.run();
+
+    expect(calls.some((c) => c.sql.includes('DELETE FROM voice_notes'))).toBe(true);
+    expect(result.voiceNotesDeleted).toBe(1);
+  });
+
+  test('honors VOICE_NOTE_RETENTION_DAYS', async () => {
+    process.env.VOICE_NOTE_RETENTION_DAYS = '2';
+    const { pool, calls } = makeVoicePool([]);
+    const service = new RetentionCleanupService(pool, makeStorage(jest.fn()));
+
+    await service.run();
+
+    expect(calls.find((c) => c.sql.includes('FROM voice_notes'))?.params[0]).toBe(2);
   });
 });
