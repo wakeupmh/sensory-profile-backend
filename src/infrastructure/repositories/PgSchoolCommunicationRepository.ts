@@ -11,7 +11,7 @@ import {
   SchoolCommunicationFilters,
   SchoolCommunicationSummary,
 } from '../../domain/repositories/SchoolCommunicationRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -75,10 +75,8 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
   }
 
   async findById(id: string, userId: string): Promise<SchoolCommunication | null> {
-    const result = await pool.query(
-      `SELECT * FROM school_communications WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('school_communications', id, userId);
+    const result = await pool.query(`SELECT * FROM school_communications WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
   }
 
@@ -168,10 +166,8 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM school_communications WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('school_communications', id, userId);
+    const result = await pool.query(`DELETE FROM school_communications WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

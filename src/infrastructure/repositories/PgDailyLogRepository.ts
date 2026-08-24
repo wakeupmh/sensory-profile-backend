@@ -6,7 +6,7 @@ import {
   DailyLogUpdateInput,
   DailyLogFilters,
 } from '../../domain/repositories/DailyLogRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -35,10 +35,8 @@ export class PgDailyLogRepository implements DailyLogRepository {
   }
 
   async findById(id: string, userId: string): Promise<DailyLog | null> {
-    const result = await pool.query(
-      `SELECT * FROM daily_logs WHERE id = $1 AND user_id = $2`,
-      [id, userId]
-    );
+    const scope = scopedById('daily_logs', id, userId);
+    const result = await pool.query(`SELECT * FROM daily_logs WHERE ${scope.where}`, scope.params);
     if (result.rows.length === 0) return null;
     return this.mapRowToLog(result.rows[0]);
   }
@@ -126,10 +124,8 @@ export class PgDailyLogRepository implements DailyLogRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM daily_logs WHERE id = $1 AND user_id = $2`,
-      [id, userId]
-    );
+    const scope = scopedById('daily_logs', id, userId);
+    const result = await pool.query(`DELETE FROM daily_logs WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 

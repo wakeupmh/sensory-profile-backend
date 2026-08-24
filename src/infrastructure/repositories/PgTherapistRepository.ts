@@ -5,6 +5,7 @@ import {
   TherapistCreateInput,
   TherapistUpdateInput,
 } from '../../domain/repositories/TherapistRepository';
+import { scopedById } from './queryUtils';
 
 export class PgTherapistRepository implements TherapistRepository {
   private mapRowToTherapist(row: Record<string, unknown>): Therapist {
@@ -41,10 +42,8 @@ export class PgTherapistRepository implements TherapistRepository {
   }
 
   async findById(id: string, userId: string): Promise<Therapist | null> {
-    const result = await pool.query(
-      `SELECT * FROM therapists WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('therapists', id, userId);
+    const result = await pool.query(`SELECT * FROM therapists WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToTherapist(result.rows[0]);
   }
 
@@ -97,10 +96,8 @@ export class PgTherapistRepository implements TherapistRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM therapists WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('therapists', id, userId);
+    const result = await pool.query(`DELETE FROM therapists WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

@@ -11,7 +11,7 @@ import {
   MilestoneUpdateInput,
   MilestoneFilters,
 } from '../../domain/repositories/DevelopmentalMilestoneRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -59,10 +59,8 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
   }
 
   async findById(id: string, userId: string): Promise<DevelopmentalMilestone | null> {
-    const result = await pool.query(
-      `SELECT * FROM developmental_milestones WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('developmental_milestones', id, userId);
+    const result = await pool.query(`SELECT * FROM developmental_milestones WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToMilestone(result.rows[0]);
   }
 
@@ -124,10 +122,8 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM developmental_milestones WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('developmental_milestones', id, userId);
+    const result = await pool.query(`DELETE FROM developmental_milestones WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

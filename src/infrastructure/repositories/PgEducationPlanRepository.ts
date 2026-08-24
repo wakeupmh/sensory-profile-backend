@@ -10,6 +10,7 @@ import {
   EducationPlanUpdateInput,
   EducationPlanFilters,
 } from '../../domain/repositories/EducationPlanRepository';
+import { scopedById } from './queryUtils';
 
 export class PgEducationPlanRepository implements EducationPlanRepository {
   private mapRow(row: Record<string, unknown>): EducationPlan {
@@ -57,10 +58,8 @@ export class PgEducationPlanRepository implements EducationPlanRepository {
   }
 
   async findById(id: string, userId: string): Promise<EducationPlan | null> {
-    const result = await pool.query(
-      `SELECT * FROM education_plans WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('education_plans', id, userId);
+    const result = await pool.query(`SELECT * FROM education_plans WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 
@@ -124,10 +123,8 @@ export class PgEducationPlanRepository implements EducationPlanRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM education_plans WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('education_plans', id, userId);
+    const result = await pool.query(`DELETE FROM education_plans WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

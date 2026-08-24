@@ -1,3 +1,60 @@
+import { currentScope } from '../database/requestScope';
+
+/**
+ * Tabelas que têm coluna `child_id` e portanto podem — e devem — ser
+ * restringidas quando a requisição chega por delegação. Lista explícita, e
+ * não uma checagem em tempo de execução, para que uma tabela nova exija uma
+ * decisão consciente; `delegationScopeCoverage.int.test.ts` compara esta
+ * lista com o schema vivo e falha se alguma tabela com `child_id` ficar de
+ * fora, do mesmo jeito que o teste de cobertura da eliminação faz.
+ */
+export const CHILD_SCOPED_TABLES = new Set([
+  'access_logs',
+  'ai_summaries',
+  'caregiver_shares',
+  'child_shares',
+  'communication_logs',
+  'comorbidities',
+  'daily_logs',
+  'daily_reports',
+  'developmental_milestones',
+  'documents',
+  'education_plans',
+  'goals',
+  'medical_appointments',
+  'medications',
+  'professional_notes',
+  'reminders',
+  'report_shares',
+  'school_communications',
+  'sensory_assessments',
+  'therapy_sessions',
+]);
+
+/**
+ * Predicado para buscar/alterar UM registro pelo id, já com o escopo da
+ * requisição aplicado.
+ *
+ * Escrever `WHERE id = $1 AND user_id = $2` à mão era o buraco: sob delegação
+ * o `user_id` é o do DONO, então um cuidador convidado para uma criança
+ * alcançava qualquer registro das outras crianças dele bastando saber o id.
+ */
+export function scopedById(
+  table: string,
+  id: string,
+  userId: string,
+): { where: string; params: unknown[]; nextIndex: number } {
+  const { restrictedToChildId } = currentScope();
+  if (restrictedToChildId && CHILD_SCOPED_TABLES.has(table)) {
+    return {
+      where: 'id = $1 AND user_id = $2 AND child_id = $3',
+      params: [id, userId, restrictedToChildId],
+      nextIndex: 4,
+    };
+  }
+  return { where: 'id = $1 AND user_id = $2', params: [id, userId], nextIndex: 3 };
+}
+
 /**
  * Specification for a single filter field: which DB column and operator to use.
  * Defaults to `=` when operator is omitted.
@@ -23,6 +80,16 @@ export function buildWhere(
   const conditions: string[] = ['user_id = $1'];
   const params: unknown[] = [userId];
   let idx = 2;
+
+  // Sob delegação a listagem já vem com `childId` preenchido pelo middleware,
+  // mas isso depende de a listagem ter esse filtro no mapping. Aplicar aqui
+  // também fecha o caso de um mapping que não o tenha — a restrição passa a
+  // ser propriedade do construtor de SQL, não de cada chamada.
+  const { restrictedToChildId } = currentScope();
+  if (restrictedToChildId && !Object.values(mapping).some(([column]) => column === 'child_id')) {
+    conditions.push(`child_id = $${idx++}`);
+    params.push(restrictedToChildId);
+  }
 
   if (filters) {
     for (const [key, spec] of Object.entries(mapping)) {

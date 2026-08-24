@@ -6,6 +6,7 @@ import {
   MedicationUpdateInput,
   MedicationFilters,
 } from '../../domain/repositories/MedicationRepository';
+import { scopedById } from './queryUtils';
 
 export class PgMedicationRepository implements MedicationRepository {
   private mapRowToMedication(row: Record<string, unknown>): Medication {
@@ -51,10 +52,8 @@ export class PgMedicationRepository implements MedicationRepository {
   }
 
   async findById(id: string, userId: string): Promise<Medication | null> {
-    const result = await pool.query(
-      `SELECT * FROM medications WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('medications', id, userId);
+    const result = await pool.query(`SELECT * FROM medications WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToMedication(result.rows[0]);
   }
 
@@ -132,10 +131,8 @@ export class PgMedicationRepository implements MedicationRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM medications WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('medications', id, userId);
+    const result = await pool.query(`DELETE FROM medications WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

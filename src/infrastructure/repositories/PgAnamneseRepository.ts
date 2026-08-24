@@ -22,6 +22,7 @@ import {
   AnamneseCreateInput,
   AnamneseUpdateInput,
 } from '../../domain/repositories/AnamneseRepository';
+import { scopedById } from './queryUtils';
 
 export class PgAnamneseRepository implements AnamneseRepository {
   async findAllByUser(userId: string): Promise<AnamneseSummary[]> {
@@ -50,10 +51,8 @@ export class PgAnamneseRepository implements AnamneseRepository {
   }
 
   async findById(id: string, userId: string): Promise<Anamnese | null> {
-    const result = await pool.query(
-      `SELECT * FROM anamneses WHERE id = $1 AND user_id = $2`,
-      [id, userId]
-    );
+    const scope = scopedById('anamneses', id, userId);
+    const result = await pool.query(`SELECT * FROM anamneses WHERE ${scope.where}`, scope.params);
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);
   }
@@ -133,10 +132,8 @@ export class PgAnamneseRepository implements AnamneseRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM anamneses WHERE id = $1 AND user_id = $2`,
-      [id, userId]
-    );
+    const scope = scopedById('anamneses', id, userId);
+    const result = await pool.query(`DELETE FROM anamneses WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -159,15 +156,13 @@ export class PgAnamneseRepository implements AnamneseRepository {
   }
 
   async clearShareToken(id: string, userId: string): Promise<Anamnese | null> {
-    const result = await pool.query(
-      `UPDATE anamneses SET
+    const scope = scopedById('anamneses', id, userId);
+    const result = await pool.query(`UPDATE anamneses SET
          share_token = NULL,
          shared_at   = NULL,
          updated_at  = CURRENT_TIMESTAMP
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [id, userId]
-    );
+       WHERE ${scope.where}
+       RETURNING *`, scope.params);
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);
   }

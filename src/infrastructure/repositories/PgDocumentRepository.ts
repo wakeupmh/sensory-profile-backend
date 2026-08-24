@@ -6,7 +6,7 @@ import {
   DocumentUpdateInput,
   DocumentFilters,
 } from '../../domain/repositories/DocumentRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -59,7 +59,8 @@ export class PgDocumentRepository implements DocumentRepository {
   }
 
   async findById(id: string, userId: string): Promise<Document | null> {
-    const result = await pool.query(`SELECT * FROM documents WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('documents', id, userId);
+    const result = await pool.query(`SELECT * FROM documents WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 
@@ -96,7 +97,8 @@ export class PgDocumentRepository implements DocumentRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(`DELETE FROM documents WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('documents', id, userId);
+    const result = await pool.query(`DELETE FROM documents WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

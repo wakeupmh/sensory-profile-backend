@@ -4,6 +4,7 @@ import { NotFoundError } from '../utils/errors/CustomErrors';
 import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
+import { scopedById } from './queryUtils';
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
@@ -226,7 +227,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
 
   async delete(id: string, userId: string, externalClient?: PoolClient): Promise<void> {
     const queryable = externalClient ?? pool;
-    await queryable.query('DELETE FROM sensory_assessments WHERE id = $1 AND user_id = $2', [id, userId]);
+    const scope = scopedById('sensory_assessments', id, userId);
+    await queryable.query(`DELETE FROM sensory_assessments WHERE ${scope.where}`, scope.params);
   }
 
   async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<AssessmentWithRelations[]> {

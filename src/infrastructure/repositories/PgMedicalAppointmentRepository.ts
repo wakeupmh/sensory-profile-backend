@@ -6,7 +6,7 @@ import {
   MedicalAppointmentUpdateInput,
   MedicalAppointmentFilters,
 } from '../../domain/repositories/MedicalAppointmentRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -70,10 +70,8 @@ export class PgMedicalAppointmentRepository implements MedicalAppointmentReposit
   }
 
   async findById(id: string, userId: string): Promise<MedicalAppointment | null> {
-    const result = await pool.query(
-      `SELECT * FROM medical_appointments WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('medical_appointments', id, userId);
+    const result = await pool.query(`SELECT * FROM medical_appointments WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToAppointment(result.rows[0]);
   }
 
@@ -159,10 +157,8 @@ export class PgMedicalAppointmentRepository implements MedicalAppointmentReposit
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM medical_appointments WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('medical_appointments', id, userId);
+    const result = await pool.query(`DELETE FROM medical_appointments WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

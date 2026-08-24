@@ -6,7 +6,7 @@ import {
   GoalUpdateInput,
   GoalFilters,
 } from '../../domain/repositories/GoalRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -66,7 +66,8 @@ export class PgGoalRepository implements GoalRepository {
   }
 
   async findById(id: string, userId: string): Promise<Goal | null> {
-    const result = await pool.query(`SELECT * FROM goals WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('goals', id, userId);
+    const result = await pool.query(`SELECT * FROM goals WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 
@@ -118,7 +119,8 @@ export class PgGoalRepository implements GoalRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(`DELETE FROM goals WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('goals', id, userId);
+    const result = await pool.query(`DELETE FROM goals WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }
