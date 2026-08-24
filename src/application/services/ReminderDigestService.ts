@@ -10,6 +10,14 @@ import logger from '../../infrastructure/utils/logger';
 // Reminders due within this window get notified. Matches the default
 // "upcoming" horizon the frontend widget shows, so a daily digest run
 // catches everything a user would see if they opened the app today.
+/**
+ * Usuários processados em paralelo. Cada um dispara 8 consultas em paralelo
+ * dentro de `getUpcoming`, e o pool tem 10 conexões — então este número é
+ * baixo de propósito: o ganho vem de sobrepor as chamadas de rede, não de
+ * espremer o banco.
+ */
+const USER_BATCH_SIZE = 4;
+
 const NOTIFY_WINDOW_DAYS = 3;
 
 export interface ReminderDigestResult {
@@ -102,32 +110,48 @@ export class ReminderDigestService {
       pushFailed: 0,
     };
 
-    for (const userId of userIds) {
-      try {
-        const items = await this.upcomingReminderService.getUpcoming(userId, undefined, NOTIFY_WINDOW_DAYS);
-        if (items.length === 0) continue;
+    // Em lotes, e não um usuário por vez. O relógio desta rotina é dominado
+    // por trabalho de REDE — uma chamada ao SES por usuário, ~200ms — que não
+    // usa o pool de conexões. Em série, mil usuários levavam minutos numa
+    // única requisição HTTP; o agendador desiste em 5 minutos (`--max-time`)
+    // enquanto o servidor continua rodando, e o workflow reporta falha de uma
+    // execução que na verdade seguiu em frente.
+    //
+    // O tamanho do lote é modesto de propósito: cada usuário ainda dispara as
+    // 8 consultas de `getUpcoming` em paralelo, e o pool tem 10 conexões.
+    const ids = [...userIds];
+    for (let i = 0; i < ids.length; i += USER_BATCH_SIZE) {
+      await Promise.all(
+        ids.slice(i, i + USER_BATCH_SIZE).map(async (userId) => {
+          try {
+            const items = await this.upcomingReminderService.getUpcoming(userId, undefined, NOTIFY_WINDOW_DAYS);
+            if (items.length === 0) return;
 
-        let notified = false;
+            let notified = false;
 
-        const email = emailByUser.get(userId);
-        if (email) {
-          const sent = await this.sendEmailChannel(userId, email, items, result);
-          notified = notified || sent;
-        }
+            const email = emailByUser.get(userId);
+            if (email) {
+              const sent = await this.sendEmailChannel(userId, email, items, result);
+              notified = notified || sent;
+            }
 
-        const subscriptions = pushSubscriptionsByUser.get(userId) ?? [];
-        if (subscriptions.length > 0) {
-          const sent = await this.sendPushChannel(userId, subscriptions, items, result);
-          notified = notified || sent;
-        }
+            const subscriptions = pushSubscriptionsByUser.get(userId) ?? [];
+            if (subscriptions.length > 0) {
+              const sent = await this.sendPushChannel(userId, subscriptions, items, result);
+              notified = notified || sent;
+            }
 
-        if (notified) result.usersNotified += 1;
-      } catch (error) {
-        logger.error('[ReminderDigestService] failed to process user', {
-          userId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+            if (notified) result.usersNotified += 1;
+          } catch (error) {
+            // Falhar um usuário não pode derrubar a execução inteira: os
+            // outros ainda precisam receber.
+            logger.error('[ReminderDigestService] failed to process user', {
+              userId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+      );
     }
 
     return result;
@@ -150,12 +174,8 @@ export class ReminderDigestService {
     items: UpcomingReminderItem[],
     result: ReminderDigestResult,
   ): Promise<boolean> {
-    const unsent: UpcomingReminderItem[] = [];
-    for (const item of items) {
-      const key = reminderKey(item);
-      const reserved = await this.notificationRepo.reserve(userId, key, 'email');
-      if (reserved) unsent.push(item);
-    }
+    const reserved = new Set(await this.notificationRepo.reserveMany(userId, items.map(reminderKey), 'email'));
+    const unsent = items.filter((item) => reserved.has(reminderKey(item)));
     if (unsent.length === 0) return false;
 
     const { subject, body } = buildDigestEmail(unsent);
@@ -166,7 +186,7 @@ export class ReminderDigestService {
     } catch (sendError) {
       // Sending failed after reserving — release so the next run retries
       // these instead of silently losing them forever.
-      await Promise.all(unsent.map((item) => this.notificationRepo.release(userId, reminderKey(item), 'email')));
+      await this.notificationRepo.releaseMany(userId, unsent.map(reminderKey), 'email');
       result.emailsFailed += 1;
       logger.warn('[ReminderDigestService] failed to send digest email', {
         userId,
@@ -182,12 +202,8 @@ export class ReminderDigestService {
     items: UpcomingReminderItem[],
     result: ReminderDigestResult,
   ): Promise<boolean> {
-    const unsent: UpcomingReminderItem[] = [];
-    for (const item of items) {
-      const key = reminderKey(item);
-      const reserved = await this.notificationRepo.reserve(userId, key, 'push');
-      if (reserved) unsent.push(item);
-    }
+    const reserved = new Set(await this.notificationRepo.reserveMany(userId, items.map(reminderKey), 'push'));
+    const unsent = items.filter((item) => reserved.has(reminderKey(item)));
     if (unsent.length === 0) return false;
 
     const payload = buildDigestPush(unsent);
@@ -218,7 +234,7 @@ export class ReminderDigestService {
       result.pushSent += 1;
     } else {
       // No device reachable — release so the next run retries instead of losing these forever.
-      await Promise.all(unsent.map((item) => this.notificationRepo.release(userId, reminderKey(item), 'push')));
+      await this.notificationRepo.releaseMany(userId, unsent.map(reminderKey), 'push');
       result.pushFailed += 1;
     }
     return anySent;
