@@ -4,7 +4,7 @@ import logger from '../../../infrastructure/utils/logger';
 import { MedicationService } from '../../../application/services/MedicationService';
 import { createMedicationSchema, updateMedicationSchema, listMedicationFiltersSchema } from '../validations/medicalValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class MedicationController {
   constructor(private readonly service: MedicationService) {}

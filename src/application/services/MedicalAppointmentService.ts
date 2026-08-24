@@ -1,5 +1,5 @@
-import { MedicalAppointment, MedicalAppointmentSummary } from '../../domain/entities/MedicalAppointment';
-import { MedicalAppointmentRepository, MedicalAppointmentCreateInput, MedicalAppointmentUpdateInput, MedicalAppointmentFilters } from '../../domain/repositories/MedicalAppointmentRepository';
+import { MedicalAppointment } from '../../domain/entities/MedicalAppointment';
+import { MedicalAppointmentRepository, MedicalAppointmentCreateInput, MedicalAppointmentUpdateInput } from '../../domain/repositories/MedicalAppointmentRepository';
 import { BaseDomainService } from './BaseDomainService';
 
 export interface CreateAppointmentPayload {

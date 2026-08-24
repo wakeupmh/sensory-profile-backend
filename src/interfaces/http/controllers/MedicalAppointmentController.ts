@@ -4,7 +4,7 @@ import logger from '../../../infrastructure/utils/logger';
 import { MedicalAppointmentService } from '../../../application/services/MedicalAppointmentService';
 import { createAppointmentSchema, updateAppointmentSchema, listAppointmentFiltersSchema } from '../validations/medicalValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class MedicalAppointmentController {
   constructor(private readonly service: MedicalAppointmentService) {}

@@ -6,7 +6,6 @@ import {
   BaseError,
   ValidationError,
   InternalServerError,
-  isOperationalError,
   serializeError
 } from './CustomErrors';
 import logger from '../logger';
@@ -62,7 +61,9 @@ export const errorHandler = (
   error: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  // Não usado, mas obrigatório: o Express identifica um error handler pela
+  // aridade 4 da função. Removê-lo faria este handler deixar de ser chamado.
+  _next: NextFunction
 ): void => {
   let customError: BaseError;
 

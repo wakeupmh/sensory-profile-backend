@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export const LOG_TYPES = ['abc', 'mood', 'sleep', 'food', 'toileting'] as const;
+export { LOG_TYPES } from '../../../domain/entities/DailyLog';
+import { LOG_TYPES } from '../../../domain/entities/DailyLog';
+
 export const logTypeEnum = z.enum(LOG_TYPES);
 
 // Canonical shape for ABC (Antecedent-Behavior-Consequence) entries. Enforced

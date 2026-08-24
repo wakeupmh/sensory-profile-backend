@@ -341,6 +341,7 @@ export const transformPayloadForService = (payload: CreateAssessmentPayload) => 
 
   try {
     // Import scoring functions dynamically to avoid circular imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- quebra um ciclo real de imports
     const { calculateScores, validateScores } = require('../../../infrastructure/utils/scoring/scoringService');
 
     const scoringResults = calculateScores(payload.responses);

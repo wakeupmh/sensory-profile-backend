@@ -36,7 +36,6 @@ import { TherapistRepository } from 'domain/repositories/TherapistRepository';
 // ---------------------------------------------------------------------------
 
 const USER_ID = 'user-001';
-const OTHER_USER_ID = 'user-002';
 const CHILD_ID_A = '018f4e8a-0000-7000-8000-aaaaaaaaaaaa';
 const CHILD_ID_B = '018f4e8a-0000-7000-8000-bbbbbbbbbbbb';
 const THERAPIST_ID = '018f4e8a-0000-7000-8000-cccccccccccc';

@@ -29,7 +29,7 @@ import { Pool, QueryResult } from 'pg';
 import { ChildProfileService } from 'application/services/ChildProfileService';
 import { ChildService } from 'application/services/ChildService';
 import { Child } from 'domain/entities/Child';
-import type { ChildRepository, ChildCreateInput, ChildUpdateInput } from 'domain/repositories/ChildRepository';
+import type { ChildRepository } from 'domain/repositories/ChildRepository';
 import { NotFoundError } from 'infrastructure/utils/errors/CustomErrors';
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,6 @@ function makePool(
   childRows: Record<string, unknown>[] = [makeChildRow()],
   countOverride: number = 3,
 ): Pool {
-  let callCount = 0;
 
   const mockQuery = jest.fn().mockImplementation((sql: string) => {
     // Timeline UNION query (check before COUNT to avoid matching COUNT(*) OVER())
@@ -113,7 +112,6 @@ function makePool(
     }
     // COUNT queries (profile stats)
     if (sql.includes('COUNT(*)')) {
-      callCount++;
       return Promise.resolve(makeQueryResult([{ cnt: String(countOverride) }]));
     }
     return Promise.resolve(makeQueryResult([]));

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { CaregiverShareService } from '../../../application/services/CaregiverShareService';
 import { inviteCaregiverSchema, acceptCaregiverInvitationSchema } from '../validations/caregiverShareValidation';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
-import { assertValidId, requireOwnUserId, requireUserId } from './controllerUtils';
+import { assertValidId, requireOwnUserId } from './controllerUtils';
 import { jsonResponse, jsonMessage } from '../utils/response';
 import logger from '../../../infrastructure/utils/logger';
 

@@ -8,7 +8,7 @@ import {
   listCommunicationLogFiltersSchema,
 } from '../validations/developmentValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class CommunicationLogController {
   constructor(private readonly service: CommunicationLogService) {}

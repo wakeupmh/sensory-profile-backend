@@ -1,4 +1,3 @@
-import { v7 as uuidv7 } from 'uuid';
 import { TherapySession } from '../../domain/entities/TherapySession';
 import { TherapySessionRepository, TherapySessionCreateInput, TherapySessionUpdateInput, TherapySessionFilters } from '../../domain/repositories/TherapySessionRepository';
 import { TherapistRepository } from '../../domain/repositories/TherapistRepository';

@@ -8,7 +8,7 @@ import {
   listMilestoneFiltersSchema,
 } from '../validations/developmentValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class DevelopmentalMilestoneController {
   constructor(private readonly service: DevelopmentalMilestoneService) {}

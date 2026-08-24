@@ -261,8 +261,6 @@ describe('DailyLogService — CRUD operations', () => {
           userId === USER_ID ? Promise.resolve(makeLog()) : Promise.resolve(null)
       ),
     });
-    const service = new DailyLogService(repo);
-
     const ownersResult = await repo.findById(LOG_ID_1, USER_ID);
     expect(ownersResult).not.toBeNull();
 

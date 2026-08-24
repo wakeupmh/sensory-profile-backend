@@ -8,7 +8,7 @@ import {
   listEducationPlanFiltersSchema,
 } from '../validations/educationValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class EducationPlanController {
   constructor(private readonly service: EducationPlanService) {}
