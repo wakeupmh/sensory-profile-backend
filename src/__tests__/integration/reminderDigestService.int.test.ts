@@ -83,6 +83,9 @@ function makeNotificationRepo(overrides: Partial<ReminderNotificationRepository>
   return {
     reserve: jest.fn().mockResolvedValue(true),
     release: jest.fn().mockResolvedValue(undefined),
+    // Por padrão o lote ganha todas as chaves — o mesmo que `reserve: true`.
+    reserveMany: jest.fn((_u: string, keys: string[]) => Promise.resolve(keys)),
+    releaseMany: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -170,8 +173,11 @@ describe('ReminderDigestService', () => {
 
     const result = await service.run();
 
-    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'email');
-    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r2', 'email');
+    expect(notificationRepo.reserveMany).toHaveBeenCalledWith(
+      'user-001',
+      ['custom:custom:r1', 'custom:custom:r2'],
+      'email',
+    );
     expect(emailService.sendEmail).toHaveBeenCalledTimes(1);
     expect(emailService.sendEmail).toHaveBeenCalledWith(
       'user@example.com',
@@ -183,7 +189,7 @@ describe('ReminderDigestService', () => {
   });
 
   test('does not re-send an email whose reservation was already claimed', async () => {
-    const notificationRepo = makeNotificationRepo({ reserve: jest.fn().mockResolvedValue(false) });
+    const notificationRepo = makeNotificationRepo({ reserveMany: jest.fn().mockResolvedValue([]) });
     const emailService = makeEmailService();
     const service = buildService({ notificationRepo, upcomingService: makeUpcomingService([makeItem()]), emailService });
 
@@ -203,7 +209,7 @@ describe('ReminderDigestService', () => {
 
     const result = await service.run();
 
-    expect(notificationRepo.release).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'email');
+    expect(notificationRepo.releaseMany).toHaveBeenCalledWith('user-001', ['custom:custom:r1'], 'email');
     expect(result.emailsSent).toBe(0);
     expect(result.emailsFailed).toBe(1);
     expect(result.usersNotified).toBe(0);
@@ -267,7 +273,7 @@ describe('ReminderDigestService', () => {
 
     const result = await service.run();
 
-    expect(notificationRepo.reserve).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'push');
+    expect(notificationRepo.reserveMany).toHaveBeenCalledWith('user-001', ['custom:custom:r1'], 'push');
     expect(webPushService.send).toHaveBeenCalledTimes(2);
     expect(webPushService.send).toHaveBeenCalledWith(
       { endpoint: 'https://push.example.com/a', keys: { p256dh: 'p256dh-key', auth: 'auth-key' } },
@@ -280,9 +286,9 @@ describe('ReminderDigestService', () => {
   test('a user with both email and an active push subscription gets both, independently reserved', async () => {
     const reserveCalls: Array<[string, string, ReminderChannel]> = [];
     const notificationRepo = makeNotificationRepo({
-      reserve: jest.fn((userId: string, key: string, channel: ReminderChannel) => {
-        reserveCalls.push([userId, key, channel]);
-        return Promise.resolve(true);
+      reserveMany: jest.fn((userId: string, keys: string[], channel: ReminderChannel) => {
+        for (const key of keys) reserveCalls.push([userId, key, channel]);
+        return Promise.resolve(keys);
       }),
     });
     const emailService = makeEmailService();
@@ -344,9 +350,68 @@ describe('ReminderDigestService', () => {
 
     const result = await service.run();
 
-    expect(notificationRepo.release).toHaveBeenCalledWith('user-001', 'custom:custom:r1', 'push');
+    expect(notificationRepo.releaseMany).toHaveBeenCalledWith('user-001', ['custom:custom:r1'], 'push');
     expect(result.pushSent).toBe(0);
     expect(result.pushFailed).toBe(1);
     expect(result.usersNotified).toBe(0);
+  });
+});
+
+describe('ReminderDigestService — custo e ritmo da execução', () => {
+  test('reserves a user\'s keys in one round trip, not one per reminder', async () => {
+    // Eram 2K idas ao banco por usuário (K lembretes x 2 canais). Com mil
+    // usuários e cinco lembretes cada, isso dominava a contagem de consultas
+    // da rotina inteira.
+    const notificationRepo = makeNotificationRepo();
+    const service = buildService({
+      notificationRepo,
+      upcomingService: makeUpcomingService([
+        makeItem({ id: 'r1' }),
+        makeItem({ id: 'r2' }),
+        makeItem({ id: 'r3' }),
+        makeItem({ id: 'r4' }),
+        makeItem({ id: 'r5' }),
+      ]),
+    });
+
+    await service.run();
+
+    expect((notificationRepo.reserveMany as jest.Mock).mock.calls).toHaveLength(1);
+    expect((notificationRepo.reserveMany as jest.Mock).mock.calls[0][1]).toHaveLength(5);
+    expect(notificationRepo.reserve).not.toHaveBeenCalled();
+  });
+
+  test('overlaps users instead of waiting for each send in turn', async () => {
+    // O relógio da rotina é dominado por rede (uma chamada ao SES por
+    // usuário). Em série, mil usuários levavam minutos numa requisição HTTP.
+    let inFlight = 0;
+    let peak = 0;
+    const emailService = {
+      sendEmail: jest.fn(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight -= 1;
+      }),
+    } as unknown as EmailService;
+
+    const profiles = Array.from({ length: 8 }, (_, i) =>
+      makeProfile({ userId: `user-${i}`, email: `u${i}@example.com` }),
+    );
+    const service = buildService({
+      userProfileRepo: makeUserProfileRepo({
+        findAllEligibleForReminders: jest.fn().mockResolvedValue(profiles),
+      }),
+      emailService,
+      upcomingService: makeUpcomingService([makeItem({ id: 'r1' })]),
+    });
+
+    await service.run();
+
+    expect(emailService.sendEmail).toHaveBeenCalledTimes(8);
+    expect(peak).toBeGreaterThan(1);
+    // Mas com teto: cada usuário ainda dispara 8 consultas em paralelo contra
+    // um pool de 10, então paralelismo irrestrito trocaria um problema por outro.
+    expect(peak).toBeLessThanOrEqual(4);
   });
 });

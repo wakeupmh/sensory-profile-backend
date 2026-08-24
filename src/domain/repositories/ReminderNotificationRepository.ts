@@ -11,6 +11,17 @@ export interface ReminderNotificationRepository {
    */
   reserve(userId: string, reminderKey: string, channel: ReminderChannel): Promise<boolean>;
 
+  /**
+   * Reserva vários de uma vez e devolve as chaves que ESTA chamada ganhou.
+   * O digest reservava item por item em série — com K lembretes por usuário e
+   * dois canais, eram 2K idas ao banco por usuário, o que dominava a contagem
+   * de consultas da execução inteira.
+   */
+  reserveMany(userId: string, reminderKeys: string[], channel: ReminderChannel): Promise<string[]>;
+
   /** Releases a reservation so the reminder is retried on the next run — used when sending fails after reserving. */
   release(userId: string, reminderKey: string, channel: ReminderChannel): Promise<void>;
+
+  /** Contraparte de `reserveMany`, para devolver tudo quando o envio falha. */
+  releaseMany(userId: string, reminderKeys: string[], channel: ReminderChannel): Promise<void>;
 }
