@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import pool from '../database/connection';
 import { Child } from '../../domain/entities/Child';
 import { ChildRepository, ChildCreateInput, ChildUpdateInput } from '../../domain/repositories/ChildRepository';
+import { scopedById } from './queryUtils';
 
 export class PgChildRepository implements ChildRepository {
   async findByUserId(userId: string): Promise<Child[]> {
@@ -13,10 +14,8 @@ export class PgChildRepository implements ChildRepository {
   }
 
   async findById(id: string, userId: string): Promise<Child | null> {
-    const result = await pool.query(
-      `SELECT * FROM children WHERE id = $1 AND user_id = $2`,
-      [id, userId]
-    );
+    const scope = scopedById('children', id, userId);
+    const result = await pool.query(`SELECT * FROM children WHERE ${scope.where}`, scope.params);
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);
   }
@@ -76,7 +75,8 @@ export class PgChildRepository implements ChildRepository {
   async delete(id: string, userId: string): Promise<boolean> {
     const has = await this.hasAssessments(id, userId);
     if (has) return false;
-    const result = await pool.query(`DELETE FROM children WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('children', id, userId);
+    const result = await pool.query(`DELETE FROM children WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 

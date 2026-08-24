@@ -3,15 +3,14 @@ import { ResponseRepository } from '../../domain/repositories/ResponseRepository
 import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
+import { scopedById } from './queryUtils';
 
 export class PgResponseRepository implements ResponseRepository {
   async findByAssessmentId(assessmentId: string, userId?: string): Promise<Response[]> {
     // If userId is provided, we verify that the assessment belongs to the user
     if (userId) {
-      const assessmentCheck = await pool.query(
-        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-        [assessmentId, userId]
-      );
+      const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await pool.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       
       if (assessmentCheck.rows.length === 0) {
         return [];
@@ -28,9 +27,10 @@ export class PgResponseRepository implements ResponseRepository {
 
   async save(response: Response, userId: string): Promise<Response> {
     // Verify that the assessment belongs to the user
+    const _s = scopedById('sensory_assessments', response.getAssessmentId(), userId);
     const assessmentCheck = await pool.query(
-      'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-      [response.getAssessmentId(), userId]
+      `SELECT 1 FROM sensory_assessments WHERE ${_s.where}`,
+      _s.params
     );
     
     if (assessmentCheck.rows.length === 0) {
@@ -64,10 +64,8 @@ export class PgResponseRepository implements ResponseRepository {
     if (externalClient) {
       // Verify that the assessment belongs to the user
       const assessmentId = responses[0].getAssessmentId();
-      const assessmentCheck = await externalClient.query(
-        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-        [assessmentId, userId]
-      );
+      const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await externalClient.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
         throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
       }
@@ -88,10 +86,8 @@ export class PgResponseRepository implements ResponseRepository {
 
       // Verify that the assessment belongs to the user
       const assessmentId = responses[0].getAssessmentId();
-      const assessmentCheck = await client.query(
-        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-        [assessmentId, userId]
-      );
+      const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await client.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
         throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
       }
@@ -127,10 +123,8 @@ export class PgResponseRepository implements ResponseRepository {
     const assessmentId = responseQuery.rows[0].assessment_id;
     
     // Verify that the assessment belongs to the user
-    const assessmentCheck = await pool.query(
-      'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-      [assessmentId, userId]
-    );
+    const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await pool.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
     
     if (assessmentCheck.rows.length === 0) {
       throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
@@ -143,10 +137,8 @@ export class PgResponseRepository implements ResponseRepository {
     const queryable = externalClient ?? pool;
 
     // Verify that the assessment belongs to the user
-    const assessmentCheck = await queryable.query(
-      'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-      [assessmentId, userId]
-    );
+    const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await queryable.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
 
     if (assessmentCheck.rows.length === 0) {
       throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
@@ -159,10 +151,8 @@ export class PgResponseRepository implements ResponseRepository {
     // When an external client (shared transaction) is provided, skip
     // local transaction management — the caller owns BEGIN/COMMIT/ROLLBACK.
     if (externalClient) {
-      const assessmentCheck = await externalClient.query(
-        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-        [assessmentId, userId]
-      );
+      const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await externalClient.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
         throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
       }
@@ -184,10 +174,8 @@ export class PgResponseRepository implements ResponseRepository {
     try {
       await client.query('BEGIN');
 
-      const assessmentCheck = await client.query(
-        'SELECT 1 FROM sensory_assessments WHERE id = $1 AND user_id = $2',
-        [assessmentId, userId]
-      );
+      const _s = scopedById('sensory_assessments', assessmentId, userId);
+      const assessmentCheck = await client.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
         throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
       }

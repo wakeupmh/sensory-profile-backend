@@ -11,7 +11,7 @@ import {
   CommunicationLogFilters,
   CommunicationLogSummary,
 } from '../../domain/repositories/CommunicationLogRepository';
-import { buildWhere, FilterSpec } from './queryUtils';
+import { buildWhere, FilterSpec, scopedById } from './queryUtils';
 
 const FILTER_MAP: Record<string, FilterSpec> = {
   childId: ['child_id'],
@@ -70,10 +70,8 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
   }
 
   async findById(id: string, userId: string): Promise<CommunicationLog | null> {
-    const result = await pool.query(
-      `SELECT * FROM communication_logs WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('communication_logs', id, userId);
+    const result = await pool.query(`SELECT * FROM communication_logs WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
   }
 
@@ -155,10 +153,8 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM communication_logs WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('communication_logs', id, userId);
+    const result = await pool.query(`DELETE FROM communication_logs WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

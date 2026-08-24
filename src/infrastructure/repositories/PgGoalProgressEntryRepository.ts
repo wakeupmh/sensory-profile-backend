@@ -5,6 +5,7 @@ import {
   GoalProgressEntryRepository,
   GoalProgressEntryCreateInput,
 } from '../../domain/repositories/GoalProgressEntryRepository';
+import { scopedById } from './queryUtils';
 
 export class PgGoalProgressEntryRepository implements GoalProgressEntryRepository {
   private mapRow(row: Record<string, unknown>): GoalProgressEntry {
@@ -43,10 +44,8 @@ export class PgGoalProgressEntryRepository implements GoalProgressEntryRepositor
   }
 
   async findById(id: string, userId: string): Promise<GoalProgressEntry | null> {
-    const result = await pool.query(
-      `SELECT * FROM goal_progress_entries WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('goal_progress_entries', id, userId);
+    const result = await pool.query(`SELECT * FROM goal_progress_entries WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 
@@ -59,10 +58,8 @@ export class PgGoalProgressEntryRepository implements GoalProgressEntryRepositor
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM goal_progress_entries WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('goal_progress_entries', id, userId);
+    const result = await pool.query(`DELETE FROM goal_progress_entries WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

@@ -7,6 +7,7 @@ import {
   TherapySessionFilters,
   TherapySessionUpdateInput,
 } from '../../domain/repositories/TherapySessionRepository';
+import { scopedById } from './queryUtils';
 
 export class PgTherapySessionRepository implements TherapySessionRepository {
   private mapRowToSession(row: Record<string, unknown>): TherapySession {
@@ -59,10 +60,8 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
   }
 
   async findById(id: string, userId: string): Promise<TherapySession | null> {
-    const result = await pool.query(
-      `SELECT * FROM therapy_sessions WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('therapy_sessions', id, userId);
+    const result = await pool.query(`SELECT * FROM therapy_sessions WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRowToSession(result.rows[0]);
   }
 
@@ -168,10 +167,8 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM therapy_sessions WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('therapy_sessions', id, userId);
+    const result = await pool.query(`DELETE FROM therapy_sessions WHERE ${scope.where}`, scope.params);
     return (result.rowCount ?? 0) > 0;
   }
 }

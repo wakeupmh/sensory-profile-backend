@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { runWithScope } from '../../../infrastructure/database/requestScope';
 import { CaregiverShareService } from '../../../application/services/CaregiverShareService';
 import { AccessLogService } from '../../../application/services/AccessLogService';
 import { AuthorizationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
@@ -135,7 +136,11 @@ export function createDelegationMiddleware(
         });
       });
 
-      return next();
+      // O resto da requisição corre dentro do escopo, então TODA consulta
+      // construída por `buildWhere`/`scopedById` daqui em diante já sai
+      // restrita a esta criança — inclusive as que endereçam um registro pelo
+      // próprio id, que o filtro de `childId` acima não alcança.
+      return runWithScope({ restrictedToChildId: childId }, () => next());
     } catch (error) {
       return next(error);
     }

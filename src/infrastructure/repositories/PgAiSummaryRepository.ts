@@ -1,6 +1,7 @@
 import pool from '../database/connection';
 import { AiSummary, AiSummaryProps } from '../../domain/entities/AiSummary';
 import { AiSummaryRepository, AiSummaryCreateInput, AiSummaryListResult } from '../../domain/repositories/AiSummaryRepository';
+import { scopedById } from './queryUtils';
 
 export class PgAiSummaryRepository implements AiSummaryRepository {
   private mapRow(row: Record<string, unknown>): AiSummary {
@@ -28,7 +29,8 @@ export class PgAiSummaryRepository implements AiSummaryRepository {
   }
 
   async findById(id: string, userId: string): Promise<AiSummary | null> {
-    const result = await pool.query(`SELECT * FROM ai_summaries WHERE id = $1 AND user_id = $2`, [id, userId]);
+    const scope = scopedById('ai_summaries', id, userId);
+    const result = await pool.query(`SELECT * FROM ai_summaries WHERE ${scope.where}`, scope.params);
     return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
   }
 

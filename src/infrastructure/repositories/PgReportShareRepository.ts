@@ -1,6 +1,7 @@
 import pool from '../database/connection';
 import { ReportShare, ReportShareProps } from '../../domain/entities/ReportShare';
 import { ReportShareRepository } from '../../domain/repositories/ReportShareRepository';
+import { scopedById } from './queryUtils';
 
 export class PgReportShareRepository implements ReportShareRepository {
   private mapRow(row: Record<string, unknown>): ReportShare {
@@ -49,9 +50,7 @@ export class PgReportShareRepository implements ReportShareRepository {
   }
 
   async deleteById(id: string, userId: string): Promise<void> {
-    await pool.query(
-      `DELETE FROM report_shares WHERE id = $1 AND user_id = $2`,
-      [id, userId],
-    );
+    const scope = scopedById('report_shares', id, userId);
+    await pool.query(`DELETE FROM report_shares WHERE ${scope.where}`, scope.params);
   }
 }
