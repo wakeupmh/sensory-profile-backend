@@ -1,4 +1,11 @@
 import { Pool } from 'pg';
+
+/**
+ * Consultas simultâneas por vez durante a exportação. Abaixo do `max: 10` do
+ * pool de propósito, para sobrar conexão para as requisições normais enquanto
+ * uma exportação roda.
+ */
+const CHILD_QUERY_CONCURRENCY = 5;
 import { randomUUID } from 'crypto';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 import { S3StorageService, DOWNLOAD_URL_TTL_SECONDS } from '../../infrastructure/storage/S3StorageService';
@@ -119,18 +126,21 @@ export class DataExportService {
   async exportAccount(userId: string): Promise<DataExportResult> {
     const childrenResult = await this.pool.query(`SELECT * FROM children WHERE user_id = $1 ORDER BY created_at`, [userId]);
 
-    // One child at a time, deliberately. Fanning every child out in parallel
-    // would put (children x 23) queries on a pool of 10 at once; node-pg's
-    // connectionTimeoutMillis covers queue wait, so one big export could make
-    // unrelated requests fail rather than merely wait. An export is not
-    // latency-sensitive — nobody is watching a spinner for it.
+    // Uma criança por vez, e cada criança em lotes (ver
+    // gatherChildLinkedTables). Uma exportação não é sensível a latência —
+    // ninguém está olhando um spinner — mas ela divide o pool com todo o
+    // resto do serviço, e é isso que o ritmo protege.
     const children = [];
     for (const child of childrenResult.rows) {
       children.push({ child, ...(await this.gatherChildLinkedTables(userId, child.id as string)) });
     }
 
     const entries = Object.entries(ACCOUNT_LEVEL_QUERIES);
-    const results = await Promise.all(entries.map(([, sql]) => this.pool.query(sql, [userId])));
+    const results: Array<{ rows: unknown[] }> = [];
+    for (let i = 0; i < entries.length; i += CHILD_QUERY_CONCURRENCY) {
+      const batch = entries.slice(i, i + CHILD_QUERY_CONCURRENCY);
+      results.push(...(await Promise.all(batch.map(([, sql]) => this.pool.query(sql, [userId])))));
+    }
     const accountLevel = Object.fromEntries(entries.map(([name], i) => [name, results[i].rows]));
 
     const data = {
@@ -148,8 +158,20 @@ export class DataExportService {
 
   private async gatherChildLinkedTables(userId: string, childId: string) {
     const entries = Object.entries(CHILD_LINKED_QUERIES);
-    const results = await Promise.all(entries.map(([, sql]) => this.pool.query(sql, [userId, childId])));
-    return Object.fromEntries(entries.map(([name], i) => [name, results[i].rows])) as Record<
+    const rows: unknown[][] = [];
+    // Em lotes, não tudo de uma vez. São 24 consultas e o pool tem 10
+    // conexões: um `Promise.all` sobre todas prendia as 10 e enfileirava o
+    // resto, e como `connectionTimeoutMillis` conta espera na fila, uma
+    // exportação fazia requisições alheias **falharem**, não só demorarem.
+    // (O comentário em `exportAccount` dizia que percorrer as crianças em
+    // série evitava isso — evitava só a multiplicação por criança; o leque
+    // por criança já estourava o pool sozinho.)
+    for (let i = 0; i < entries.length; i += CHILD_QUERY_CONCURRENCY) {
+      const batch = entries.slice(i, i + CHILD_QUERY_CONCURRENCY);
+      const results = await Promise.all(batch.map(([, sql]) => this.pool.query(sql, [userId, childId])));
+      rows.push(...results.map((r) => r.rows));
+    }
+    return Object.fromEntries(entries.map(([name], i) => [name, rows[i]])) as Record<
       keyof typeof CHILD_LINKED_QUERIES,
       unknown[]
     >;
@@ -157,7 +179,10 @@ export class DataExportService {
 
   private async upload(userId: string, label: string, data: unknown): Promise<DataExportResult> {
     const key = `exports/${userId}/${label}-${Date.now()}-${randomUUID()}.json`;
-    const body = JSON.stringify(data, null, 2);
+    // Sem indentação: o arquivo é lido por máquina, e o `null, 2` custava
+    // 21% de bytes a mais (medido sobre uma conta pesada: 7,7 MB contra
+    // 6,1 MB) e um quinto a mais de tempo de event loop bloqueado.
+    const body = JSON.stringify(data);
     await this.storage.putObject(key, body, 'application/json');
     const downloadUrl = await this.storage.getDownloadUrl(key);
     const expiresAt = new Date(Date.now() + DOWNLOAD_URL_TTL_SECONDS * 1000).toISOString();

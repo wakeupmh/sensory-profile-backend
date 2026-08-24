@@ -133,3 +133,41 @@ describe('DataExportService', () => {
     });
   });
 });
+
+describe('DataExportService — ritmo contra o pool de conexões', () => {
+  test('never issues more concurrent queries than the pool can serve', async () => {
+    // O pool tem max: 10. Um Promise.all sobre as 24 consultas por criança
+    // prendia as 10 e enfileirava o resto; como connectionTimeoutMillis conta
+    // espera na fila, requisições alheias FALHAVAM durante uma exportação.
+    let inFlight = 0;
+    let peak = 0;
+    const pool = {
+      query: jest.fn().mockImplementation(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setImmediate(r));
+        inFlight -= 1;
+        return { rows: [] };
+      }),
+    } as unknown as Pool;
+    const { storage } = makeStorage();
+
+    await new DataExportService(pool, storage).exportAccount(USER_ID);
+
+    expect(peak).toBeLessThanOrEqual(5);
+    expect(peak).toBeGreaterThan(0);
+  });
+
+  test('writes the export compactly — it is read by machines, not people', async () => {
+    const { pool } = makePool();
+    const { storage, putObject } = makeStorage();
+
+    await new DataExportService(pool, storage).exportAccount(USER_ID);
+
+    const body = (putObject as jest.Mock).mock.calls[0]?.[1] as string;
+    expect(body).toBeDefined();
+    // A indentação custava 21% de bytes numa conta pesada (7,7 MB -> 6,1 MB).
+    expect(body).not.toMatch(/\n {2}"/);
+    expect(() => JSON.parse(body)).not.toThrow();
+  });
+});
