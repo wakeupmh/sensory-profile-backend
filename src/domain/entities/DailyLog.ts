@@ -1,4 +1,12 @@
-export type LogType = 'abc' | 'mood' | 'sleep' | 'food' | 'toileting';
+/**
+ * Vocabulário do domínio. Morava no arquivo de validação Zod, o que fazia a
+ * camada de aplicação importar de `interfaces/http` para conhecer os tipos de
+ * registro — a dependência apontando para fora, ao contrário do que a
+ * arquitetura em camadas pede. Aqui, o validador importa do domínio.
+ */
+export const LOG_TYPES = ['abc', 'mood', 'sleep', 'food', 'toileting'] as const;
+
+export type LogType = (typeof LOG_TYPES)[number];
 
 export interface AbcData { antecedent: string; behavior: string; consequence: string; intensity?: 1|2|3|4|5; }
 export interface MoodData { level: 1|2|3|4|5; tags?: string[]; }

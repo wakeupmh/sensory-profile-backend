@@ -4,7 +4,7 @@ import logger from '../../../infrastructure/utils/logger';
 import { ComorbidityService } from '../../../application/services/ComorbidityService';
 import { createComorbiditySchema, updateComorbiditySchema, listComorbidityFiltersSchema } from '../validations/medicalValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class ComorbidityController {
   constructor(private readonly service: ComorbidityService) {}

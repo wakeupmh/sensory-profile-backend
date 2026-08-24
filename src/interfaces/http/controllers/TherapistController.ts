@@ -4,7 +4,7 @@ import logger from '../../../infrastructure/utils/logger';
 import { TherapistService } from '../../../application/services/TherapistService';
 import { createTherapistSchema, updateTherapistSchema } from '../validations/therapistValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class TherapistController {
   constructor(private readonly service: TherapistService) {}

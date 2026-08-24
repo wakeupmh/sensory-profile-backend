@@ -1,14 +1,11 @@
 import { Assessment } from '../../../domain/entities/Assessment';
 import { Response } from '../../../domain/entities/Response';
 import { 
-  DataConsistencyError, 
-  ValidationError,
-  BusinessLogicError 
+  DataConsistencyError 
 } from '../errors/CustomErrors';
 import { 
   calculateScores, 
   validateScores, 
-  AssessmentResults,
   SectionScores 
 } from '../scoring/scoringService';
 import logger from '../logger';
@@ -179,7 +176,7 @@ export class DataConsistencyValidator {
       responses.forEach(response => {
         const itemId = response.getItemId();
         
-        Object.entries(sectionItemCounts).forEach(([section, info]) => {
+        Object.entries(sectionItemCounts).forEach(([, info]) => {
           const [minId, maxId] = info.range;
           if (itemId >= minId && itemId <= maxId) {
             info.actual++;

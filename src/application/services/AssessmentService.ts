@@ -2,17 +2,13 @@ import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessm
 import { Response } from '../../domain/entities/Response';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
-import { calculateScores } from '../../infrastructure/utils/scoring/scoringService';
 import { DataConsistencyValidator } from '../../infrastructure/utils/validation/DataConsistencyValidator';
 import {
   NotFoundError,
-  ValidationError,
-  DataConsistencyError,
-  AssessmentNotFoundError
+  ValidationError
 } from '../../infrastructure/utils/errors/CustomErrors';
 import { v7 as uuidv7 } from 'uuid';
 import pool from '../../infrastructure/database/connection';
-import { PoolClient } from 'pg';
 import { PgAssessmentRepository } from '../../infrastructure/repositories/PgAssessmentRepository';
 import { PgResponseRepository } from '../../infrastructure/repositories/PgResponseRepository';
 import { ChildService } from './ChildService';

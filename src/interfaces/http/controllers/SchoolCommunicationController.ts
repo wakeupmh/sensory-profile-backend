@@ -8,7 +8,7 @@ import {
   listSchoolCommFiltersSchema,
 } from '../validations/educationValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class SchoolCommunicationController {
   constructor(private readonly service: SchoolCommunicationService) {}

@@ -4,7 +4,7 @@ import logger from '../../../infrastructure/utils/logger';
 import { TherapySessionService } from '../../../application/services/TherapySessionService';
 import { createSessionSchema, updateSessionSchema, listSessionFiltersSchema } from '../validations/therapySessionValidation';
 import { assertValidId, requireUserId } from './controllerUtils';
-import { jsonResponse, jsonMessage } from '../utils/response';
+import { jsonResponse } from '../utils/response';
 
 export class TherapySessionController {
   constructor(private readonly service: TherapySessionService) {}

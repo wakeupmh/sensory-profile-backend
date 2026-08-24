@@ -61,7 +61,14 @@ export const mapResponseToValue = (response: string): number => {
 };
 
 // Complete item-to-section mapping for Sensory Profile 2 (86 items total)
-const sectionMap: Record<number, keyof SectionScores> = {
+/**
+ * Mapa item -> seção do Perfil Sensorial 2. Exportado porque existia uma
+ * segunda cópia idêntica em sp2Strategy: duas rotas de pontuação vivas liam
+ * tabelas separadas, e editar uma faria o verificador de consistência acusar
+ * divergências fantasma de pontuação — em silêncio, já que nada comparava as
+ * duas. É dado clínico; tem que ter um dono só.
+ */
+export const sectionMap: Record<number, keyof SectionScores> = {
   // Processamento AUDITIVO (items 1-8) - ALL count toward raw score
   1: 'auditoryProcessing', 2: 'auditoryProcessing', 3: 'auditoryProcessing',
   4: 'auditoryProcessing', 5: 'auditoryProcessing', 6: 'auditoryProcessing',
@@ -119,7 +126,8 @@ const sectionMap: Record<number, keyof SectionScores> = {
 // EV = Esquiva (blue) = Sensory Avoidance 
 // SN = Sensibilidade (green) = Sensory Sensitivity
 // OB = Observação (purple) = Registration Increased
-const quadrantMap: Record<number, keyof QuadrantScores> = {
+/** Mapa item -> quadrante. Mesma razão de ser exportado que `sectionMap`. */
+export const quadrantMap: Record<number, keyof QuadrantScores> = {
   // From the official form quadrant table (page 7):
   
   // EX - Exploração/Sensory Seeking (orange items)

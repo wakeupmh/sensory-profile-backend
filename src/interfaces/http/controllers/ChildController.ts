@@ -47,7 +47,11 @@ export class ChildController {
   create = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const userId = requireUserId(req);
     const body = createChildSchema.parse(req.body);
-    logger.info(`[child.create] userId=${userId} name=${body.name}`);
+    // Sem o nome: o printf do winston emite apenas a `message`, então isso
+    // colocava o nome de uma criança nos arquivos de log e no stdout, que num
+    // PaaS vai para um agregador de terceiros com retenção própria. Todos os
+    // outros controllers registram só UUIDs.
+    logger.info(`[child.create] userId=${userId}`);
     const child = await this.service.create(userId, body);
     jsonResponse(res, child.toJSON(), 201);
   });

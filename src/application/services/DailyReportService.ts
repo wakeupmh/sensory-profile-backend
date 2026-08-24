@@ -5,7 +5,7 @@ import { NotFoundError, ValidationError } from '../../infrastructure/utils/error
 import { S3StorageService } from '../../infrastructure/storage/S3StorageService';
 import { TranscriptionService } from '../../infrastructure/transcription/TranscriptionService';
 import { AISummaryService } from './AISummaryService';
-import { LOG_TYPES } from '../../interfaces/http/validations/dailyLogValidation';
+import { LOG_TYPES } from '../../domain/entities/DailyLog';
 import logger from '../../infrastructure/utils/logger';
 
 /**

@@ -24,7 +24,7 @@
  */
 
 import { Pool } from 'pg';
-import { ConsolidatedReportService, ConsolidatedSummary } from 'application/services/ConsolidatedReportService';
+import { ConsolidatedReportService } from 'application/services/ConsolidatedReportService';
 import { ReportShareService } from 'application/services/ReportShareService';
 import { AISummaryService } from 'application/services/AISummaryService';
 import { ReportShare } from 'domain/entities/ReportShare';
@@ -60,19 +60,6 @@ function makeQueryResult(rows: Record<string, unknown>[]) {
   return { rows, rowCount: rows.length };
 }
 
-function makeSummary(childName: string = 'Ana'): ConsolidatedSummary {
-  return {
-    child: { id: CHILD_ID, name: childName, birthDate: null, notes: null },
-    generatedAt: new Date().toISOString(),
-    period: { from: new Date().toISOString(), to: new Date().toISOString() },
-    assessments: { recent: [], count: 0 },
-    logs: { byType: {}, totalCount: 0 },
-    therapy: { activeTherapists: [], recentSessions: [], sessionCount: 0, byType: {} },
-    medical: { activeMedications: [], comorbidities: [], recentAppointments: [] },
-    development: { milestoneStats: { achieved: 0, inProgress: 0, notYet: 0, regressed: 0 }, recentCommunicationLogs: [] },
-    education: { plans: [], recentComms: [] },
-  };
-}
 
 function makeShareRepo(overrides: Partial<ReportShareRepository> = {}): ReportShareRepository {
   return {

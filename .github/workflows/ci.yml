@@ -40,6 +40,11 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      # O script de lint existia desde sempre, mas sem arquivo de configuração
+      # ele apenas errava — e o CI nunca o chamava, então ninguém percebeu.
+      - name: Lint
+        run: npm run lint
+
       - name: Apply migrations
         run: npm run migrate
 
