@@ -260,6 +260,68 @@ describe('DailyReportService', () => {
   });
 });
 
+describe('DailyReportService — updateTranscript (correção da transcrição)', () => {
+  const readyRow = (overrides: Row = {}) =>
+    baseRow({
+      status: 'ready',
+      transcript: 'Hoje ele dormiu mal e recusou o almoço.',
+      structured: { summary: 'Dia difícil', suggestedLogs: [] },
+      ...overrides,
+    });
+
+  test('refuses to edit a report that is not ready', async () => {
+    const { pool } = makePool({ selectRow: baseRow({ status: 'transcribing' }) });
+    const { storage, transcription, ai } = makeCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await expect(service.updateTranscript(USER, REPORT, 'texto corrigido')).rejects.toThrow(/pronto/i);
+    expect(ai.structureDailyReport).not.toHaveBeenCalled();
+  });
+
+  test('is scoped to the caller, like every other lookup by id', async () => {
+    // Nenhuma linha bate id+userId juntos: simula um relato de outro usuário.
+    const { pool } = makePool({ selectRow: null });
+    const { storage, transcription, ai } = makeCollaborators();
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await expect(service.updateTranscript(USER, REPORT, 'texto corrigido')).rejects.toThrow();
+  });
+
+  test('saves the corrected transcript and re-runs structuring against the new text', async () => {
+    const { pool, calls } = makePool({
+      selectRow: readyRow(),
+      updatedRow: readyRow({ transcript: 'Hoje ele dormiu bem e comeu tudo.' }),
+    });
+    const structureDailyReport = jest.fn().mockResolvedValue('{"summary":"Dia tranquilo"}');
+    const { storage, transcription, ai } = makeCollaborators({ structureDailyReport });
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    const report = await service.updateTranscript(USER, REPORT, 'Hoje ele dormiu bem e comeu tudo.');
+
+    expect(structureDailyReport).toHaveBeenCalledWith('Hoje ele dormiu bem e comeu tudo.', '2026-08-20');
+    const update = calls.find((c) => c.sql.includes('SET transcript ='));
+    expect(update?.params).toEqual(['Hoje ele dormiu bem e comeu tudo.', { summary: 'Dia tranquilo', suggestedLogs: [] }, REPORT, USER]);
+    expect(report.status).toBe('ready');
+  });
+
+  test('clears structured instead of leaving it describing the old transcript when re-structuring fails', async () => {
+    const { pool, calls } = makePool({
+      selectRow: readyRow(),
+      updatedRow: readyRow({ transcript: 'texto corrigido', structured: null }),
+    });
+    const structureDailyReport = jest.fn().mockRejectedValue(new Error('bedrock down'));
+    const { storage, transcription, ai } = makeCollaborators({ structureDailyReport });
+    const service = new DailyReportService(pool, storage, transcription, ai);
+
+    await service.updateTranscript(USER, REPORT, 'texto corrigido');
+
+    const update = calls.find((c) => c.sql.includes('SET transcript ='));
+    expect(update?.params[0]).toBe('texto corrigido');
+    // Nunca a estruturação antiga: ou reestruturado, ou nulo — nunca desatualizado.
+    expect(update?.params[1]).toBeNull();
+  });
+});
+
 describe('sanitizeStructured — a saída do modelo é dado de terceiro, não contrato', () => {
   test('keeps a well-formed payload as-is', () => {
     const result = sanitizeStructured({

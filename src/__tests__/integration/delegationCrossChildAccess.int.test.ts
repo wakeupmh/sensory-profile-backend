@@ -12,6 +12,10 @@ import { randomUUID } from 'crypto';
 import { PgDailyLogRepository } from 'infrastructure/repositories/PgDailyLogRepository';
 import { PgDocumentRepository } from 'infrastructure/repositories/PgDocumentRepository';
 import { runWithScope } from 'infrastructure/database/requestScope';
+import { DailyReportService } from 'application/services/DailyReportService';
+import type { S3StorageService } from 'infrastructure/storage/S3StorageService';
+import type { TranscriptionService } from 'infrastructure/transcription/TranscriptionService';
+import type { AISummaryService } from 'application/services/AISummaryService';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -20,6 +24,7 @@ const childA = randomUUID();
 const childB = randomUUID();
 const logB = randomUUID();
 const docB = randomUUID();
+const reportB = randomUUID();
 
 beforeAll(async () => {
   await pool.query(
@@ -36,6 +41,11 @@ beforeAll(async () => {
     `INSERT INTO documents (id,user_id,child_id,title,storage_key,mime_type)
      VALUES ($1,$2,$3,'Laudo da B','documents/x/b.pdf','application/pdf')`,
     [docB, owner, childB],
+  );
+  await pool.query(
+    `INSERT INTO daily_reports (id,user_id,child_id,report_date,status,transcript)
+     VALUES ($1,$2,$3,'2026-08-24','ready','relato privado da B')`,
+    [reportB, owner, childB],
   );
 });
 
@@ -77,5 +87,45 @@ describe('acesso entre crianças sob delegação', () => {
     await runWithScope({ restrictedToChildId: childB }, async () => {
       expect(await logs.findById(logB, owner)).not.toBeNull();
     });
+  });
+});
+
+/**
+ * `DailyReportService` fala com o banco diretamente, sem passar por um
+ * repositório — então a correção que cobriu os `Pg*Repository` não o alcançou,
+ * e o relato do dia seguiu acessível entre crianças pelo `:id`.
+ */
+describe('relato do dia entre crianças sob delegação', () => {
+  const service = new DailyReportService(
+    pool,
+    {} as S3StorageService,
+    {} as TranscriptionService,
+    {} as AISummaryService,
+  );
+
+  test('the owner can read their own report', async () => {
+    expect((await service.get(owner, reportB)).transcript).toBe('relato privado da B');
+  });
+
+  test("a caregiver delegated to child A cannot read child B's report by id", async () => {
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      await expect(service.get(owner, reportB)).rejects.toThrow();
+    });
+  });
+
+  test("a caregiver delegated to child A cannot edit child B's transcript", async () => {
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      await expect(service.updateTranscript(owner, reportB, 'texto injetado')).rejects.toThrow();
+    });
+    const { rows } = await pool.query('SELECT transcript FROM daily_reports WHERE id = $1', [reportB]);
+    expect(rows[0].transcript).toBe('relato privado da B');
+  });
+
+  test("a caregiver delegated to child A cannot delete child B's report", async () => {
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      await expect(service.delete(owner, reportB)).rejects.toThrow();
+    });
+    const { rowCount } = await pool.query('SELECT 1 FROM daily_reports WHERE id = $1', [reportB]);
+    expect(rowCount).toBe(1);
   });
 });

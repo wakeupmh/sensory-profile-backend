@@ -6,6 +6,7 @@ import { S3StorageService } from '../../infrastructure/storage/S3StorageService'
 import { TranscriptionService } from '../../infrastructure/transcription/TranscriptionService';
 import { AISummaryService } from './AISummaryService';
 import { LOG_TYPES } from '../../domain/entities/DailyLog';
+import { scopedById } from '../../infrastructure/repositories/queryUtils';
 import logger from '../../infrastructure/utils/logger';
 
 /**
@@ -221,13 +222,14 @@ export class DailyReportService {
 
     await this.transcription.startJob(jobName, row.audio_storage_key, transcriptKey);
 
+    const scope = scopedById('daily_reports', reportId, userId, 3);
     const result = await this.pool.query(
       `UPDATE daily_reports
           SET status = 'transcribing', transcribe_job_name = $1, transcript_key = $2, error = NULL,
               structuring_started_at = NULL
-        WHERE id = $3 AND user_id = $4
+        WHERE ${scope.where}
         RETURNING *`,
-      [jobName, transcriptKey, reportId, userId],
+      [jobName, transcriptKey, ...scope.params],
     );
     return toDailyReport(result.rows[0] as DailyReportRow);
   }
@@ -340,18 +342,63 @@ export class DailyReportService {
     return this.storage.getDownloadUrl(row.audio_storage_key);
   }
 
+  /**
+   * A fala é transcrita por máquina: nomes, remédios e termos clínicos são o
+   * que mais erra. A transcrição é o registro durável (alimenta a exportação
+   * LGPD e os resumos da IA), então precisa ser corrigível sem descartar a
+   * gravação inteira.
+   *
+   * Só um relato `ready` tem transcrição para editar — `draft`/`transcribing`
+   * ainda não têm texto, e `failed` idem.
+   *
+   * `structured` foi gerado a partir do texto ANTIGO: resumo, destaques e os
+   * registros sugeridos citam frases da transcrição anterior. Deixá-lo como
+   * estava depois da edição seria pior que apagá-lo — o cuidador leria uma
+   * sugestão de registro que já não corresponde ao que ele escreveu. Por
+   * isso a estruturação é refeita aqui, de forma síncrona (a chamada ao
+   * Bedrock já é essa mesma leva de 2-5s do fluxo original — não há job
+   * assíncrono para uma correção de texto). Se a IA falhar, o relato erra
+   * para o lado seguro: guarda a transcrição corrigida e zera `structured`
+   * (nunca deixa a versão desatualizada), do mesmo jeito que `advance` faz
+   * quando a estruturação inicial falha.
+   */
+  async updateTranscript(userId: string, reportId: string, transcript: string): Promise<DailyReport> {
+    const row = await this.findRow(userId, reportId);
+    if (row.status !== 'ready') {
+      throw new ValidationError('Só é possível editar a transcrição de um relato pronto');
+    }
+
+    let structured: Record<string, unknown> | null = null;
+    try {
+      structured = await this.structure(transcript, toDateString(row.report_date));
+    } catch (e) {
+      logger.warn('[DailyReportService] re-structuring failed after transcript edit, clearing stale structured data', {
+        reportId: row.id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    const scope = scopedById('daily_reports', reportId, userId, 3);
+    const result = await this.pool.query(
+      `UPDATE daily_reports SET transcript = $1, structured = $2
+        WHERE ${scope.where}
+        RETURNING *`,
+      [transcript, structured, ...scope.params],
+    );
+    return toDailyReport(result.rows[0] as DailyReportRow);
+  }
+
   async delete(userId: string, reportId: string): Promise<void> {
     const row = await this.findRow(userId, reportId);
-    await this.pool.query(`DELETE FROM daily_reports WHERE id = $1 AND user_id = $2`, [reportId, userId]);
+    const scope = scopedById('daily_reports', reportId, userId);
+    await this.pool.query(`DELETE FROM daily_reports WHERE ${scope.where}`, scope.params);
     if (row.audio_storage_key) await this.storage.deleteObject(row.audio_storage_key).catch(() => undefined);
     if (row.transcript_key) await this.storage.deleteObject(row.transcript_key).catch(() => undefined);
   }
 
   private async findRow(userId: string, reportId: string): Promise<DailyReportRow> {
-    const result = await this.pool.query(`SELECT * FROM daily_reports WHERE id = $1 AND user_id = $2`, [
-      reportId,
-      userId,
-    ]);
+    const scope = scopedById('daily_reports', reportId, userId);
+    const result = await this.pool.query(`SELECT * FROM daily_reports WHERE ${scope.where}`, scope.params);
     if (result.rows.length === 0) throw new NotFoundError('DailyReport', reportId);
     return result.rows[0] as DailyReportRow;
   }

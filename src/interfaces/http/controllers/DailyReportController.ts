@@ -3,6 +3,7 @@ import { DailyReportService } from '../../../application/services/DailyReportSer
 import {
   createDailyReportSchema,
   listDailyReportsSchema,
+  updateDailyReportSchema,
 } from '../validations/dailyReportValidation';
 import { asyncHandler } from '../../../infrastructure/utils/errors/ErrorHandler';
 import logger from '../../../infrastructure/utils/logger';
@@ -54,6 +55,21 @@ export class DailyReportController {
     const userId = requireUserId(req);
 
     jsonResponse(res, await this.service.get(userId, id));
+  });
+
+  /**
+   * Corrige a transcrição de um relato `ready` (nome, remédio ou termo que a
+   * transcrição automática errou). Reestrutura via IA como efeito colateral —
+   * ver o comentário em `DailyReportService.updateTranscript`.
+   */
+  update = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    assertValidId(id, 'report ID');
+    const userId = requireUserId(req);
+    const { transcript } = updateDailyReportSchema.parse(req.body);
+    logger.info(`[dailyReport.update] id=${id} userId=${userId}`);
+
+    jsonResponse(res, await this.service.updateTranscript(userId, id, transcript));
   });
 
   getAudioUrl = asyncHandler(async (req: Request, res: Response): Promise<void> => {
