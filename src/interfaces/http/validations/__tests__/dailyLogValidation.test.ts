@@ -310,3 +310,39 @@ describe('listFiltersSchema — optional filters', () => {
     expect(result.success).toBe(false);
   });
 });
+
+describe('validação dos dados por tipo de registro', () => {
+  const base = { childId: '11111111-1111-1111-1111-111111111111', occurredAt: '2026-08-24T12:00:00Z' };
+
+  test('rejects out-of-range values a caregiver can now type by hand', () => {
+    // A tela do relato do dia passou a permitir AJUSTAR os valores sugeridos
+    // pela IA antes de confirmar; sem isto, um humor 42 entrava no histórico.
+    expect(() => createLogSchema.parse({ ...base, logType: 'mood', data: { level: 42 } })).toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'sleep', data: { quality: 9 } })).toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'sleep', data: { wakings: -3 } })).toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'sleep', data: { bedtime: '25:00' } })).toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'food', data: { meal: 'brunch' } })).toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'toileting', data: { type: 'outro' } })).toThrow();
+  });
+
+  test('accepts what the existing quick-log forms produce', () => {
+    expect(() => createLogSchema.parse({ ...base, logType: 'mood', data: { level: 4, tags: ['calmo'] } })).not.toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'sleep', data: { bedtime: '20:30', waketime: '07:00', wakings: 2, quality: 2 } })).not.toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'food', data: { meal: 'almoco', accepted: ['arroz'], refused: [] } })).not.toThrow();
+    expect(() => createLogSchema.parse({ ...base, logType: 'toileting', data: { type: 'urina', independent: true } })).not.toThrow();
+  });
+
+  test('does not newly require anything, and does not drop fields it does not know', () => {
+    // Um registro que era aceito antes tem que continuar sendo aceito: isto
+    // valida o valor de campos conhecidos, não muda o que é obrigatório.
+    expect(() => createLogSchema.parse({ ...base, logType: 'mood', data: {} })).not.toThrow();
+    const parsed = createLogSchema.parse({ ...base, logType: 'sleep', data: { quality: 2, campoAntigo: 'x' } });
+    expect((parsed.data as Record<string, unknown>).campoAntigo).toBe('x');
+  });
+
+  test('reports the offending field under data, not at the root', () => {
+    const result = createLogSchema.safeParse({ ...base, logType: 'sleep', data: { quality: 9 } });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].path).toEqual(['data', 'quality']);
+  });
+});

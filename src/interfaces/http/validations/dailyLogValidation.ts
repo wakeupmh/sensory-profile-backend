@@ -20,9 +20,56 @@ const abcDataSchema = z.object({
 
 const genericDataSchema = z.record(z.unknown());
 
+/**
+ * Formatos dos demais tipos de registro. Só o `abc` era validado; os outros
+ * quatro aceitavam qualquer coisa, o que passou a importar quando a tela do
+ * relato do dia permitiu ao cuidador **editar** os valores sugeridos pela IA
+ * antes de confirmar — um sono de qualidade 9, ou um humor nível 42, entrava
+ * no histórico clínico sem ninguém reclamar.
+ *
+ * `passthrough` e tudo opcional de propósito: isto valida o VALOR de campos
+ * conhecidos, não torna nada obrigatório nem descarta campos que algum
+ * cliente já mande. Um registro que era aceito antes continua sendo aceito;
+ * o que deixa de passar é um valor fora da faixa.
+ */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const shortText = z.string().trim().max(200);
+
+const moodDataSchema = z.object({
+  level: z.number().int().min(1).max(5).optional(),
+  tags: z.array(shortText).max(20).optional(),
+}).passthrough();
+
+const sleepDataSchema = z.object({
+  bedtime: z.string().regex(HHMM, 'Horário deve estar no formato HH:MM').optional(),
+  waketime: z.string().regex(HHMM, 'Horário deve estar no formato HH:MM').optional(),
+  wakings: z.number().int().min(0).max(50).optional(),
+  quality: z.number().int().min(1).max(3).optional(),
+}).passthrough();
+
+const foodDataSchema = z.object({
+  meal: z.enum(['cafe', 'almoco', 'jantar', 'lanche']).optional(),
+  accepted: z.array(shortText).max(50).optional(),
+  refused: z.array(shortText).max(50).optional(),
+}).passthrough();
+
+const toiletingDataSchema = z.object({
+  type: z.enum(['urina', 'fezes', 'ambos']).optional(),
+  independent: z.boolean().optional(),
+}).passthrough();
+
+const DATA_SCHEMA_BY_LOG_TYPE: Record<string, z.ZodTypeAny> = {
+  abc: abcDataSchema,
+  mood: moodDataSchema,
+  sleep: sleepDataSchema,
+  food: foodDataSchema,
+  toileting: toiletingDataSchema,
+};
+
 function validateDataForLogType(logType: string, data: unknown, ctx: z.RefinementCtx) {
-  if (logType !== 'abc') return;
-  const result = abcDataSchema.safeParse(data);
+  const schema = DATA_SCHEMA_BY_LOG_TYPE[logType];
+  if (!schema) return;
+  const result = schema.safeParse(data);
   if (!result.success) {
     for (const issue of result.error.issues) {
       ctx.addIssue({

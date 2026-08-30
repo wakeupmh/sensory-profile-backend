@@ -65,6 +65,18 @@ export const accountExportLimiter = perUserLimiter({
 });
 
 /**
+ * Editar a transcrição reprocessa a estruturação — ou seja, cada salvamento é
+ * uma invocação **cobrada** do Bedrock. Sem limite, segurar o botão de salvar
+ * vira uma conta de IA. O teto é generoso para o uso real (corrigir algumas
+ * palavras e salvar), e baixo o bastante para não virar despesa.
+ */
+export const transcriptEditLimiter = perUserLimiter({
+  windowMs: HOUR,
+  max: 20,
+  message: 'Muitas edições seguidas. Tente novamente em uma hora.',
+});
+
+/**
  * Cada URL pré-assinada permite um PUT de tamanho não verificado no bucket.
  * O limite é alto o bastante para um envio em lote de fotos e baixo o
  * bastante para não virar armazenamento gratuito de terceiros.
