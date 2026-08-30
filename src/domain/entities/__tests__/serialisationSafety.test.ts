@@ -46,6 +46,7 @@ const SENSITIVE_FIELDS = [
 const ALLOWED_EXPOSURES = new Map<string, string>([
   ['CareTeamMember.toOwnerView.invitationToken', 'resposta da criação do convite — a listagem usa toListView()'],
   ['CaregiverShare.toOwnerView.invitationToken', 'resposta da criação do convite — a listagem usa toListView()'],
+  ['ClinicMember.toInviteView.invitationToken', 'resposta da criação do convite — o quadro usa toRosterView(), sem token'],
   ['Professional.toOwnerView.invitationToken', 'criação, consulta por id e rotação — a listagem usa toListView()'],
 
   // Os dois tokens de compartilhamento. Antes saíam na LISTAGEM — cada
