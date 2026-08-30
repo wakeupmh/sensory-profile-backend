@@ -106,12 +106,13 @@ export class PgGoalRepository implements GoalRepository {
     if (setClauses.length === 0) return this.findById(id, userId);
 
     setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id, userId);
+    const scope = scopedById('goals', id, userId, params.length + 1);
+    params.push(...scope.params);
 
     const result = await pool.query(
       `UPDATE goals
        SET ${setClauses.join(', ')}
-       WHERE id = $${params.length - 1} AND user_id = $${params.length}
+       WHERE ${scope.where}
        RETURNING *`,
       params,
     );

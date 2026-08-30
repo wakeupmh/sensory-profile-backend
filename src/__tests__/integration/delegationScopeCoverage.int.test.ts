@@ -19,6 +19,18 @@ const REPO_DIR = join(__dirname, '../../infrastructure/repositories');
 const SERVICE_DIR = join(__dirname, '../../application/services');
 
 /**
+ * Repositórios cuja autorização NÃO passa por `user_id`, e por isso não têm o
+ * que `scopedById` faça por eles: `caregiver_shares` é gerido pelo dono
+ * (`owner_user_id`) e `professional_notes` pelo autor (`professional_id`).
+ * Ambas as tabelas têm `child_id`, então caem na lista de child-scoped —
+ * a isenção é explícita para que ninguém a confunda com esquecimento.
+ */
+const REPOS_AUTHORIZED_BY_ANOTHER_COLUMN = new Set([
+  'PgCaregiverShareRepository.ts',
+  'PgProfessionalNoteRepository.ts',
+]);
+
+/**
  * Serviços que escrevem SQL direto e cuja tabela NÃO tem `child_id`
  * (`caregivers`, `examiners`, `voice_notes`) — não há o que restringir ali.
  */
@@ -67,17 +79,35 @@ describe('cobertura do escopo de delegação', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('no repository hand-writes the id+user predicate that bypasses the scope', () => {
-    // `WHERE id = $1 AND user_id = $2` é exatamente o que vazava: sob
-    // delegação o user_id é o do DONO, então bastava saber o id de um
-    // registro de outra criança.
+  test('no repository addresses a row by id without going through the scope helper', () => {
+    // A primeira versão desta guarda procurava a string LITERAL
+    // `WHERE id = $1 AND user_id = $2`. Os métodos `update` montam o mesmo
+    // predicado com placeholders dinâmicos — `$${params.length - 1}`, `$17` —
+    // então a guarda passava com 14 caminhos de escrita abertos, e um cuidador
+    // delegado à criança A conseguia editar registros da criança B.
+    //
+    // Agora a checagem é estrutural: QUALQUER `WHERE id = $...` num
+    // repositório precisa vir de `scopedById` (ou seja, usar `scope.where`).
+    // A forma do placeholder deixa de importar.
     const offenders: string[] = [];
     for (const file of readdirSync(REPO_DIR).filter((f) => f.startsWith('Pg') && f.endsWith('.ts'))) {
-      const src = readFileSync(join(REPO_DIR, file), 'utf8');
-      if (/WHERE id = \$1 AND user_id = \$2/.test(src)) offenders.push(file);
+      if (REPOS_AUTHORIZED_BY_ANOTHER_COLUMN.has(file)) continue;
+      const lines = readFileSync(join(REPO_DIR, file), 'utf8').split('\n');
+      lines.forEach((line, i) => {
+        if (!/WHERE\s+id\s*=\s*\$/.test(line) || /scope\.where/.test(line)) return;
+        // Só interessa a tabela que a consulta toca: um `WHERE id = $1` em
+        // `anamneses` ou `caregiver_shares` não tem `child_id` a restringir.
+        const context = lines.slice(Math.max(0, i - 12), i + 1).join(' ');
+        const matches = [...context.matchAll(/(?:FROM|UPDATE|INTO)\s+([a-z_]+)/g)];
+        const table = matches.length > 0 ? matches[matches.length - 1][1] : undefined;
+        if (table && CHILD_SCOPED_TABLES.has(table)) {
+          offenders.push(`${file}:${i + 1}  (${table})  ${line.trim()}`);
+        }
+      });
     }
     expect(offenders).toEqual([]);
   });
+
 });
 
 describe('scopedById', () => {
