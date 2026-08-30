@@ -48,15 +48,11 @@ const ALLOWED_EXPOSURES = new Map<string, string>([
   ['CaregiverShare.toOwnerView.invitationToken', 'resposta da criação do convite — a listagem usa toListView()'],
   ['Professional.toOwnerView.invitationToken', 'criação, consulta por id e rotação — a listagem usa toListView()'],
 
-  // ABERTOS, e declarados para não ficarem invisíveis. Nos dois casos a tela
-  // monta a URL do compartilhamento a partir do token que veio NA LISTAGEM, e
-  // não existe endpoint de consulta por id nem de rotação para servir de
-  // alternativa. Fechar aqui é decisão de produto (ou some o "copiar link"
-  // dos compartilhamentos existentes, ou eles ganham rotação), não um ajuste
-  // que caiba num refactor. Enquanto isso, a listagem devolve o token vivo de
-  // todo compartilhamento.
-  ['ReportShare.toJSON.token', 'ABERTO: SharePanel monta a URL a partir da listagem; sem rotação nem get-by-id'],
-  ['Anamnese.toJSON.shareToken', 'ABERTO: mesma forma que ReportShare'],
+  // Os dois tokens de compartilhamento. Antes saíam na LISTAGEM — cada
+  // `GET` devolvia a capacidade viva de todo compartilhamento do usuário.
+  // Agora saem um de cada vez, no momento em que o dono pede.
+  ['ReportShare.toOwnerView.token', 'endpoint de revelar, um compartilhamento por vez; a listagem usa toJSON(), sem token'],
+  ['Anamnese.toJSON.shareToken', 'consulta por id do próprio dono; a listagem devolve apenas isShared'],
 ]);
 
 interface EntityModule {
@@ -136,7 +132,12 @@ function loadEntities(): EntityModule[] {
 function markedProps(propNames: string[]): Record<string, unknown> {
   const props: Record<string, unknown> = {};
   for (const p of propNames) {
-    if (p.endsWith('At') || p === 'createdAt' || p === 'updatedAt') props[p] = new Date(0);
+    // Campo sensível nunca vira Date, mesmo terminando em `At`: uma Date
+    // serializa como data e a checagem POR VALOR (`<<campo>>`) deixaria de
+    // valer, sobrando só a checagem por nome de chave. Um
+    // `expiresAt`-sensível renomeado na saída passaria.
+    if (SENSITIVE_FIELDS.includes(p)) props[p] = `<<${p}>>`;
+    else if (p.endsWith('At') || p === 'createdAt' || p === 'updatedAt') props[p] = new Date(0);
     else props[p] = `<<${p}>>`;
   }
   return props;
@@ -158,7 +159,15 @@ function serialisers(instance: object): string[] {
     for (const m of Object.getOwnPropertyNames(proto)) {
       if (m === 'constructor' || !/^to[A-Z]/.test(m)) continue;
       const fn = (instance as Record<string, unknown>)[m];
-      if (typeof fn === 'function' && (fn as () => unknown).length === 0) found.add(m);
+      if (typeof fn !== 'function') continue;
+      // Uma view com argumento não dá para chamar às cegas — mas sair da
+      // varredura sem dizer nada é como as outras lacunas começaram. Fica
+      // registrada, e o teste de pulos cobra.
+      if ((fn as () => unknown).length > 0) {
+        skipped.push(`${instance.constructor.name}.${m}: view com argumento, não inspecionada`);
+        continue;
+      }
+      found.add(m);
     }
     proto = Object.getPrototypeOf(proto) as object | null;
   }

@@ -11,6 +11,15 @@ export interface PushSubscriptionProps {
 
 export class PushSubscription extends Entity<PushSubscriptionProps, 'id' | 'userId' | 'p256dhKey' | 'authKey'> {
 
+  /**
+   * Esta era a única das 24 conversões com diferença real de comportamento: o
+   * `toJSON` escrito à mão devolvia `createdAt` como string ISO, e o herdado
+   * devolve a `Date`. Fica assim de propósito. `JSON.stringify` produz
+   * exatamente os mesmos bytes a partir de uma `Date`, o método não é chamado
+   * por ninguém (o controller responde `{subscribed:true}`), e forçar a
+   * string exigiria um `toJSON` que contraria o tipo da base — trocar uma
+   * diferença invisível por uma exceção ao contrato.
+   */
   protected hiddenFields() {
     return ['id', 'userId', 'p256dhKey', 'authKey'] as const;
   }

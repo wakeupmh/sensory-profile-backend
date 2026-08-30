@@ -72,6 +72,7 @@ router.use(careTeamScopeMiddleware);
 router.get('/summary', controller.getSummary.bind(controller));
 router.post('/shares', controller.createShare.bind(controller));
 router.get('/shares', controller.listShares.bind(controller));
+router.get('/shares/:id/token', controller.revealShareToken.bind(controller));
 router.delete('/shares/:id', controller.deleteShare.bind(controller));
 router.post('/ai-summary', aiSummaryLimiter, controller.generateAISummary.bind(controller));
 
