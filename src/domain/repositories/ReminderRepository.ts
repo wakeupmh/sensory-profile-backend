@@ -3,6 +3,8 @@ import { Reminder, ReminderStatus } from '../entities/Reminder';
 export interface ReminderCreateInput {
   id: string;
   userId: string;
+  /** Ver ReminderProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   title: string;
   dueAt: Date;

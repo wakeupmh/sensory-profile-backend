@@ -3,6 +3,8 @@ import { MedicalAppointment, MedicalAppointmentSummary } from '../entities/Medic
 export interface MedicalAppointmentCreateInput {
   id: string;
   userId: string;
+  /** Ver MedicalAppointmentProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   doctorName?: string | null;
   specialty?: string | null;

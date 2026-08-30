@@ -13,6 +13,8 @@ export interface CommunicationLogSummary {
 export interface CommunicationLogProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   occurredAt: Date;
   entryType: CommunicationEntryType;
@@ -28,6 +30,7 @@ export class CommunicationLog {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getOccurredAt(): Date { return this.props.occurredAt; }
   getEntryType(): CommunicationEntryType { return this.props.entryType; }
@@ -41,6 +44,7 @@ export class CommunicationLog {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       occurredAt: this.props.occurredAt,
       entryType: this.props.entryType,

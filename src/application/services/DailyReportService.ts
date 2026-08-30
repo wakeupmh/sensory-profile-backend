@@ -7,6 +7,7 @@ import { TranscriptionService } from '../../infrastructure/transcription/Transcr
 import { AISummaryService } from './AISummaryService';
 import { LOG_TYPES } from '../../domain/entities/DailyLog';
 import { scopedById } from '../../infrastructure/repositories/queryUtils';
+import { currentScope } from '../../infrastructure/database/requestScope';
 import logger from '../../infrastructure/utils/logger';
 
 /**
@@ -73,6 +74,8 @@ export interface DailyReport {
   error: string | null;
   hasAudio: boolean;
   audioExpiresAt: string | null;
+  /** `sub` de quem gravou este relato, quando difere do dono. NULL = dono. */
+  authorUserId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,6 +92,7 @@ interface DailyReportRow {
   audio_expires_at: Date | null;
   transcribe_job_name: string | null;
   transcript_key: string | null;
+  author_user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -108,6 +112,7 @@ function toDailyReport(row: DailyReportRow): DailyReport {
     error: row.error,
     hasAudio: row.audio_storage_key !== null,
     audioExpiresAt: row.audio_expires_at ? row.audio_expires_at.toISOString() : null,
+    authorUserId: row.author_user_id ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -163,14 +168,24 @@ export class DailyReportService {
       ),
     );
 
+    // Autoria: derivada do escopo do jeito que BaseDomainService.create faz,
+    // repetido aqui porque este serviço nunca passou por ele (monta o SQL à
+    // mão). O ON CONFLICT também grava author_user_id — regravar o relato do
+    // mesmo dia zera áudio/transcrição/estruturação por inteiro (ver
+    // comentário acima), então é uma autoria nova, não uma edição do que já
+    // existia.
+    const { actingUserId } = currentScope();
+    const authorUserId = actingUserId && actingUserId !== userId ? actingUserId : null;
+
     // O upsert vem antes de calcular a chave do áudio, porque a chave precisa
     // conter o id da linha — e num ON CONFLICT o id que vale é o da linha que
     // já existia, não o que acabamos de gerar.
     const upserted = await this.pool.query(
-      `INSERT INTO daily_reports (id, user_id, child_id, report_date, status)
-       VALUES ($1, $2, $3, $4, 'draft')
+      `INSERT INTO daily_reports (id, user_id, author_user_id, child_id, report_date, status)
+       VALUES ($1, $2, $3, $4, $5, 'draft')
        ON CONFLICT (child_id, report_date) DO UPDATE SET
          status = 'draft',
+         author_user_id = $3,
          audio_storage_key = NULL,
          audio_mime_type = NULL,
          audio_expires_at = NULL,
@@ -180,7 +195,7 @@ export class DailyReportService {
          transcribe_job_name = NULL,
          transcript_key = NULL
        RETURNING id`,
-      [uuidv7(), userId, childId, reportDate],
+      [uuidv7(), userId, authorUserId, childId, reportDate],
     );
     const { id } = upserted.rows[0] as { id: string };
 

@@ -12,6 +12,7 @@ export class PgGoalProgressEntryRepository implements GoalProgressEntryRepositor
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       goalId: row.goal_id as string,
       recordedAt: new Date(row.recorded_at as string),
       value: row.value == null ? null : Number(row.value),
@@ -26,12 +27,13 @@ export class PgGoalProgressEntryRepository implements GoalProgressEntryRepositor
   async save(input: GoalProgressEntryCreateInput): Promise<GoalProgressEntry> {
     const result = await pool.query(
       `INSERT INTO goal_progress_entries
-         (id, user_id, goal_id, recorded_at, value, status_snapshot, notes, therapy_session_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (id, user_id, author_user_id, goal_id, recorded_at, value, status_snapshot, notes, therapy_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.goalId,
         input.recordedAt,
         input.value ?? null,

@@ -4,6 +4,8 @@ import { TherapyType } from '../entities/Therapist';
 export interface TherapySessionCreateInput {
   id: string;
   userId: string;
+  /** Ver TherapySessionProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   therapistId?: string | null;
   therapyType: TherapyType;

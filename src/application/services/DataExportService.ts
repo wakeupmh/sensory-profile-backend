@@ -42,6 +42,22 @@ export interface DataExportResult {
  * purpose is to tell someone accurately what is held about them. Here the
  * name and its query are the same line and cannot drift apart.
  */
+/**
+ * `author_user_id` (migration 036): a maioria das tabelas abaixo faz `SELECT
+ * *`, então a coluna já sai no export sem precisar mexer em nada — é
+ * exatamente o "não fica frágil quando um campo novo aparece" que o
+ * comentário no topo do arquivo promete. Fica como `sub` cru de propósito,
+ * sem tentar virar nome/rótulo: não há credencial de service-role do
+ * Supabase neste backend para resolver um id em pessoa (ver comentário do
+ * topo do arquivo), e o mesmo padrão já existe hoje em `accessLogs.actorUserId`
+ * e `professionalNotes.authorUserId` logo abaixo — um `sub` que o
+ * responsável não sabe decifrar sozinho ainda é mais informação do que
+ * "escrito por outra pessoa" apagaria: se dois profissionais diferentes
+ * escreveram no mesmo período, o id é o que permite ao responsável perceber
+ * isso ao comparar linhas, uma distinção que um booleano jogaria fora. A
+ * única exceção é `dailyReports`, que já lista colunas à mão (para excluir
+ * chaves de S3) e por isso precisa da coluna adicionada explicitamente.
+ */
 const CHILD_LINKED_QUERIES = {
   assessments: `SELECT * FROM sensory_assessments WHERE user_id = $1 AND child_id = $2 ORDER BY assessment_date`,
   // As respostas item a item são o dado clínico central da avaliação — sem
@@ -54,7 +70,7 @@ const CHILD_LINKED_QUERIES = {
   // As chaves de S3 (áudio/transcrição) ficam de fora: são referências
   // internas de armazenamento, não conteúdo do titular, e não abrem nada
   // sem uma URL assinada.
-  dailyReports: `SELECT id, child_id, report_date, status, transcript, structured, error, created_at, updated_at
+  dailyReports: `SELECT id, child_id, report_date, status, transcript, structured, error, author_user_id, created_at, updated_at
      FROM daily_reports WHERE user_id = $1 AND child_id = $2 ORDER BY report_date`,
   logAttachments: `SELECT la.* FROM log_attachments la JOIN daily_logs dl ON dl.id = la.log_id
      WHERE dl.user_id = $1 AND dl.child_id = $2 ORDER BY la.created_at`,

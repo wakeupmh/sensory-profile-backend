@@ -3,6 +3,8 @@ import { EducationPlan, EducationPlanType } from '../entities/EducationPlan';
 export interface EducationPlanCreateInput {
   id: string;
   userId: string;
+  /** Ver EducationPlanProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   schoolName: string;
   academicYear: string;

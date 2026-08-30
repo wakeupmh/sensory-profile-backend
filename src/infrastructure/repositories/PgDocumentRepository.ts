@@ -19,6 +19,7 @@ export class PgDocumentRepository implements DocumentRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       title: row.title as string,
       description: (row.description as string | null) ?? null,
@@ -37,13 +38,13 @@ export class PgDocumentRepository implements DocumentRepository {
   async save(input: DocumentCreateInput): Promise<Document> {
     const result = await pool.query(
       `INSERT INTO documents
-         (id, user_id, child_id, title, description, storage_key, mime_type,
-          size_bytes, resource_type, resource_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (id, user_id, author_user_id, child_id, title, description, storage_key, mime_type, size_bytes, resource_type, resource_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.title,
         input.description ?? null,

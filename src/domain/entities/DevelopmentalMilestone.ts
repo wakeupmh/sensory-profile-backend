@@ -4,6 +4,8 @@ export type MilestoneStatus = 'not_yet' | 'in_progress' | 'achieved' | 'regresse
 export interface DevelopmentalMilestoneProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   title: string;
   category: MilestoneCategory;
@@ -20,6 +22,7 @@ export class DevelopmentalMilestone {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getTitle(): string { return this.props.title; }
   getCategory(): MilestoneCategory { return this.props.category; }
@@ -35,6 +38,7 @@ export class DevelopmentalMilestone {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       title: this.props.title,
       category: this.props.category,

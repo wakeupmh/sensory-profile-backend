@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from 'uuid';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { currentScope } from '../../infrastructure/database/requestScope';
 
 /**
  * Minimal repository contract shared by all domain services.
@@ -50,7 +51,18 @@ export class BaseDomainService<
   }
 
   create(payload: TPayload, userId: string): Promise<TEntity> {
-    const input = { id: uuidv7(), userId, ...payload } as unknown as TCreateInput;
+    // `actingUserId` é quem de fato está escrevendo (ver requestScope.ts);
+    // `userId` é sempre o dono, que é quem a linha continua pertencendo a.
+    // Só grava author_user_id quando os dois divergem — quando o próprio
+    // dono escreve, fica NULL, do mesmo jeito que as linhas anteriores a
+    // este recurso: assim "não-nulo" segue significando de forma confiável
+    // "outra pessoa escreveu isto", em vez de virar `userId` repetido em
+    // toda linha nova. `authorUserId` vem DEPOIS do `...payload` de
+    // propósito — o payload é o corpo que o cliente mandou, e autoria não é
+    // campo que quem chama a API possa forjar.
+    const { actingUserId } = currentScope();
+    const authorUserId = actingUserId && actingUserId !== userId ? actingUserId : undefined;
+    const input = { id: uuidv7(), userId, ...payload, authorUserId } as unknown as TCreateInput;
     return this.repo.save(input);
   }
 

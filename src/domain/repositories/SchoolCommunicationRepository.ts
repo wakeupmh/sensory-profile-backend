@@ -4,6 +4,8 @@ export type { SchoolCommunicationSummary };
 export interface SchoolCommunicationCreateInput {
   id: string;
   userId: string;
+  /** Ver SchoolCommunicationProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   occurredAt: Date;
   commType: SchoolCommType;

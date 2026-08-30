@@ -62,6 +62,47 @@ const ACCOUNT_SCOPED_DELETES = [
   `DELETE FROM user_profiles WHERE user_id = $1`,
 ] as const;
 
+/**
+ * Tabelas clínicas com `author_user_id` opcional (migration 036) — quem de
+ * fato escreveu a linha, quando é alguém além do dono (um profissional
+ * escrevendo sob concessão do care team). Exportada para que
+ * `accountErasureCoverage.int.test.ts` monte a MESMA lista em vez de manter
+ * uma cópia paralela que pode divergir desta.
+ *
+ * O buraco que esta lista fecha: os DELETEs acima e o cascade de `children`
+ * só alcançam linhas de quem está apagando a PRÓPRIA conta — e um
+ * profissional não é dono de nenhuma das crianças em que escreveu sob
+ * concessão. Sem isto, o `sub` do Supabase de quem pediu a eliminação (LGPD
+ * Art. 18 VI) ficava para sempre gravado no prontuário de famílias que ele
+ * nunca foi dono. O registro clínico em si FICA — pertence à família, que
+ * não pediu para apagá-lo — só a autoria é neutralizada.
+ *
+ * `professional_notes` também tem `author_user_id`, mas NOT NULL desde a
+ * migration 024 — lá a coluna É A RAZÃO DE SER da linha (uma nota sem autor
+ * não é uma nota), então zerá-la violaria a constraint em vez de neutralizar
+ * algo. Fica de fora desta lista de propósito: é o mesmo buraco de LGPD, só
+ * que decidir apagar a nota ou afrouxar a constraint é uma decisão que esta
+ * fase do care team não toma sozinha. Ver o comentário em
+ * `accountErasureCoverage.int.test.ts` — o buraco fica registrado como
+ * conhecido, não esquecido.
+ */
+export const AUTHOR_ATTRIBUTED_TABLES = [
+  'communication_logs',
+  'comorbidities',
+  'daily_logs',
+  'daily_reports',
+  'developmental_milestones',
+  'documents',
+  'education_plans',
+  'goals',
+  'goal_progress_entries',
+  'medical_appointments',
+  'medications',
+  'reminders',
+  'school_communications',
+  'therapy_sessions',
+] as const;
+
 export class AccountErasureService {
   constructor(
     private readonly pool: Pool,
@@ -151,6 +192,42 @@ export class AccountErasureService {
       // Not a delete: the row belongs to whoever invited this user as a
       // professional, so it stays — but it must stop pointing at them.
       await client.query(`UPDATE professionals SET accepted_user_id = NULL WHERE accepted_user_id = $1`, [userId]);
+
+      // Autoria em dados de OUTRAS famílias — ver o comentário de
+      // AUTHOR_ATTRIBUTED_TABLES acima para o porquê. Cada UPDATE só toca
+      // linhas onde este usuário é o AUTOR, nunca o dono (essas já foram
+      // apagadas pelos DELETEs/cascade acima), então não há como isto
+      // remover autoria de quem não deveria.
+      for (const table of AUTHOR_ATTRIBUTED_TABLES) {
+        await client.query(`UPDATE ${table} SET author_user_id = NULL WHERE author_user_id = $1`, [userId]);
+      }
+
+      // A existência da tabela é checada em tempo de execução em vez de
+      // assumida: a eliminação de conta não pode falhar num ambiente que
+      // ainda não aplicou a migration 035. Sem a tabela, o passo é pulado.
+      //
+      // Não é DELETE: a linha é do RESPONSÁVEL que concedeu o acesso (é ele
+      // quem tem o histórico de "quem já atendeu esta criança"), não do
+      // profissional que aceitou — mesmo raciocínio do UPDATE em
+      // `professionals` acima. `member_user_id` é zerado para não deixar o
+      // `sub` de quem pediu a eliminação preso à concessão de outra família,
+      // e `revoked_at` é marcado (se ainda não estava) porque uma conta
+      // apagada não pode continuar contando como participação ativa na
+      // equipe de cuidado — a revogação já era soft por design (ver
+      // CONTRACT.md), então isto só antecipa o que aconteceria de qualquer
+      // forma.
+      const careTeamTableExists = await client.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'care_team_members'`,
+      );
+      if (careTeamTableExists.rows.length > 0) {
+        await client.query(
+          `UPDATE care_team_members
+              SET member_user_id = NULL, revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+            WHERE member_user_id = $1`,
+          [userId],
+        );
+      }
 
       await client.query('COMMIT');
     } catch (error) {

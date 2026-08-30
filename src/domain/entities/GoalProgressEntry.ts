@@ -3,6 +3,8 @@ import { GoalStatus } from './Goal';
 export interface GoalProgressEntryProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   goalId: string;
   recordedAt: Date;
   value: number | null;
@@ -17,6 +19,7 @@ export class GoalProgressEntry {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getGoalId(): string { return this.props.goalId; }
   getRecordedAt(): Date { return this.props.recordedAt; }
   getValue(): number | null { return this.props.value; }
@@ -25,6 +28,7 @@ export class GoalProgressEntry {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       goalId: this.props.goalId,
       recordedAt: this.props.recordedAt,
       value: this.props.value,

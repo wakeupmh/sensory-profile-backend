@@ -19,6 +19,7 @@ export class PgMedicalAppointmentRepository implements MedicalAppointmentReposit
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       doctorName: row.doctor_name as string | null,
       specialty: row.specialty as string | null,
@@ -50,12 +51,13 @@ export class PgMedicalAppointmentRepository implements MedicalAppointmentReposit
   async save(input: MedicalAppointmentCreateInput): Promise<MedicalAppointment> {
     const result = await pool.query(
       `INSERT INTO medical_appointments
-         (id, user_id, child_id, doctor_name, specialty, clinic_name, occurred_at, summary, follow_up_date, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (id, user_id, author_user_id, child_id, doctor_name, specialty, clinic_name, occurred_at, summary, follow_up_date, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.doctorName ?? null,
         input.specialty ?? null,

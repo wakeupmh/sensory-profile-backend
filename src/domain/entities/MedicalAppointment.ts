@@ -1,6 +1,8 @@
 export interface MedicalAppointmentProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   doctorName: string | null;
   specialty: string | null;
@@ -30,6 +32,7 @@ export class MedicalAppointment {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getDoctorName(): string | null { return this.props.doctorName; }
   getSpecialty(): string | null { return this.props.specialty; }
@@ -45,6 +48,7 @@ export class MedicalAppointment {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       doctorName: this.props.doctorName,
       specialty: this.props.specialty,

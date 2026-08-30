@@ -18,6 +18,8 @@ export type LogData = AbcData | MoodData | SleepData | FoodData | ToiletingData;
 export interface DailyLogProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   logType: LogType;
   occurredAt: Date;
@@ -41,6 +43,7 @@ export class DailyLog {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getLogType(): LogType { return this.props.logType; }
   getOccurredAt(): Date { return this.props.occurredAt; }
@@ -53,6 +56,7 @@ export class DailyLog {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       logType: this.props.logType,
       occurredAt: this.props.occurredAt,

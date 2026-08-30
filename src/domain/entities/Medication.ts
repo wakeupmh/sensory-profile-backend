@@ -1,6 +1,8 @@
 export interface MedicationProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   name: string;
   dosage: string | null;
@@ -19,6 +21,7 @@ export class Medication {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getName(): string { return this.props.name; }
   getDosage(): string | null { return this.props.dosage; }
@@ -35,6 +38,7 @@ export class Medication {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       name: this.props.name,
       dosage: this.props.dosage,

@@ -17,6 +17,7 @@ export class PgEducationPlanRepository implements EducationPlanRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       schoolName: row.school_name as string,
       academicYear: row.academic_year as string,
@@ -36,12 +37,13 @@ export class PgEducationPlanRepository implements EducationPlanRepository {
   async save(input: EducationPlanCreateInput): Promise<EducationPlan> {
     const result = await pool.query(
       `INSERT INTO education_plans
-         (id, user_id, child_id, school_name, academic_year, plan_type, start_date, review_date, end_date, goals, accommodations, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         (id, user_id, author_user_id, child_id, school_name, academic_year, plan_type, start_date, review_date, end_date, goals, accommodations, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.schoolName,
         input.academicYear,
