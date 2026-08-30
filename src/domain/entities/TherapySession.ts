@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 import { TherapyType } from './Therapist';
 
 export interface TherapySessionProps {
@@ -26,8 +28,7 @@ export interface TherapySessionSummary {
   createdAt: Date;
 }
 
-export class TherapySession {
-  constructor(private readonly props: TherapySessionProps) {}
+export class TherapySession extends Entity<TherapySessionProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -41,19 +42,4 @@ export class TherapySession {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      therapistId: this.props.therapistId,
-      therapyType: this.props.therapyType,
-      occurredAt: this.props.occurredAt,
-      durationMinutes: this.props.durationMinutes,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

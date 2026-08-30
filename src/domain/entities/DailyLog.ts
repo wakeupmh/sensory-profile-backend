@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 /**
  * Vocabulário do domínio. Morava no arquivo de validação Zod, o que fazia a
  * camada de aplicação importar de `interfaces/http` para conhecer os tipos de
@@ -38,8 +40,7 @@ export interface DailyLogSummary {
   createdAt: Date;
 }
 
-export class DailyLog {
-  constructor(private readonly props: DailyLogProps) {}
+export class DailyLog extends Entity<DailyLogProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -52,18 +53,4 @@ export class DailyLog {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      logType: this.props.logType,
-      occurredAt: this.props.occurredAt,
-      data: this.props.data,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

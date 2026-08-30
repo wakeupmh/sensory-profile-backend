@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface ChildProps {
   id: string;
   userId: string;
@@ -13,8 +15,11 @@ export interface ChildProps {
   updatedAt: Date;
 }
 
-export class Child {
-  constructor(private readonly props: ChildProps) {}
+export class Child extends Entity<ChildProps, 'userId'> {
+
+  protected hiddenFields() {
+    return ['userId'] as const;
+  }
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -29,19 +34,4 @@ export class Child {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      name: this.props.name,
-      birthDate: this.props.birthDate,
-      gender: this.props.gender,
-      nationalIdentity: this.props.nationalIdentity,
-      otherInfo: this.props.otherInfo,
-      sensoryTriggers: this.props.sensoryTriggers,
-      calmingStrategies: this.props.calmingStrategies,
-      emergencyContact: this.props.emergencyContact,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

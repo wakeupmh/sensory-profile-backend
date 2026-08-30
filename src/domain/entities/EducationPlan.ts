@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type EducationPlanType = 'pei' | 'pei_simplificado' | 'adaptacao_curricular' | 'plano_aee' | 'outro';
 
 export interface EducationPlanProps {
@@ -19,8 +21,7 @@ export interface EducationPlanProps {
   updatedAt: Date;
 }
 
-export class EducationPlan {
-  constructor(private readonly props: EducationPlanProps) {}
+export class EducationPlan extends Entity<EducationPlanProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -38,23 +39,4 @@ export class EducationPlan {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON(): EducationPlanProps {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      schoolName: this.props.schoolName,
-      academicYear: this.props.academicYear,
-      planType: this.props.planType,
-      startDate: this.props.startDate,
-      reviewDate: this.props.reviewDate,
-      endDate: this.props.endDate,
-      goals: this.props.goals,
-      accommodations: this.props.accommodations,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

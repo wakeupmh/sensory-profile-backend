@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type MilestoneCategory = 'motor_gross' | 'motor_fine' | 'language' | 'communication' | 'social' | 'cognitive' | 'self_care' | 'other';
 export type MilestoneStatus = 'not_yet' | 'in_progress' | 'achieved' | 'regressed';
 
@@ -17,8 +19,7 @@ export interface DevelopmentalMilestoneProps {
   updatedAt: Date;
 }
 
-export class DevelopmentalMilestone {
-  constructor(private readonly props: DevelopmentalMilestoneProps) {}
+export class DevelopmentalMilestone extends Entity<DevelopmentalMilestoneProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -34,20 +35,4 @@ export class DevelopmentalMilestone {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      title: this.props.title,
-      category: this.props.category,
-      status: this.props.status,
-      achievedDate: this.props.achievedDate,
-      targetDate: this.props.targetDate,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

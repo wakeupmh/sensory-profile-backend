@@ -44,6 +44,16 @@ export class ReportShareService {
     return this.repo.findByUserAndChild(userId, childId);
   }
 
+  /**
+   * Um compartilhamento do próprio dono, com o token. Existe para a tela poder
+   * montar o link sem que a listagem inteira carregue os tokens.
+   */
+  async getOwnShare(id: string, userId: string): Promise<ReportShare> {
+    const share = await this.repo.findById(id, userId);
+    if (!share) throw new NotFoundError('Compartilhamento não encontrado', id);
+    return share;
+  }
+
   deleteShare(id: string, userId: string): Promise<void> {
     return this.repo.deleteById(id, userId);
   }

@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type AccessLogAction = 'read' | 'write';
 
 export interface AccessLogProps {
@@ -18,20 +20,6 @@ export interface AccessLogProps {
   actorName: string | null;
 }
 
-export class AccessLog {
-  constructor(private readonly props: AccessLogProps) {}
+export class AccessLog extends Entity<AccessLogProps> {
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      actorUserId: this.props.actorUserId,
-      professionalId: this.props.professionalId,
-      childId: this.props.childId,
-      resourceType: this.props.resourceType,
-      resourceId: this.props.resourceId,
-      action: this.props.action,
-      createdAt: this.props.createdAt,
-      actorName: this.props.actorName,
-    };
-  }
 }

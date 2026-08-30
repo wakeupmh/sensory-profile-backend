@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type CommunicationEntryType = 'vocabulary' | 'aac_usage' | 'verbal_speech' | 'signs' | 'other';
 
 export interface CommunicationLogSummary {
@@ -25,8 +27,7 @@ export interface CommunicationLogProps {
   updatedAt: Date;
 }
 
-export class CommunicationLog {
-  constructor(private readonly props: CommunicationLogProps) {}
+export class CommunicationLog extends Entity<CommunicationLogProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -40,19 +41,4 @@ export class CommunicationLog {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      occurredAt: this.props.occurredAt,
-      entryType: this.props.entryType,
-      description: this.props.description,
-      wordsCount: this.props.wordsCount,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }
