@@ -10,16 +10,27 @@ export class AccessLogService {
   ) {}
 
   /**
-   * Best-effort: a logging failure must never break the read/write it's
-   * describing. Errors are swallowed after being logged at warn level.
+   * Best-effort: uma falha de auditoria nunca pode derrubar a leitura ou
+   * escrita que ela descreve.
+   *
+   * Mas o nível é `error`, e não `warn`: uma linha de auditoria perdida é um
+   * evento de conformidade — é o responsável deixando de enxergar o que foi
+   * feito com os dados da criança dele. Isso já aconteceu em silêncio quando
+   * `resource_type` recebia a URL inteira e estourava o `VARCHAR(50)`, e
+   * ninguém percebeu porque o log estava em `warn`. O input inteiro vai
+   * junto para que a linha perdida seja reconstituível.
    */
   async record(input: AccessLogCreateInput): Promise<void> {
     try {
       await this.repo.record(input);
     } catch (error) {
-      logger.warn('[AccessLogService] failed to record access log', {
+      logger.error('[AccessLogService] linha de auditoria PERDIDA', {
         error: error instanceof Error ? error.message : String(error),
+        actorUserId: input.actorUserId,
+        childId: input.childId,
         resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        action: input.action,
       });
     }
   }

@@ -18,6 +18,7 @@ export class PgAccessLogRepository implements AccessLogRepository {
       resourceId: (row.resource_id as string | null) ?? null,
       action: row.action as AccessLogAction,
       createdAt: new Date(row.created_at as string),
+      actorName: (row.actor_name as string | null) ?? null,
     } satisfies AccessLogProps;
     return new AccessLog(props);
   }
@@ -41,8 +42,21 @@ export class PgAccessLogRepository implements AccessLogRepository {
   async listForChild(childId: string, page: number, limit: number): Promise<AccessLogListResult> {
     const offset = (page - 1) * limit;
     const [dataResult, countResult] = await Promise.all([
+      // O nome de quem agiu vem das tabelas de concessão desta MESMA criança:
+      // é o responsável que registrou aquele nome ao convidar, então não há
+      // vazamento de identidade de terceiros aqui. Ambos os joins batem em
+      // índice (`idx_caregiver_shares_caregiver_user`, PK de professionals).
+      // Quando a equipe de cuidado entrar, ela é a terceira fonte de nome.
       pool.query(
-        `SELECT * FROM access_logs WHERE child_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+        `SELECT al.*, COALESCE(cs.caregiver_name, p.name) AS actor_name
+           FROM access_logs al
+           LEFT JOIN caregiver_shares cs
+                  ON cs.child_id = al.child_id AND cs.caregiver_user_id = al.actor_user_id
+           LEFT JOIN professionals p
+                  ON p.id = al.professional_id
+          WHERE al.child_id = $1
+          ORDER BY al.created_at DESC
+          LIMIT $2 OFFSET $3`,
         [childId, limit, offset],
       ),
       pool.query(`SELECT COUNT(*)::int AS count FROM access_logs WHERE child_id = $1`, [childId]),

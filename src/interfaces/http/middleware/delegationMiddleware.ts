@@ -3,6 +3,7 @@ import { runWithScope } from '../../../infrastructure/database/requestScope';
 import { CaregiverShareService } from '../../../application/services/CaregiverShareService';
 import { AccessLogService } from '../../../application/services/AccessLogService';
 import { AuthorizationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
+import { auditTargetFromPath } from './auditTarget';
 
 declare global {
   namespace Express {
@@ -128,10 +129,12 @@ export function createDelegationMiddleware(
       const actorUserId = req.userId;
       res.on('finish', () => {
         if (res.statusCode >= 400) return; // don't log rejected/failed requests
+        const target = auditTargetFromPath(req);
         void accessLogService.record({
           actorUserId,
           childId,
-          resourceType: `delegated:${req.method}:${req.baseUrl}${req.path}`,
+          resourceType: target.resourceType,
+          resourceId: target.resourceId,
           action: ['GET', 'HEAD'].includes(req.method) ? 'read' : 'write',
         });
       });
