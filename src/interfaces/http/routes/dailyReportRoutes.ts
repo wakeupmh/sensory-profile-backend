@@ -1,8 +1,5 @@
-import { Router } from 'express';
 import { transcriptionLimiter } from '../middleware/rateLimiters';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { delegationMiddleware } from './childRoutes';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter } from './domainRouter';
 import pool from '../../../infrastructure/database/connection';
 
 import { DailyReportController } from '../controllers/DailyReportController';
@@ -21,11 +18,7 @@ const dailyReportService = new DailyReportService(
 );
 const controller = new DailyReportController(dailyReportService);
 
-const router = Router();
-
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
+const router = domainRouter();
 
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));
