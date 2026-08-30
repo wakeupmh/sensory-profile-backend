@@ -176,6 +176,9 @@ export class PgAssessmentRepository implements AssessmentRepository {
 
   async update(assessment: Assessment, userId: string, externalClient?: PoolClient): Promise<Assessment> {
     const queryable = externalClient ?? pool;
+    const assessmentId = assessment.getId();
+    if (!assessmentId) throw new Error('Cannot update an assessment without an id');
+    const scope = scopedById('sensory_assessments', assessmentId, userId, 17);
     const result = await queryable.query(
       `UPDATE sensory_assessments SET
         child_id = $1,
@@ -195,7 +198,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
         scores_json = $15,
         parent_assessment_id = $16,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $17 AND user_id = $18 RETURNING *`,
+      WHERE ${scope.where} RETURNING *`,
       [
         assessment.getChildId(),
         assessment.getExaminerId(),

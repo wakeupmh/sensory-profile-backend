@@ -83,6 +83,26 @@ describe('acesso entre crianças sob delegação', () => {
     expect(await logs.findById(logB, owner)).not.toBeNull();
   });
 
+  test("a caregiver delegated to child A cannot UPDATE child B's log by id", async () => {
+    // O caminho de escrita era o que faltava: `findById` e `delete` já usavam
+    // o helper de escopo, mas os `update` montavam o predicado com
+    // placeholders dinâmicos e passavam sem restrição de criança.
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      expect(await logs.update(logB, owner, { notes: 'alterado por quem nao podia' })).toBeNull();
+    });
+    const fresh = await logs.findById(logB, owner);
+    expect(fresh?.getNotes()).toBe('registro privado da B');
+  });
+
+  test("a caregiver delegated to child A cannot UPDATE child B's document by id", async () => {
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      expect(await docs.update(docB, owner, { title: 'renomeado' })).toBeNull();
+    });
+    // O título vive em props privadas; ler direto do banco é a prova que importa.
+    const { rows } = await pool.query('SELECT title FROM documents WHERE id = $1', [docB]);
+    expect(rows[0].title).toBe('Laudo da B');
+  });
+
   test('delegation to the right child still works normally', async () => {
     await runWithScope({ restrictedToChildId: childB }, async () => {
       expect(await logs.findById(logB, owner)).not.toBeNull();
