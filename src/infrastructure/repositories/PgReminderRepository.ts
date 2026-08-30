@@ -18,6 +18,7 @@ export class PgReminderRepository implements ReminderRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       title: row.title as string,
       dueAt: new Date(row.due_at as string),
@@ -34,12 +35,13 @@ export class PgReminderRepository implements ReminderRepository {
   async save(input: ReminderCreateInput): Promise<Reminder> {
     const result = await pool.query(
       `INSERT INTO reminders
-         (id, user_id, child_id, title, due_at, status, resource_type, resource_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (id, user_id, author_user_id, child_id, title, due_at, status, resource_type, resource_id, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.title,
         input.dueAt,

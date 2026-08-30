@@ -1,6 +1,8 @@
 export interface ComorbidityProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   conditionName: string;
   icdCode: string | null;
@@ -16,6 +18,7 @@ export class Comorbidity {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getConditionName(): string { return this.props.conditionName; }
   getIcdCode(): string | null { return this.props.icdCode; }
@@ -29,6 +32,7 @@ export class Comorbidity {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       conditionName: this.props.conditionName,
       icdCode: this.props.icdCode,

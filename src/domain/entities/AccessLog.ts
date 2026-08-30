@@ -9,6 +9,13 @@ export interface AccessLogProps {
   resourceId: string | null;
   action: AccessLogAction;
   createdAt: Date;
+  /**
+   * Nome de quem agiu, quando dá para resolver: o cuidador delegado ou o
+   * profissional convidado por este responsável. Null quando o ator não é
+   * nenhum dos dois — não há credencial de admin do Supabase neste serviço,
+   * então um id solto não vira nome.
+   */
+  actorName: string | null;
 }
 
 export class AccessLog {
@@ -24,6 +31,7 @@ export class AccessLog {
       resourceId: this.props.resourceId,
       action: this.props.action,
       createdAt: this.props.createdAt,
+      actorName: this.props.actorName,
     };
   }
 }

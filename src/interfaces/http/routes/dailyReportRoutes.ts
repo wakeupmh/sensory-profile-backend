@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { transcriptionLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 import pool from '../../../infrastructure/database/connection';
 
 import { DailyReportController } from '../controllers/DailyReportController';
@@ -24,6 +25,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));

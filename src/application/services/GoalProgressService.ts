@@ -4,6 +4,7 @@ import { GoalStatus } from '../../domain/entities/Goal';
 import { GoalProgressEntryRepository } from '../../domain/repositories/GoalProgressEntryRepository';
 import { GoalRepository } from '../../domain/repositories/GoalRepository';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { currentScope } from '../../infrastructure/database/requestScope';
 
 export interface CreateGoalProgressPayload {
   recordedAt: Date;
@@ -47,11 +48,18 @@ export class GoalProgressService {
 
   async create(goalId: string, payload: CreateGoalProgressPayload, userId: string): Promise<GoalProgressEntry> {
     await this.assertGoalOwnership(goalId, userId);
+    // Não passa por BaseDomainService, então a mesma derivação de autoria
+    // (ver BaseDomainService.create) é repetida aqui: só grava quando quem
+    // age difere do dono, e vem depois do `...payload` para não poder ser
+    // forjada pelo corpo da requisição.
+    const { actingUserId } = currentScope();
+    const authorUserId = actingUserId && actingUserId !== userId ? actingUserId : undefined;
     return this.progressRepo.save({
       id: uuidv7(),
       userId,
       goalId,
       ...payload,
+      authorUserId,
     });
   }
 

@@ -3,6 +3,8 @@ import { Comorbidity } from '../entities/Comorbidity';
 export interface ComorbidityCreateInput {
   id: string;
   userId: string;
+  /** Ver ComorbidityProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   conditionName: string;
   icdCode?: string | null;

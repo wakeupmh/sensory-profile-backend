@@ -25,6 +25,7 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       occurredAt: new Date(row.occurred_at as string),
       commType: row.comm_type as SchoolCommType,
@@ -55,12 +56,13 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
   async save(input: SchoolCommunicationCreateInput): Promise<SchoolCommunication> {
     const result = await pool.query(
       `INSERT INTO school_communications
-         (id, user_id, child_id, occurred_at, comm_type, subject, description, attendees, follow_up_date, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (id, user_id, author_user_id, child_id, occurred_at, comm_type, subject, description, attendees, follow_up_date, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.occurredAt,
         input.commType,

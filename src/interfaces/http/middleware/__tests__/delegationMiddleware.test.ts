@@ -214,12 +214,42 @@ describe('createDelegationMiddleware', () => {
     await middleware(req, res, next);
     fireFinish(res);
 
+    // `resource_type` guarda a coleção e `resource_id` o uuid, e não a URL
+    // inteira: a coluna é VARCHAR(50), a URL inteira passava disso em toda
+    // ação sobre um registro específico, e a linha se perdia em silêncio.
+    // Ver `auditTarget.ts` e `accessLogAudit.int.test.ts`.
     expect(record).toHaveBeenCalledWith({
       actorUserId: CALLER_ID,
       childId: VALID_CHILD_ID,
-      resourceType: `delegated:POST:/api/children/${VALID_CHILD_ID}/notes`,
+      resourceType: 'notes',
+      resourceId: null,
       action: 'write',
     });
+  });
+
+  test('o resource_type gravado sempre cabe em access_logs.resource_type', async () => {
+    const resolve = jest.fn().mockResolvedValue(OWNER_ID);
+    const record = jest.fn();
+    const middleware = createDelegationMiddleware(makeService(resolve), makeAccessLogService(record));
+    // A rota mais comprida que a delegação alcança, com o registro endereçado
+    // pelo próprio id — a forma exata que estourava a coluna antes.
+    const reportId = '0199c3a1-1f2e-7a01-8b3c-2d4e5f60718a';
+    const req = makeReq({
+      header: jest.fn().mockReturnValue(VALID_CHILD_ID),
+      method: 'PATCH',
+      baseUrl: '/api/developmental-milestones',
+      path: `/${reportId}`,
+    });
+    const res = makeRes();
+    const next = jest.fn() as unknown as NextFunction;
+
+    await middleware(req, res, next);
+    fireFinish(res);
+
+    const logged = record.mock.calls[0][0];
+    expect(logged.resourceType).toBe('developmental_milestones');
+    expect(logged.resourceId).toBe(reportId);
+    expect(logged.resourceType.length).toBeLessThanOrEqual(50);
   });
 
   test('a GET delegated request is recorded with action "read"', async () => {

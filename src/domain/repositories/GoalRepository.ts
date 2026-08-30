@@ -3,6 +3,8 @@ import { Goal, GoalDomain, GoalStatus } from '../entities/Goal';
 export interface GoalCreateInput {
   id: string;
   userId: string;
+  /** Ver GoalProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   domain: GoalDomain;
   title: string;

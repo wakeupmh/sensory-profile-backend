@@ -32,6 +32,38 @@ export const CHILD_SCOPED_TABLES = new Set([
 ]);
 
 /**
+ * Lista de crianças concedidas que DEVE entrar no predicado desta consulta —
+ * ou `undefined` quando não entra nenhuma.
+ *
+ * É o único lugar onde a interação entre os dois mecanismos é decidida, para
+ * que `buildWhere` e `scopedById` não possam divergir:
+ *
+ * - sem concessão (lista ausente ou vazia): `undefined`. É o caso do
+ *   responsável sem equipe, e o SQL emitido continua sendo, letra por letra,
+ *   o de antes do care team existir;
+ * - tabela sem `child_id`: `undefined`. Não há o que conceder ali;
+ * - sob delegação: `undefined`. A DELEGAÇÃO ESTREITA, NUNCA ALARGA — a
+ *   requisição já está presa a uma única criança, cujas linhas pertencem ao
+ *   dono sob o qual a consulta corre, então a disjunção não alcançaria nenhuma
+ *   linha a mais; só afrouxaria o predicado do dono por nada.
+ */
+function grantedChildIds(childScoped: boolean): string[] | undefined {
+  const { restrictedToChildId, careTeamChildIds } = currentScope();
+  if (restrictedToChildId || !childScoped) return undefined;
+  return careTeamChildIds && careTeamChildIds.length > 0 ? careTeamChildIds : undefined;
+}
+
+/**
+ * Predicado do dono quando existe concessão: o registro é alcançável ou por
+ * ser da conta de quem chama, ou por a criança estar entre as concedidas.
+ * `ANY($n::uuid[])` mantém a lista inteira num único parâmetro — o número de
+ * placeholders não varia com o tamanho da equipe.
+ */
+function ownerOrGranted(userIndex: number, grantsIndex: number): string {
+  return `(user_id = $${userIndex} OR child_id = ANY($${grantsIndex}::uuid[]))`;
+}
+
+/**
  * Predicado para buscar/alterar UM registro pelo id, já com o escopo da
  * requisição aplicado.
  *
@@ -48,14 +80,56 @@ export function scopedById(
 ): { where: string; params: unknown[]; nextIndex: number } {
   const { restrictedToChildId } = currentScope();
   const i = startIndex;
-  if (restrictedToChildId && CHILD_SCOPED_TABLES.has(table)) {
+  const childScoped = CHILD_SCOPED_TABLES.has(table);
+  if (restrictedToChildId && childScoped) {
     return {
       where: `id = $${i} AND user_id = $${i + 1} AND child_id = $${i + 2}`,
       params: [id, userId, restrictedToChildId],
       nextIndex: i + 3,
     };
   }
+  // Concessão do care team: o profissional convidado não é o dono de linha
+  // nenhuma, então sem esta disjunção ele não alcança o registro nem sabendo
+  // o id — e com ela alcança SÓ as crianças concedidas. Vale para ler e para
+  // escrever, porque é o mesmo predicado que o `update` e o `delete` usam.
+  const granted = grantedChildIds(childScoped);
+  if (granted) {
+    return {
+      where: `id = $${i} AND ${ownerOrGranted(i + 1, i + 2)}`,
+      params: [id, userId, granted],
+      nextIndex: i + 3,
+    };
+  }
   return { where: `id = $${i} AND user_id = $${i + 1}`, params: [id, userId], nextIndex: i + 2 };
+}
+
+/**
+ * `children` é o caso que não cabe em `scopedById`: a criança é identificada
+ * pela própria coluna `id`, não por `child_id`, então o predicado
+ * "dono OU concedido" tem de casar por outra coluna.
+ *
+ * Vive à parte de propósito, e só é usado na LEITURA. `PgChildRepository` usa
+ * `scopedById('children', ...)` também no DELETE — ensinar a concessão lá
+ * dentro daria a um membro da equipe o poder de apagar a criança de uma
+ * família. Leitura e destruição compartilham um helper hoje; a concessão
+ * entra só de um lado, e é por isso que este helper existe em vez de uma
+ * entrada em `CHILD_SCOPED_TABLES`.
+ *
+ * Sem concessão o SQL é idêntico ao de `scopedById('children', ...)`.
+ */
+export function scopedChildRead(
+  id: string,
+  userId: string,
+): { where: string; params: unknown[] } {
+  // Mesma decisão que `scopedById` toma (inclusive "sob delegação não entra"),
+  // para que os dois não possam divergir.
+  const grants = grantedChildIds(true);
+
+  if (!grants) return { where: `id = $1 AND user_id = $2`, params: [id, userId] };
+  return {
+    where: `id = $1 AND (user_id = $2 OR id = ANY($3::uuid[]))`,
+    params: [id, userId, grants],
+  };
 }
 
 /**
@@ -80,16 +154,29 @@ export function buildWhere(
   filters: Record<string, unknown> | undefined,
   mapping: Record<string, FilterSpec>,
 ): { where: string; params: unknown[]; nextIndex: number } {
-  const conditions: string[] = ['user_id = $1'];
   const params: unknown[] = [userId];
   let idx = 2;
+
+  // `buildWhere` não recebe o nome da tabela — e a assinatura é fixa, porque
+  // 9 chamadas e ~20 repositórios dependem dela. O sinal de que a listagem é
+  // child-scoped está no próprio mapping: uma listagem cuja tabela tem
+  // `child_id` mapeia esse filtro (todas as 9 mapeiam). Se um dia alguma não
+  // mapear, o efeito é a concessão NÃO entrar — quem foi convidado vê menos,
+  // nunca mais. `delegationScopeCoverage.int.test.ts` guarda esse acordo.
+  const mappingIsChildScoped = Object.values(mapping).some(([column]) => column === 'child_id');
+
+  // Concessão do care team: o dono deixa de ser a única forma de alcançar a
+  // linha. Um único parâmetro (`$2`), independentemente do tamanho da equipe.
+  const granted = grantedChildIds(mappingIsChildScoped);
+  const conditions: string[] = [granted ? ownerOrGranted(1, idx++) : 'user_id = $1'];
+  if (granted) params.push(granted);
 
   // Sob delegação a listagem já vem com `childId` preenchido pelo middleware,
   // mas isso depende de a listagem ter esse filtro no mapping. Aplicar aqui
   // também fecha o caso de um mapping que não o tenha — a restrição passa a
   // ser propriedade do construtor de SQL, não de cada chamada.
   const { restrictedToChildId } = currentScope();
-  if (restrictedToChildId && !Object.values(mapping).some(([column]) => column === 'child_id')) {
+  if (restrictedToChildId && !mappingIsChildScoped) {
     conditions.push(`child_id = $${idx++}`);
     params.push(restrictedToChildId);
   }

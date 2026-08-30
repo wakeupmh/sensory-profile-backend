@@ -3,6 +3,8 @@ import { TherapyType } from './Therapist';
 export interface TherapySessionProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   therapistId: string | null;
   therapyType: TherapyType;
@@ -29,6 +31,7 @@ export class TherapySession {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getTherapistId(): string | null { return this.props.therapistId; }
   getTherapyType(): TherapyType { return this.props.therapyType; }
@@ -42,6 +45,7 @@ export class TherapySession {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       therapistId: this.props.therapistId,
       therapyType: this.props.therapyType,

@@ -4,6 +4,8 @@ import { GoalStatus } from '../entities/Goal';
 export interface GoalProgressEntryCreateInput {
   id: string;
   userId: string;
+  /** Ver GoalProgressEntryProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   goalId: string;
   recordedAt: Date;
   value?: number | null;

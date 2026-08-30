@@ -3,6 +3,8 @@ import { DailyLog, DailyLogSummary, LogData, LogType } from '../entities/DailyLo
 export interface DailyLogCreateInput {
   id: string;
   userId: string;
+  /** Ver DailyLogProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   logType: LogType;
   occurredAt: Date;

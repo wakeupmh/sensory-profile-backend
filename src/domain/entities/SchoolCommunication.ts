@@ -14,6 +14,8 @@ export interface SchoolCommunicationSummary {
 export interface SchoolCommunicationProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   occurredAt: Date;             // TIMESTAMPTZ → Date
   commType: SchoolCommType;
@@ -31,6 +33,7 @@ export class SchoolCommunication {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getOccurredAt(): Date { return this.props.occurredAt; }
   getCommType(): SchoolCommType { return this.props.commType; }
@@ -46,6 +49,7 @@ export class SchoolCommunication {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       occurredAt: this.props.occurredAt,
       commType: this.props.commType,

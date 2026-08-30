@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { uploadUrlLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 import pool from '../../../infrastructure/database/connection';
 
 import { DocumentController } from '../controllers/DocumentController';
@@ -18,6 +19,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 router.get('/', documentController.list.bind(documentController));
 router.post('/upload-url', uploadUrlLimiter, documentController.requestUpload.bind(documentController));

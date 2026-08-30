@@ -16,6 +16,7 @@ export class PgComorbidityRepository implements ComorbidityRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       conditionName: row.condition_name as string,
       icdCode: row.icd_code as string | null,
@@ -31,12 +32,13 @@ export class PgComorbidityRepository implements ComorbidityRepository {
   async save(input: ComorbidityCreateInput): Promise<Comorbidity> {
     const result = await pool.query(
       `INSERT INTO comorbidities
-         (id, user_id, child_id, condition_name, icd_code, diagnosis_date, diagnosing_doctor, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (id, user_id, author_user_id, child_id, condition_name, icd_code, diagnosis_date, diagnosing_doctor, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.conditionName,
         input.icdCode ?? null,

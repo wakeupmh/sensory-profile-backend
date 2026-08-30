@@ -3,6 +3,8 @@ export type EducationPlanType = 'pei' | 'pei_simplificado' | 'adaptacao_curricul
 export interface EducationPlanProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   schoolName: string;
   academicYear: string;
@@ -22,6 +24,7 @@ export class EducationPlan {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getSchoolName(): string { return this.props.schoolName; }
   getAcademicYear(): string { return this.props.academicYear; }
@@ -39,6 +42,7 @@ export class EducationPlan {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       schoolName: this.props.schoolName,
       academicYear: this.props.academicYear,

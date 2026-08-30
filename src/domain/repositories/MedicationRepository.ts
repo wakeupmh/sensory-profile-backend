@@ -3,6 +3,8 @@ import { Medication } from '../entities/Medication';
 export interface MedicationCreateInput {
   id: string;
   userId: string;
+  /** Ver MedicationProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   name: string;
   dosage?: string | null;

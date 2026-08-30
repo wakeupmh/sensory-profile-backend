@@ -14,6 +14,7 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       therapistId: row.therapist_id as string | null,
       therapyType: row.therapy_type as TherapyType,
@@ -42,12 +43,13 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
   async save(input: TherapySessionCreateInput): Promise<TherapySession> {
     const result = await pool.query(
       `INSERT INTO therapy_sessions
-         (id, user_id, child_id, therapist_id, therapy_type, occurred_at, duration_minutes, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (id, user_id, author_user_id, child_id, therapist_id, therapy_type, occurred_at, duration_minutes, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.therapistId ?? null,
         input.therapyType,

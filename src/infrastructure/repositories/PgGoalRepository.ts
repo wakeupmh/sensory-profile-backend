@@ -19,6 +19,7 @@ export class PgGoalRepository implements GoalRepository {
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       domain: row.domain as GoalDomain,
       title: row.title as string,
@@ -40,14 +41,13 @@ export class PgGoalRepository implements GoalRepository {
   async save(input: GoalCreateInput): Promise<Goal> {
     const result = await pool.query(
       `INSERT INTO goals
-         (id, user_id, child_id, domain, title, description, mastery_criteria,
-          baseline_value, target_value, unit, status, target_date,
-          source_education_plan_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         (id, user_id, author_user_id, child_id, domain, title, description, mastery_criteria, baseline_value, target_value, unit, status, target_date, source_education_plan_id, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.domain,
         input.title,

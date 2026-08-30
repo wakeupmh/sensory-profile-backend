@@ -18,12 +18,13 @@ const FILTER_MAP: Record<string, FilterSpec> = {
 export class PgDailyLogRepository implements DailyLogRepository {
   async save(input: DailyLogCreateInput): Promise<DailyLog> {
     const result = await pool.query(
-      `INSERT INTO daily_logs (id, user_id, child_id, log_type, occurred_at, data, notes)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+      `INSERT INTO daily_logs (id, user_id, author_user_id, child_id, log_type, occurred_at, data, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.logType,
         input.occurredAt,
@@ -134,6 +135,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
     return new DailyLog({
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       logType: row.log_type as LogType,
       occurredAt: new Date(row.occurred_at as string),

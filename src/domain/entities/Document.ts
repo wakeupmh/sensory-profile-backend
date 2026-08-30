@@ -1,6 +1,8 @@
 export interface DocumentProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   title: string;
   description: string | null;
@@ -19,6 +21,7 @@ export class Document {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getStorageKey(): string { return this.props.storageKey; }
   getSizeBytes(): number | null { return this.props.sizeBytes; }
@@ -27,6 +30,7 @@ export class Document {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       title: this.props.title,
       description: this.props.description,

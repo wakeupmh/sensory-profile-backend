@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 
 import { GoalController } from '../controllers/GoalController';
 import { GoalService } from '../../../application/services/GoalService';
@@ -22,6 +23,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 router.get('/', goalController.list.bind(goalController));
 router.post('/', goalController.create.bind(goalController));

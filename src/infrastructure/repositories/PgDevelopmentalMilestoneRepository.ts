@@ -24,6 +24,7 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
     const props = {
       id: row.id as string,
       userId: row.user_id as string,
+      authorUserId: (row.author_user_id as string | null) ?? null,
       childId: row.child_id as string,
       title: row.title as string,
       category: row.category as MilestoneCategory,
@@ -40,12 +41,13 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
   async save(input: MilestoneCreateInput): Promise<DevelopmentalMilestone> {
     const result = await pool.query(
       `INSERT INTO developmental_milestones
-         (id, user_id, child_id, title, category, status, achieved_date, target_date, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (id, user_id, author_user_id, child_id, title, category, status, achieved_date, target_date, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         input.id,
         input.userId,
+        input.authorUserId ?? null,
         input.childId,
         input.title,
         input.category,

@@ -3,6 +3,8 @@ import { DevelopmentalMilestone, MilestoneCategory, MilestoneStatus } from '../e
 export interface MilestoneCreateInput {
   id: string;
   userId: string;
+  /** Ver DevelopmentalMilestoneProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   title: string;
   category: MilestoneCategory;

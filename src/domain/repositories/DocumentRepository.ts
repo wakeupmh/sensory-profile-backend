@@ -3,6 +3,8 @@ import { Document } from '../entities/Document';
 export interface DocumentCreateInput {
   id: string;
   userId: string;
+  /** Ver DocumentProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   title: string;
   description?: string | null;

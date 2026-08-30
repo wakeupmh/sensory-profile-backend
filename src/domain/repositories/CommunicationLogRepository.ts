@@ -4,6 +4,8 @@ export type { CommunicationLogSummary };
 export interface CommunicationLogCreateInput {
   id: string;
   userId: string;
+  /** Ver CommunicationLogProps.authorUserId — omitido/undefined vira NULL no repositório. */
+  authorUserId?: string | null;
   childId: string;
   occurredAt: Date;
   entryType: CommunicationEntryType;

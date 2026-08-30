@@ -17,12 +17,20 @@
  * 10.  eraseAccount() erases the user-scoped tables no cascade reaches
  *      (therapists/examiners/caregivers/push_subscriptions)
  * 11.  eraseAccount() nulls accepted_user_id on another account's professional row
- * 12.  eraseAccount() wraps the wipe in one transaction and releases the client
- * 13.  eraseAccount() rolls back and leaves S3 untouched when a delete fails
+ * 12.  eraseAccount() nulls author_user_id on every AUTHOR_ATTRIBUTED_TABLES table
+ * 13.  eraseAccount() nulls member_user_id and revokes care_team_members rows when the table exists
+ * 14.  eraseAccount() skips the care_team_members pass when the table does not exist yet
+ * 15.  eraseAccount() wraps the wipe in one transaction and releases the client
+ * 16.  eraseAccount() rolls back and leaves S3 untouched when a delete fails
+ *
+ * Real-database coverage for the author-neutralisation pass itself (a row
+ * that survives with author_user_id actually cleared) lives in
+ * accountErasureAuthorship.int.test.ts — this file stays mock-only, like the
+ * rest of AccountErasureService's suite.
  */
 
 import { Pool } from 'pg';
-import { AccountErasureService } from 'application/services/AccountErasureService';
+import { AccountErasureService, AUTHOR_ATTRIBUTED_TABLES } from 'application/services/AccountErasureService';
 import { S3StorageService } from 'infrastructure/storage/S3StorageService';
 
 const USER_ID = 'user-001';
@@ -42,6 +50,13 @@ interface MockPoolConfig {
   childrenDeleteRowCount?: number;
   /** Faz qualquer DELETE falhar, para exercitar o ROLLBACK. */
   failOnDelete?: boolean;
+  /**
+   * Simula se `care_team_members` já existe no banco (migration 035 é do
+   * a migration 035 e pode não ter rodado ainda). `undefined`/`false` reproduz um
+   * banco sem a tabela — o caminho mais comum enquanto o care team está em
+   * construção em paralelo.
+   */
+  careTeamTableExists?: boolean;
 }
 
 function makePool(config: MockPoolConfig = {}) {
@@ -61,6 +76,9 @@ function makePool(config: MockPoolConfig = {}) {
     if (sql.includes('FROM daily_reports')) {
       const childId = params[1] as string;
       return Promise.resolve(makeQueryResult(config.dailyReportsByChild?.[childId] ?? []));
+    }
+    if (sql.includes('information_schema.tables')) {
+      return Promise.resolve(makeQueryResult(config.careTeamTableExists ? [{ '?column?': 1 }] : []));
     }
     if (sql.startsWith('DELETE FROM')) {
       if (config.failOnDelete) return Promise.reject(new Error('constraint violation'));
@@ -275,6 +293,54 @@ describe('AccountErasureService', () => {
       const update = calls.find((c) => c.sql.startsWith('UPDATE professionals'));
       expect(update?.sql).toContain('SET accepted_user_id = NULL');
       expect(update?.params).toEqual([USER_ID]);
+    });
+
+    test('nulls author_user_id on every AUTHOR_ATTRIBUTED_TABLES table, scoped to the erased user', async () => {
+      const { pool, calls } = makePool({ children: [] });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      // Este é o buraco de LGPD que o care team abre: um profissional que
+      // escreveu no prontuário de OUTRAS famílias não é dono de nenhuma
+      // dessas linhas, então nem o DELETE nem o cascade de children as
+      // alcançam. Sem este passo, o `sub` de quem pediu a eliminação ficava
+      // gravado para sempre no dado de terceiros.
+      for (const table of AUTHOR_ATTRIBUTED_TABLES) {
+        const update = calls.find((c) => c.sql.startsWith(`UPDATE ${table}`) && c.sql.includes('author_user_id'));
+        expect(update?.sql).toContain('SET author_user_id = NULL');
+        expect(update?.sql).toContain('WHERE author_user_id = $1');
+        expect(update?.params).toEqual([USER_ID]);
+      }
+    });
+
+    test('nulls member_user_id and revokes care_team_members rows when the table exists', async () => {
+      const { pool, calls } = makePool({ children: [], careTeamTableExists: true });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await service.eraseAccount(USER_ID);
+
+      const update = calls.find((c) => c.sql.startsWith('UPDATE care_team_members'));
+      expect(update?.sql).toContain('member_user_id = NULL');
+      expect(update?.sql).toContain('revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)');
+      expect(update?.sql).toContain('WHERE member_user_id = $1');
+      expect(update?.params).toEqual([USER_ID]);
+    });
+
+    test('skips the care_team_members pass when the table does not exist yet', async () => {
+      // a migration 035 pode não ter rodado neste banco ainda —
+      // a checagem via information_schema tem que tolerar isso sem quebrar
+      // o resto da eliminação.
+      const { pool, calls } = makePool({ children: [], careTeamTableExists: false });
+      const { storage } = makeStorage();
+      const service = new AccountErasureService(pool, storage);
+
+      await expect(service.eraseAccount(USER_ID)).resolves.toBeDefined();
+
+      const update = calls.find((c) => c.sql.startsWith('UPDATE care_team_members'));
+      expect(update).toBeUndefined();
     });
 
     test('runs the whole wipe in one transaction and releases the client', async () => {

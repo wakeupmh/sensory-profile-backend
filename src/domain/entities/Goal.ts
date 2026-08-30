@@ -12,6 +12,8 @@ export type GoalStatus = 'active' | 'achieved' | 'paused' | 'discontinued';
 export interface GoalProps {
   id: string;
   userId: string;
+  /** `sub` de quem escreveu, quando difere do dono (`userId`). NULL = dono, ou anterior ao care team. */
+  authorUserId: string | null;
   childId: string;
   domain: GoalDomain;
   title: string;
@@ -33,6 +35,7 @@ export class Goal {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
+  getAuthorUserId(): string | null { return this.props.authorUserId; }
   getChildId(): string { return this.props.childId; }
   getDomain(): GoalDomain { return this.props.domain; }
   getTitle(): string { return this.props.title; }
@@ -44,6 +47,7 @@ export class Goal {
     return {
       id: this.props.id,
       userId: this.props.userId,
+      authorUserId: this.props.authorUserId,
       childId: this.props.childId,
       domain: this.props.domain,
       title: this.props.title,
