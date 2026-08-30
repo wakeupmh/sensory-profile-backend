@@ -5,110 +5,62 @@ import {
   ComorbidityCreateInput,
   ComorbidityUpdateInput,
 } from '../../domain/repositories/ComorbidityRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-};
+const TABLE = defineTable({
+  table: 'comorbidities',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    conditionName: col.required('condition_name', read.text),
+    icdCode: col.nullable('icd_code', read.textOrNull),
+    diagnosisDate: col.nullable('diagnosis_date', read.rawOrNull<string>()),
+    diagnosingDoctor: col.nullable('diagnosing_doctor', read.textOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<ComorbidityProps>,
+  filters: { childId: ['child_id'] },
+});
 
 export class PgComorbidityRepository implements ComorbidityRepository {
-  private mapRowToComorbidity(row: Record<string, unknown>): Comorbidity {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      conditionName: row.condition_name as string,
-      icdCode: row.icd_code as string | null,
-      diagnosisDate: row.diagnosis_date as string | null,
-      diagnosingDoctor: row.diagnosing_doctor as string | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies ComorbidityProps;
-    return new Comorbidity(props);
+  private toEntity(row: Record<string, unknown>): Comorbidity {
+    return new Comorbidity(TABLE.mapRow(row));
   }
 
   async save(input: ComorbidityCreateInput): Promise<Comorbidity> {
-    const result = await pool.query(
-      `INSERT INTO comorbidities
-         (id, user_id, author_user_id, child_id, condition_name, icd_code, diagnosis_date, diagnosing_doctor, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.conditionName,
-        input.icdCode ?? null,
-        input.diagnosisDate ?? null,
-        input.diagnosingDoctor ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToComorbidity(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Comorbidity | null> {
-    const scope = scopedById('comorbidities', id, userId);
-    const result = await pool.query(`SELECT * FROM comorbidities WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToComorbidity(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: { childId?: string }): Promise<Comorbidity[]> {
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM comorbidities WHERE ${where} ORDER BY condition_name ASC`,
       params,
     );
-    return result.rows.map((row) => this.mapRowToComorbidity(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: ComorbidityUpdateInput): Promise<Comorbidity | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.conditionName !== undefined) {
-      params.push(input.conditionName);
-      setClauses.push(`condition_name = $${params.length}`);
-    }
-    if ('icdCode' in input) {
-      params.push(input.icdCode ?? null);
-      setClauses.push(`icd_code = $${params.length}`);
-    }
-    if ('diagnosisDate' in input) {
-      params.push(input.diagnosisDate ?? null);
-      setClauses.push(`diagnosis_date = $${params.length}`);
-    }
-    if ('diagnosingDoctor' in input) {
-      params.push(input.diagnosingDoctor ?? null);
-      setClauses.push(`diagnosing_doctor = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('comorbidities', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE comorbidities
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToComorbidity(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('comorbidities', id, userId);
-    const result = await pool.query(`DELETE FROM comorbidities WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

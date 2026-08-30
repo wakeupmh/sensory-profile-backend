@@ -6,136 +6,69 @@ import {
   MedicationUpdateInput,
   MedicationFilters,
 } from '../../domain/repositories/MedicationRepository';
-import { scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
+
+const TABLE = defineTable({
+  table: 'medications',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    name: col.required('name', read.text),
+    dosage: col.nullable('dosage', read.textOrNull),
+    frequency: col.nullable('frequency', read.textOrNull),
+    startDate: col.nullable('start_date', read.rawOrNull<string>()),
+    endDate: col.nullable('end_date', read.rawOrNull<string>()),
+    prescribingDoctor: col.nullable('prescribing_doctor', read.textOrNull),
+    active: col.required('active', read.boolean, { insertDefault: true }),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<MedicationProps>,
+  // `medications` é child-scoped, e esta listagem NÃO passava por `buildWhere`:
+  // montava `user_id = $1` à mão, então a concessão do care team não a
+  // alcançava — o profissional convidado via os logs e os documentos da
+  // criança, mas nenhum medicamento.
+  filters: { childId: ['child_id'], active: ['active'] },
+});
 
 export class PgMedicationRepository implements MedicationRepository {
-  private mapRowToMedication(row: Record<string, unknown>): Medication {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      name: row.name as string,
-      dosage: row.dosage as string | null,
-      frequency: row.frequency as string | null,
-      startDate: row.start_date as string | null,
-      endDate: row.end_date as string | null,
-      prescribingDoctor: row.prescribing_doctor as string | null,
-      active: row.active as boolean,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies MedicationProps;
-    return new Medication(props);
+  private toEntity(row: Record<string, unknown>): Medication {
+    return new Medication(TABLE.mapRow(row));
   }
 
   async save(input: MedicationCreateInput): Promise<Medication> {
-    const result = await pool.query(
-      `INSERT INTO medications
-         (id, user_id, author_user_id, child_id, name, dosage, frequency, start_date, end_date, prescribing_doctor, active, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.name,
-        input.dosage ?? null,
-        input.frequency ?? null,
-        input.startDate ?? null,
-        input.endDate ?? null,
-        input.prescribingDoctor ?? null,
-        input.active ?? true,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToMedication(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Medication | null> {
-    const scope = scopedById('medications', id, userId);
-    const result = await pool.query(`SELECT * FROM medications WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToMedication(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: MedicationFilters): Promise<Medication[]> {
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.active !== undefined) {
-      params.push(filters.active);
-      conditions.push(`active = $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM medications WHERE ${where} ORDER BY name ASC`,
       params,
     );
-    return result.rows.map((row) => this.mapRowToMedication(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: MedicationUpdateInput): Promise<Medication | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.name !== undefined) {
-      params.push(input.name);
-      setClauses.push(`name = $${params.length}`);
-    }
-    if ('dosage' in input) {
-      params.push(input.dosage ?? null);
-      setClauses.push(`dosage = $${params.length}`);
-    }
-    if ('frequency' in input) {
-      params.push(input.frequency ?? null);
-      setClauses.push(`frequency = $${params.length}`);
-    }
-    if ('startDate' in input) {
-      params.push(input.startDate ?? null);
-      setClauses.push(`start_date = $${params.length}`);
-    }
-    if ('endDate' in input) {
-      params.push(input.endDate ?? null);
-      setClauses.push(`end_date = $${params.length}`);
-    }
-    if ('prescribingDoctor' in input) {
-      params.push(input.prescribingDoctor ?? null);
-      setClauses.push(`prescribing_doctor = $${params.length}`);
-    }
-    if (input.active !== undefined) {
-      params.push(input.active);
-      setClauses.push(`active = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('medications', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE medications
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToMedication(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('medications', id, userId);
-    const result = await pool.query(`DELETE FROM medications WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }
