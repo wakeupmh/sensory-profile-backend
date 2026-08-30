@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface LogAttachmentProps {
   id: string;
   logId: string;
@@ -7,8 +9,11 @@ export interface LogAttachmentProps {
   createdAt: Date;
 }
 
-export class LogAttachment {
-  constructor(private readonly props: LogAttachmentProps) {}
+export class LogAttachment extends Entity<LogAttachmentProps, 'storageKey'> {
+
+  protected hiddenFields() {
+    return ['storageKey'] as const;
+  }
 
   getId(): string { return this.props.id; }
   getLogId(): string { return this.props.logId; }
@@ -17,13 +22,4 @@ export class LogAttachment {
   getSizeBytes(): number | null { return this.props.sizeBytes; }
   getCreatedAt(): Date { return this.props.createdAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      logId: this.props.logId,
-      mimeType: this.props.mimeType,
-      sizeBytes: this.props.sizeBytes,
-      createdAt: this.props.createdAt,
-    };
-  }
 }

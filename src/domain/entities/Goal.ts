@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type GoalDomain =
   | 'comunicacao'
   | 'social'
@@ -30,8 +32,7 @@ export interface GoalProps {
   updatedAt: Date;
 }
 
-export class Goal {
-  constructor(private readonly props: GoalProps) {}
+export class Goal extends Entity<GoalProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -43,25 +44,4 @@ export class Goal {
   getBaselineValue(): number | null { return this.props.baselineValue; }
   getTargetValue(): number | null { return this.props.targetValue; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      domain: this.props.domain,
-      title: this.props.title,
-      description: this.props.description,
-      masteryCriteria: this.props.masteryCriteria,
-      baselineValue: this.props.baselineValue,
-      targetValue: this.props.targetValue,
-      unit: this.props.unit,
-      status: this.props.status,
-      targetDate: this.props.targetDate,
-      sourceEducationPlanId: this.props.sourceEducationPlanId,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }
