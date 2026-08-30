@@ -43,16 +43,19 @@ export function scopedById(
   table: string,
   id: string,
   userId: string,
+  /** Primeiro placeholder livre, para queries cujo SET já ocupa $1, $2, ... */
+  startIndex = 1,
 ): { where: string; params: unknown[]; nextIndex: number } {
   const { restrictedToChildId } = currentScope();
+  const i = startIndex;
   if (restrictedToChildId && CHILD_SCOPED_TABLES.has(table)) {
     return {
-      where: 'id = $1 AND user_id = $2 AND child_id = $3',
+      where: `id = $${i} AND user_id = $${i + 1} AND child_id = $${i + 2}`,
       params: [id, userId, restrictedToChildId],
-      nextIndex: 4,
+      nextIndex: i + 3,
     };
   }
-  return { where: 'id = $1 AND user_id = $2', params: [id, userId], nextIndex: 3 };
+  return { where: `id = $${i} AND user_id = $${i + 1}`, params: [id, userId], nextIndex: i + 2 };
 }
 
 /**

@@ -16,6 +16,17 @@ afterAll(async () => {
 });
 
 const REPO_DIR = join(__dirname, '../../infrastructure/repositories');
+const SERVICE_DIR = join(__dirname, '../../application/services');
+
+/**
+ * Serviços que escrevem SQL direto e cuja tabela NÃO tem `child_id`
+ * (`caregivers`, `examiners`, `voice_notes`) — não há o que restringir ali.
+ */
+const SERVICES_WITHOUT_CHILD_SCOPE = new Set([
+  'CaregiverService.ts',
+  'ExaminerService.ts',
+  'VoiceNoteService.ts',
+]);
 
 describe('cobertura do escopo de delegação', () => {
   test('every table with a child_id column is declared child-scoped', async () => {
@@ -37,6 +48,23 @@ describe('cobertura do escopo de delegação', () => {
     );
     const real = new Set(rows.map((r) => r.table_name));
     expect([...CHILD_SCOPED_TABLES].filter((t) => !real.has(t))).toEqual([]);
+  });
+
+  test('no service hand-writes the id+user predicate either', () => {
+    // A primeira versão desta guarda só varria os repositórios, e vários
+    // serviços falam com o banco diretamente — foi por essa fresta que
+    // `daily_reports` continuou alcançável entre crianças depois do PR que
+    // dizia ter fechado o caso do `:id`.
+    const offenders: string[] = [];
+    for (const file of readdirSync(SERVICE_DIR).filter((f) => f.endsWith('.ts'))) {
+      if (SERVICES_WITHOUT_CHILD_SCOPE.has(file)) continue;
+      const src = readFileSync(join(SERVICE_DIR, file), 'utf8');
+      // `FROM children` é a checagem de posse da própria criança, não um
+      // registro dela — não é o padrão que vaza.
+      const lines = src.split('\n').filter((l) => /WHERE id = \$1 AND user_id = \$2/.test(l) && !/FROM children/.test(l));
+      if (lines.length > 0) offenders.push(`${file}: ${lines.length}`);
+    }
+    expect(offenders).toEqual([]);
   });
 
   test('no repository hand-writes the id+user predicate that bypasses the scope', () => {

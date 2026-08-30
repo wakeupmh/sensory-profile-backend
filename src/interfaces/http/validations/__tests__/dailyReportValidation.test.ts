@@ -1,4 +1,4 @@
-import { createDailyReportSchema, listDailyReportsSchema } from '../dailyReportValidation';
+import { createDailyReportSchema, listDailyReportsSchema, updateDailyReportSchema } from '../dailyReportValidation';
 
 const CHILD = '11111111-1111-1111-1111-111111111111';
 
@@ -38,5 +38,24 @@ describe('listDailyReportsSchema', () => {
   test('defaults and caps the limit', () => {
     expect(listDailyReportsSchema.parse({ childId: CHILD }).limit).toBe(30);
     expect(() => listDailyReportsSchema.parse({ childId: CHILD, limit: '500' })).toThrow();
+  });
+});
+
+describe('updateDailyReportSchema', () => {
+  test('accepts a corrected transcript', () => {
+    expect(updateDailyReportSchema.parse({ transcript: 'Texto corrigido.' }).transcript).toBe('Texto corrigido.');
+  });
+
+  test('trims surrounding whitespace', () => {
+    expect(updateDailyReportSchema.parse({ transcript: '  Texto corrigido.  ' }).transcript).toBe('Texto corrigido.');
+  });
+
+  test('rejects an empty transcript', () => {
+    expect(() => updateDailyReportSchema.parse({ transcript: '' })).toThrow();
+    expect(() => updateDailyReportSchema.parse({ transcript: '   ' })).toThrow();
+  });
+
+  test('rejects a transcript over the length cap', () => {
+    expect(() => updateDailyReportSchema.parse({ transcript: 'a'.repeat(20001) })).toThrow();
   });
 });

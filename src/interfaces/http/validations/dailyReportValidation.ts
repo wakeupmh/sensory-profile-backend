@@ -39,3 +39,17 @@ export const listDailyReportsSchema = z.object({
   childId: z.string().uuid(),
   limit: z.coerce.number().int().positive().max(100).default(30),
 });
+
+/**
+ * A transcrição é o registro durável — alimenta a exportação LGPD e os
+ * resumos da IA — então uma correção (nome ou termo mal-entendido pelo
+ * Transcribe) precisa continuar sendo texto de verdade, não apagar o relato
+ * inteiro. `trim()` evita salvar uma edição que é só espaço em branco.
+ */
+export const updateDailyReportSchema = z.object({
+  transcript: z
+    .string()
+    .trim()
+    .min(1, 'A transcrição não pode ficar vazia')
+    .max(20000, 'Transcrição muito longa'),
+});
