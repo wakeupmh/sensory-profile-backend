@@ -10,6 +10,7 @@ import { CaregiverService } from '../../../application/services/CaregiverService
 import { SectionCommentService } from '../../../application/services/SectionCommentService';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 import { ResourceShareService } from '../../../application/services/ResourceShareService';
 import { PgAssessmentShareRepository } from '../../../infrastructure/repositories/PgResourceShareRepository';
 import { ResourceShareController } from '../controllers/ResourceShareController';
@@ -59,6 +60,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 // Child routes
 router.get('/children', entityController.getAllChildren.bind(entityController));

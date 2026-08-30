@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { uploadUrlLimiter } from '../middleware/rateLimiters';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { delegationMiddleware } from './childRoutes';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 import pool from '../../../infrastructure/database/connection';
 
 import { DailyLogController } from '../controllers/DailyLogController';
@@ -31,6 +32,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 // Registered before '/:id' — two path segments, so no collision, but kept
 // first for readability.

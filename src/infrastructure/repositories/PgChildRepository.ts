@@ -2,7 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import pool from '../database/connection';
 import { Child } from '../../domain/entities/Child';
 import { ChildRepository, ChildCreateInput, ChildUpdateInput } from '../../domain/repositories/ChildRepository';
-import { scopedById } from './queryUtils';
+import { scopedById, scopedChildRead } from './queryUtils';
 
 export class PgChildRepository implements ChildRepository {
   async findByUserId(userId: string): Promise<Child[]> {
@@ -13,8 +13,10 @@ export class PgChildRepository implements ChildRepository {
     return result.rows.map(this.mapRow);
   }
 
+  // Leitura: alcança também as crianças concedidas à equipe de cuidado.
+  // `update` e `delete` continuam só do dono — ver `scopedChildRead`.
   async findById(id: string, userId: string): Promise<Child | null> {
-    const scope = scopedById('children', id, userId);
+    const scope = scopedChildRead(id, userId);
     const result = await pool.query(`SELECT * FROM children WHERE ${scope.where}`, scope.params);
     if (result.rows.length === 0) return null;
     return this.mapRow(result.rows[0]);

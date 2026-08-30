@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { createDelegationMiddleware } from '../middleware/delegationMiddleware';
+import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
 import { ChildController } from '../controllers/ChildController';
 import { AccountController } from '../controllers/AccountController';
 import { ChildService } from '../../../application/services/ChildService';
@@ -72,6 +73,7 @@ export {
 const router = Router();
 router.use(authMiddleware);
 router.use(delegationMiddleware);
+router.use(careTeamScopeMiddleware);
 
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));
