@@ -11,75 +11,60 @@ import {
   SchoolCommunicationFilters,
   SchoolCommunicationSummary,
 } from '../../domain/repositories/SchoolCommunicationRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  commType: ['comm_type'],
-  from: ['occurred_at', '>='],
-  to: ['occurred_at', '<='],
-};
+const TABLE = defineTable({
+  table: 'school_communications',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    occurredAt: col.required('occurred_at', read.timestamp),
+    commType: col.required('comm_type', read.raw<SchoolCommType>()),
+    subject: col.required('subject', read.text),
+    description: col.nullable('description', read.textOrNull),
+    attendees: col.nullable('attendees', read.textOrNull),
+    followUpDate: col.nullable('follow_up_date', read.rawOrNull<string>()),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<SchoolCommunicationProps>,
+  filters: {
+    childId: ['child_id'],
+    commType: ['comm_type'],
+    from: ['occurred_at', '>='],
+    to: ['occurred_at', '<='],
+  },
+});
+
+/** A projeção da listagem: as colunas do SELECT e a leitura da linha saem daqui. */
+const SUMMARY = [
+  'id',
+  'childId',
+  'occurredAt',
+  'commType',
+  'subject',
+  'attendees',
+  'followUpDate',
+  'createdAt',
+] as const;
 
 export class PgSchoolCommunicationRepository implements SchoolCommunicationRepository {
-  private mapRowToLog(row: Record<string, unknown>): SchoolCommunication {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      occurredAt: new Date(row.occurred_at as string),
-      commType: row.comm_type as SchoolCommType,
-      subject: row.subject as string,
-      description: row.description as string | null,
-      attendees: row.attendees as string | null,
-      followUpDate: row.follow_up_date as string | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies SchoolCommunicationProps;
-    return new SchoolCommunication(props);
-  }
-
-  private mapRowToSummary(row: Record<string, unknown>): SchoolCommunicationSummary {
-    return {
-      id: row.id as string,
-      childId: row.child_id as string,
-      occurredAt: new Date(row.occurred_at as string),
-      commType: row.comm_type as SchoolCommType,
-      subject: row.subject as string,
-      attendees: row.attendees as string | null,
-      followUpDate: row.follow_up_date as string | null,
-      createdAt: new Date(row.created_at as string),
-    };
+  private toEntity(row: Record<string, unknown>): SchoolCommunication {
+    return new SchoolCommunication(TABLE.mapRow(row));
   }
 
   async save(input: SchoolCommunicationCreateInput): Promise<SchoolCommunication> {
-    const result = await pool.query(
-      `INSERT INTO school_communications
-         (id, user_id, author_user_id, child_id, occurred_at, comm_type, subject, description, attendees, follow_up_date, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.occurredAt,
-        input.commType,
-        input.subject,
-        input.description ?? null,
-        input.attendees ?? null,
-        input.followUpDate ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<SchoolCommunication | null> {
-    const scope = scopedById('school_communications', id, userId);
-    const result = await pool.query(`SELECT * FROM school_communications WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(
@@ -90,7 +75,7 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM school_communications WHERE ${where}`,
@@ -99,7 +84,7 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
 
     params.push(limit, offset);
     const dataResult = await pool.query(
-      `SELECT id, child_id, occurred_at, comm_type, subject, attendees, follow_up_date, created_at
+      `SELECT ${TABLE.columnsOf(SUMMARY)}
        FROM school_communications
        WHERE ${where}
        ORDER BY occurred_at DESC
@@ -108,7 +93,9 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
     );
 
     return {
-      data: dataResult.rows.map((row) => this.mapRowToSummary(row)),
+      data: dataResult.rows.map(
+        (row) => TABLE.pick(row, SUMMARY) satisfies SchoolCommunicationSummary,
+      ),
       total: Number(countResult.rows[0].count),
       page,
       limit,
@@ -120,57 +107,15 @@ export class PgSchoolCommunicationRepository implements SchoolCommunicationRepos
     userId: string,
     input: SchoolCommunicationUpdateInput,
   ): Promise<SchoolCommunication | null> {
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
-
-    if (input.occurredAt !== undefined) {
-      params.push(input.occurredAt);
-      setClauses.push(`occurred_at = $${params.length}`);
-    }
-    if (input.commType !== undefined) {
-      params.push(input.commType);
-      setClauses.push(`comm_type = $${params.length}`);
-    }
-    if (input.subject !== undefined) {
-      params.push(input.subject);
-      setClauses.push(`subject = $${params.length}`);
-    }
-    if ('description' in input) {
-      params.push(input.description ?? null);
-      setClauses.push(`description = $${params.length}`);
-    }
-    if ('attendees' in input) {
-      params.push(input.attendees ?? null);
-      setClauses.push(`attendees = $${params.length}`);
-    }
-    if ('followUpDate' in input) {
-      params.push(input.followUpDate ?? null);
-      setClauses.push(`follow_up_date = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('school_communications', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE school_communications
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('school_communications', id, userId);
-    const result = await pool.query(`DELETE FROM school_communications WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

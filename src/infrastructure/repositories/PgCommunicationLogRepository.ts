@@ -11,70 +11,57 @@ import {
   CommunicationLogFilters,
   CommunicationLogSummary,
 } from '../../domain/repositories/CommunicationLogRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  entryType: ['entry_type'],
-  from: ['occurred_at', '>='],
-  to: ['occurred_at', '<='],
-};
+const TABLE = defineTable({
+  table: 'communication_logs',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    occurredAt: col.required('occurred_at', read.timestamp),
+    entryType: col.required('entry_type', read.raw<CommunicationEntryType>()),
+    description: col.nullable('description', read.textOrNull),
+    wordsCount: col.nullable('words_count', read.numberOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<CommunicationLogProps>,
+  filters: {
+    childId: ['child_id'],
+    entryType: ['entry_type'],
+    from: ['occurred_at', '>='],
+    to: ['occurred_at', '<='],
+  },
+});
+
+/** A projeção da listagem: as colunas do SELECT e a leitura da linha saem daqui. */
+const SUMMARY = [
+  'id',
+  'childId',
+  'occurredAt',
+  'entryType',
+  'description',
+  'wordsCount',
+  'createdAt',
+] as const;
 
 export class PgCommunicationLogRepository implements CommunicationLogRepository {
-  private mapRowToLog(row: Record<string, unknown>): CommunicationLog {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      occurredAt: new Date(row.occurred_at as string),
-      entryType: row.entry_type as CommunicationEntryType,
-      description: row.description as string | null,
-      wordsCount: row.words_count as number | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies CommunicationLogProps;
-    return new CommunicationLog(props);
-  }
-
-  private mapRowToSummary(row: Record<string, unknown>): CommunicationLogSummary {
-    return {
-      id: row.id as string,
-      childId: row.child_id as string,
-      occurredAt: new Date(row.occurred_at as string),
-      entryType: row.entry_type as CommunicationEntryType,
-      description: row.description as string | null,
-      wordsCount: row.words_count as number | null,
-      createdAt: new Date(row.created_at as string),
-    };
+  private toEntity(row: Record<string, unknown>): CommunicationLog {
+    return new CommunicationLog(TABLE.mapRow(row));
   }
 
   async save(input: CommunicationLogCreateInput): Promise<CommunicationLog> {
-    const result = await pool.query(
-      `INSERT INTO communication_logs
-         (id, user_id, author_user_id, child_id, occurred_at, entry_type, description, words_count, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.occurredAt,
-        input.entryType,
-        input.description ?? null,
-        input.wordsCount ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<CommunicationLog | null> {
-    const scope = scopedById('communication_logs', id, userId);
-    const result = await pool.query(`SELECT * FROM communication_logs WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(
@@ -85,7 +72,7 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM communication_logs WHERE ${where}`,
@@ -94,7 +81,7 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
 
     params.push(limit, offset);
     const dataResult = await pool.query(
-      `SELECT id, child_id, occurred_at, entry_type, description, words_count, created_at
+      `SELECT ${TABLE.columnsOf(SUMMARY)}
        FROM communication_logs
        WHERE ${where}
        ORDER BY occurred_at DESC
@@ -103,7 +90,7 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
     );
 
     return {
-      data: dataResult.rows.map((row) => this.mapRowToSummary(row)),
+      data: dataResult.rows.map((row) => TABLE.pick(row, SUMMARY) satisfies CommunicationLogSummary),
       total: Number(countResult.rows[0].count),
       page,
       limit,
@@ -115,49 +102,15 @@ export class PgCommunicationLogRepository implements CommunicationLogRepository 
     userId: string,
     input: CommunicationLogUpdateInput,
   ): Promise<CommunicationLog | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.occurredAt !== undefined) {
-      params.push(input.occurredAt);
-      setClauses.push(`occurred_at = $${params.length}`);
-    }
-    if (input.entryType !== undefined) {
-      params.push(input.entryType);
-      setClauses.push(`entry_type = $${params.length}`);
-    }
-    if ('description' in input) {
-      params.push(input.description ?? null);
-      setClauses.push(`description = $${params.length}`);
-    }
-    if ('wordsCount' in input) {
-      params.push(input.wordsCount ?? null);
-      setClauses.push(`words_count = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('communication_logs', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE communication_logs
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToLog(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('communication_logs', id, userId);
-    const result = await pool.query(`DELETE FROM communication_logs WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }
