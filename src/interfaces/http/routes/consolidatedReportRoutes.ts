@@ -9,9 +9,7 @@ import { AISummaryService } from '../../../application/services/AISummaryService
 import { AiSummaryHistoryService } from '../../../application/services/AiSummaryHistoryService';
 import { ConsolidatedReportController } from '../controllers/ConsolidatedReportController';
 import { AiInsightsController } from '../controllers/AiInsightsController';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { delegationMiddleware } from './childRoutes';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter } from './domainRouter';
 
 // Module-level DI
 const reportShareRepo = new PgReportShareRepository();
@@ -60,34 +58,39 @@ const aiQuestionLimiter = rateLimit({
   },
 });
 
-const router = Router();
-
-// PUBLIC route — must be before authMiddleware
-router.get('/shared/:token', controller.getSharedSummary.bind(controller));
-
-// Auth-protected routes
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
-router.get('/summary', controller.getSummary.bind(controller));
-router.post('/shares', controller.createShare.bind(controller));
-router.get('/shares', controller.listShares.bind(controller));
-router.get('/shares/:id/token', controller.revealShareToken.bind(controller));
-router.delete('/shares/:id', controller.deleteShare.bind(controller));
-router.post('/ai-summary', aiSummaryLimiter, controller.generateAISummary.bind(controller));
+// Tudo daqui para baixo é autenticado e escopado; o encadeamento vem montado
+// de `domainRouter`.
+const secure = domainRouter();
+secure.get('/summary', controller.getSummary.bind(controller));
+secure.post('/shares', controller.createShare.bind(controller));
+secure.get('/shares', controller.listShares.bind(controller));
+secure.get('/shares/:id/token', controller.revealShareToken.bind(controller));
+secure.delete('/shares/:id', controller.deleteShare.bind(controller));
+secure.post('/ai-summary', aiSummaryLimiter, controller.generateAISummary.bind(controller));
 
 // Persisted summary history (distinct from the ephemeral /ai-summary above)
-router.post('/ai-summaries', aiSummaryLimiter, aiInsightsController.generateAndSave.bind(aiInsightsController));
-router.get('/ai-summaries', aiInsightsController.list.bind(aiInsightsController));
+secure.post('/ai-summaries', aiSummaryLimiter, aiInsightsController.generateAndSave.bind(aiInsightsController));
+secure.get('/ai-summaries', aiInsightsController.list.bind(aiInsightsController));
 
 // Free-text Q&A grounded in the same consolidated data
-router.post('/ai-question', aiQuestionLimiter, aiInsightsController.askQuestion.bind(aiInsightsController));
+secure.post('/ai-question', aiQuestionLimiter, aiInsightsController.askQuestion.bind(aiInsightsController));
 
 // Structured brief formatted for an upcoming medical appointment (not persisted)
-router.post(
+secure.post(
   '/consultation-brief',
   aiSummaryLimiter,
   aiInsightsController.getConsultationBrief.bind(aiInsightsController),
 );
+
+/**
+ * `/shared/:token` é PÚBLICA: quem abre o link não tem sessão nenhuma. Por isso
+ * ela vive no router de fora, registrada ANTES do encadeamento — se entrasse no
+ * `secure`, o `authMiddleware` a recusaria antes de ela casar. É a única rota do
+ * app nessa condição, e é o motivo de este arquivo não ser um `domainRouter()`
+ * puro como os outros.
+ */
+const router = Router();
+router.get('/shared/:token', controller.getSharedSummary.bind(controller));
+router.use(secure);
 
 export default router;

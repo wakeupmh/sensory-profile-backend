@@ -6,40 +6,51 @@ import {
   DailyLogUpdateInput,
   DailyLogFilters,
 } from '../../domain/repositories/DailyLogRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  logType: ['log_type'],
-  from: ['occurred_at', '>='],
-  to: ['occurred_at', '<='],
-};
+const TABLE = defineTable({
+  table: 'daily_logs',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    logType: col.required('log_type', read.raw<LogType>()),
+    occurredAt: col.required('occurred_at', read.timestamp),
+    data: col.required('data', read.raw<LogData>(), {
+      write: (value) => JSON.stringify(value),
+      cast: '::jsonb',
+    }),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<DailyLogProps>,
+  filters: {
+    childId: ['child_id'],
+    logType: ['log_type'],
+    from: ['occurred_at', '>='],
+    to: ['occurred_at', '<='],
+  },
+});
+
+/** A projeção da listagem: as colunas do SELECT e a leitura da linha saem daqui. */
+const SUMMARY = ['id', 'childId', 'logType', 'occurredAt', 'notes', 'createdAt'] as const;
 
 export class PgDailyLogRepository implements DailyLogRepository {
+  private toEntity(row: Record<string, unknown>): DailyLog {
+    return new DailyLog(TABLE.mapRow(row));
+  }
+
   async save(input: DailyLogCreateInput): Promise<DailyLog> {
-    const result = await pool.query(
-      `INSERT INTO daily_logs (id, user_id, author_user_id, child_id, log_type, occurred_at, data, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.logType,
-        input.occurredAt,
-        JSON.stringify(input.data),
-        input.notes ?? null,
-      ]
-    );
-    return this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<DailyLog | null> {
-    const scope = scopedById('daily_logs', id, userId);
-    const result = await pool.query(`SELECT * FROM daily_logs WHERE ${scope.where}`, scope.params);
-    if (result.rows.length === 0) return null;
-    return this.mapRowToLog(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(
@@ -50,7 +61,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
     const limit = Math.min(1000, Math.max(1, filters.limit ?? 20));
     const offset = (page - 1) * limit;
 
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM daily_logs WHERE ${where}`,
@@ -59,7 +70,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
 
     params.push(limit, offset);
     const dataResult = await pool.query(
-      `SELECT id, child_id, log_type, occurred_at, notes, created_at
+      `SELECT ${TABLE.columnsOf(SUMMARY)}
        FROM daily_logs
        WHERE ${where}
        ORDER BY occurred_at DESC
@@ -68,14 +79,7 @@ export class PgDailyLogRepository implements DailyLogRepository {
     );
 
     return {
-      data: dataResult.rows.map((row) => ({
-        id: row.id as string,
-        childId: row.child_id as string,
-        logType: row.log_type as LogType,
-        occurredAt: new Date(row.occurred_at as string),
-        notes: (row.notes as string | null) ?? null,
-        createdAt: new Date(row.created_at as string),
-      })),
+      data: dataResult.rows.map((row) => TABLE.pick(row, SUMMARY) satisfies DailyLogSummary),
       total: Number(countResult.rows[0].count),
       page,
       limit,
@@ -87,62 +91,15 @@ export class PgDailyLogRepository implements DailyLogRepository {
     userId: string,
     input: DailyLogUpdateInput
   ): Promise<DailyLog | null> {
-    const setClauses: string[] = [];
-    const params: unknown[] = [];
-
-    if (input.logType !== undefined) {
-      params.push(input.logType);
-      setClauses.push(`log_type = $${params.length}`);
-    }
-    if (input.occurredAt !== undefined) {
-      params.push(input.occurredAt);
-      setClauses.push(`occurred_at = $${params.length}`);
-    }
-    if (input.data !== undefined) {
-      params.push(JSON.stringify(input.data));
-      setClauses.push(`data = $${params.length}::jsonb`);
-    }
-    // notes can be explicitly set to null to clear it
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
-    const scope = scopedById('daily_logs', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE daily_logs
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params
-    );
-    if (result.rows.length === 0) return null;
-    return this.mapRowToLog(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('daily_logs', id, userId);
-    const result = await pool.query(`DELETE FROM daily_logs WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
-  }
-
-  private mapRowToLog(row: Record<string, unknown>): DailyLog {
-    return new DailyLog({
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      logType: row.log_type as LogType,
-      occurredAt: new Date(row.occurred_at as string),
-      data: row.data as LogData,
-      notes: (row.notes as string | null) ?? null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies DailyLogProps);
   }
 }

@@ -1,0 +1,1523 @@
+{
+  "ComorbidityController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002"
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[comorbidity.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "ComorbidityController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[comorbidity.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "ComorbidityController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "conditionName": "TDAH",
+            "icdCode": "F90",
+            "diagnosisDate": "2024-01-05",
+            "notes": "obs"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[comorbidity.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Comorbidade criada com sucesso"
+    },
+    "sent": false
+  },
+  "ComorbidityController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "conditionName": "TEA",
+            "diagnosingDoctor": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[comorbidity.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Comorbidade atualizada com sucesso"
+    },
+    "sent": false
+  },
+  "ComorbidityController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[comorbidity.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "MedicationController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "active": true
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[medication.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "MedicationController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medication.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "MedicationController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "name": "Ritalina",
+            "dosage": "10mg",
+            "frequency": "1x/dia",
+            "startDate": "2024-01-01",
+            "active": true
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medication.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Medicamento criado com sucesso"
+    },
+    "sent": false
+  },
+  "MedicationController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "dosage": "20mg",
+            "endDate": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medication.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Medicamento atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "MedicationController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medication.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "MedicalAppointmentController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "from": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "to": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "page": 2,
+            "limit": 10
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[medicalAppointment.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "row-1"
+        }
+      ],
+      "timestamp": "<iso>",
+      "total": 42,
+      "page": 2,
+      "limit": 10
+    },
+    "sent": false
+  },
+  "MedicalAppointmentController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medicalAppointment.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "MedicalAppointmentController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "doctorName": "Dra. Ana",
+            "occurredAt": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "summary": "consulta"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medicalAppointment.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Consulta criada com sucesso"
+    },
+    "sent": false
+  },
+  "MedicalAppointmentController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "occurredAt": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "followUpDate": "2024-04-01"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medicalAppointment.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Consulta atualizada com sucesso"
+    },
+    "sent": false
+  },
+  "MedicalAppointmentController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[medicalAppointment.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "TherapistController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapist.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "raw-1",
+          "kind": "raw-object"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "TherapistController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapist.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "TherapistController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "name": "Ana",
+            "specialty": "ot",
+            "email": "ana@example.com"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapist.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>",
+      "message": "Terapeuta criado com sucesso"
+    },
+    "sent": false
+  },
+  "TherapistController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "name": "Ana Beatriz",
+            "phone": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapist.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>",
+      "message": "Terapeuta atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "TherapistController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapist.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "TherapySessionController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "therapyType": "aba",
+            "from": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "to": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "page": 2,
+            "limit": 10
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[therapySession.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "row-1"
+        }
+      ],
+      "timestamp": "<iso>",
+      "total": 42,
+      "page": 2,
+      "limit": 10
+    },
+    "sent": false
+  },
+  "TherapySessionController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapySession.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "TherapySessionController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "therapistId": "018f4e8a-4444-7000-8000-000000000004",
+            "therapyType": "aba",
+            "occurredAt": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "durationMinutes": 60
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapySession.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>",
+      "message": "Sessão criada com sucesso"
+    },
+    "sent": false
+  },
+  "TherapySessionController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "occurredAt": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "durationMinutes": 45
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapySession.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "raw-1",
+        "kind": "raw-object"
+      },
+      "timestamp": "<iso>",
+      "message": "Sessão atualizada com sucesso"
+    },
+    "sent": false
+  },
+  "TherapySessionController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[therapySession.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "SchoolCommunicationController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "commType": "bilhete",
+            "from": "2024-03-01T10:00:00.000Z",
+            "to": "2024-03-02T11:30:00.000Z",
+            "page": 1,
+            "limit": 20
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[schoolCommunication.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "row-1"
+        }
+      ],
+      "timestamp": "<iso>",
+      "total": 42,
+      "page": 2,
+      "limit": 10
+    },
+    "sent": false
+  },
+  "SchoolCommunicationController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[schoolCommunication.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "SchoolCommunicationController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "occurredAt": "2024-03-01T10:00:00.000Z",
+            "commType": "reuniao",
+            "subject": "Reunião"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[schoolCommunication.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Comunicação escolar criada com sucesso"
+    },
+    "sent": false
+  },
+  "SchoolCommunicationController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "occurredAt": "2024-03-02T11:30:00.000Z",
+            "subject": "Reunião remarcada"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[schoolCommunication.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Comunicação escolar atualizada com sucesso"
+    },
+    "sent": false
+  },
+  "SchoolCommunicationController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[schoolCommunication.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "EducationPlanController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "academicYear": "2024"
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[educationPlan.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "EducationPlanController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[educationPlan.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "EducationPlanController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "schoolName": "Escola Azul",
+            "academicYear": "2024",
+            "planType": "pei",
+            "startDate": "2024-02-01"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[educationPlan.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Plano educacional criado com sucesso"
+    },
+    "sent": false
+  },
+  "EducationPlanController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "schoolName": "Escola Verde",
+            "endDate": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[educationPlan.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Plano educacional atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "EducationPlanController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[educationPlan.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "GoalController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "domain": "social",
+            "status": "active"
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[goal.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "GoalController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[goal.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "GoalController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "domain": "comunicacao",
+            "title": "Pedir ajuda",
+            "baselineValue": 2,
+            "targetDate": "2024-12-01"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[goal.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Meta criada com sucesso"
+    },
+    "sent": false
+  },
+  "GoalController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "status": "achieved",
+            "notes": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[goal.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Meta atualizada com sucesso"
+    },
+    "sent": false
+  },
+  "GoalController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[goal.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "DevelopmentalMilestoneController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "category": "language"
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[developmentalMilestone.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "DevelopmentalMilestoneController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[developmentalMilestone.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "DevelopmentalMilestoneController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "title": "Sentar sem apoio",
+            "category": "motor_gross",
+            "status": "achieved",
+            "achievedDate": "2024-01-01"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[developmentalMilestone.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Marco criado com sucesso"
+    },
+    "sent": false
+  },
+  "DevelopmentalMilestoneController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "status": "in_progress",
+            "targetDate": null
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[developmentalMilestone.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Marco atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "DevelopmentalMilestoneController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[developmentalMilestone.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "CommunicationLogController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "entryType": "signs",
+            "from": "2024-03-01T10:00:00.000Z",
+            "to": "2024-03-02T11:30:00.000Z",
+            "page": 1,
+            "limit": 5
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[communicationLog.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "row-1"
+        }
+      ],
+      "timestamp": "<iso>",
+      "total": 42,
+      "page": 2,
+      "limit": 10
+    },
+    "sent": false
+  },
+  "CommunicationLogController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[communicationLog.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "CommunicationLogController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "occurredAt": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "entryType": "vocabulary",
+            "wordsCount": 12
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[communicationLog.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Registro de comunicação criado com sucesso"
+    },
+    "sent": false
+  },
+  "CommunicationLogController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "occurredAt": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "description": "usou 3 sinais"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[communicationLog.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Registro de comunicação atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "CommunicationLogController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[communicationLog.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "ReminderController.list": {
+    "service": [
+      {
+        "method": "list",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "status": "pending"
+          }
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.list] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "ent-1",
+          "kind": "entity-json"
+        }
+      ],
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "ReminderController.getById": {
+    "service": [
+      {
+        "method": "getById",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.getById] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>"
+    },
+    "sent": false
+  },
+  "ReminderController.create": {
+    "service": [
+      {
+        "method": "create",
+        "args": [
+          {
+            "childId": "018f4e8a-2222-7000-8000-000000000002",
+            "title": "Consulta",
+            "dueAt": {
+              "__date": "2024-03-01T10:00:00.000Z"
+            },
+            "notes": "levar exames"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.create] userId=018f4e8a-1111-7000-8000-000000000001"
+    ],
+    "status": 201,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Lembrete criado com sucesso"
+    },
+    "sent": false
+  },
+  "ReminderController.update": {
+    "service": [
+      {
+        "method": "update",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          {
+            "title": "Consulta remarcada",
+            "dueAt": {
+              "__date": "2024-03-02T11:30:00.000Z"
+            },
+            "status": "done"
+          },
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.update] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": {
+        "id": "ent-1",
+        "kind": "entity-json"
+      },
+      "timestamp": "<iso>",
+      "message": "Lembrete atualizado com sucesso"
+    },
+    "sent": false
+  },
+  "ReminderController.remove": {
+    "service": [
+      {
+        "method": "remove",
+        "args": [
+          "018f4e8a-3333-7000-8000-000000000003",
+          "018f4e8a-1111-7000-8000-000000000001"
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.remove] userId=018f4e8a-1111-7000-8000-000000000001 id=018f4e8a-3333-7000-8000-000000000003"
+    ],
+    "status": 204,
+    "json": {
+      "__undefined": true
+    },
+    "sent": true
+  },
+  "ReminderController.getUpcoming": {
+    "service": [
+      {
+        "method": "getUpcoming",
+        "args": [
+          "018f4e8a-1111-7000-8000-000000000001",
+          "018f4e8a-2222-7000-8000-000000000002",
+          7
+        ]
+      }
+    ],
+    "log": [
+      "[reminder.upcoming] userId=018f4e8a-1111-7000-8000-000000000001 days=7"
+    ],
+    "status": 200,
+    "json": {
+      "success": true,
+      "data": [
+        {
+          "id": "up-1"
+        },
+        {
+          "id": "up-2"
+        }
+      ],
+      "timestamp": "<iso>",
+      "count": 2
+    },
+    "sent": false
+  }
+}

@@ -1,7 +1,4 @@
-import { Router } from 'express';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { delegationMiddleware } from './childRoutes';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter } from './domainRouter';
 import pool from '../../../infrastructure/database/connection';
 
 import { ReminderController } from '../controllers/ReminderController';
@@ -14,11 +11,7 @@ const reminderService = new ReminderService(reminderRepository);
 const upcomingReminderService = new UpcomingReminderService(pool, reminderRepository);
 const reminderController = new ReminderController(reminderService, upcomingReminderService);
 
-const router = Router();
-
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
+const router = domainRouter();
 
 // Registered before '/:id' for readability (two segments, no path collision).
 router.get('/upcoming', reminderController.getUpcoming.bind(reminderController));

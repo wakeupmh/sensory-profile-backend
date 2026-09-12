@@ -6,122 +6,70 @@ import {
   GoalUpdateInput,
   GoalFilters,
 } from '../../domain/repositories/GoalRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  domain: ['domain'],
-  status: ['status'],
-};
+const TABLE = defineTable({
+  table: 'goals',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    domain: col.required('domain', read.raw<GoalDomain>()),
+    title: col.required('title', read.text),
+    description: col.nullable('description', read.textOrNull),
+    masteryCriteria: col.nullable('mastery_criteria', read.textOrNull),
+    baselineValue: col.nullable('baseline_value', read.numberOrNull),
+    targetValue: col.nullable('target_value', read.numberOrNull),
+    unit: col.required('unit', read.textOrNull),
+    status: col.required('status', read.raw<GoalStatus>(), { insertDefault: 'active' }),
+    targetDate: col.nullable('target_date', read.rawOrNull<string>()),
+    // A meta pode nascer de um plano educacional, mas não muda de origem
+    // depois — `GoalUpdateInput` não tem o campo.
+    sourceEducationPlanId: col.immutable('source_education_plan_id', read.textOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<GoalProps>,
+  filters: { childId: ['child_id'], domain: ['domain'], status: ['status'] },
+});
 
 export class PgGoalRepository implements GoalRepository {
-  private mapRow(row: Record<string, unknown>): Goal {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      domain: row.domain as GoalDomain,
-      title: row.title as string,
-      description: (row.description as string | null) ?? null,
-      masteryCriteria: (row.mastery_criteria as string | null) ?? null,
-      baselineValue: row.baseline_value == null ? null : Number(row.baseline_value),
-      targetValue: row.target_value == null ? null : Number(row.target_value),
-      unit: (row.unit as string | null) ?? null,
-      status: row.status as GoalStatus,
-      targetDate: (row.target_date as string | null) ?? null,
-      sourceEducationPlanId: (row.source_education_plan_id as string | null) ?? null,
-      notes: (row.notes as string | null) ?? null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies GoalProps;
-    return new Goal(props);
+  private toEntity(row: Record<string, unknown>): Goal {
+    return new Goal(TABLE.mapRow(row));
   }
 
   async save(input: GoalCreateInput): Promise<Goal> {
-    const result = await pool.query(
-      `INSERT INTO goals
-         (id, user_id, author_user_id, child_id, domain, title, description, mastery_criteria, baseline_value, target_value, unit, status, target_date, source_education_plan_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.domain,
-        input.title,
-        input.description ?? null,
-        input.masteryCriteria ?? null,
-        input.baselineValue ?? null,
-        input.targetValue ?? null,
-        input.unit ?? null,
-        input.status ?? 'active',
-        input.targetDate ?? null,
-        input.sourceEducationPlanId ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Goal | null> {
-    const scope = scopedById('goals', id, userId);
-    const result = await pool.query(`SELECT * FROM goals WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: GoalFilters): Promise<Goal[]> {
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM goals WHERE ${where} ORDER BY created_at DESC`,
       params,
     );
-    return result.rows.map((row) => this.mapRow(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: GoalUpdateInput): Promise<Goal | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    const setIfDefined = (key: keyof GoalUpdateInput, column: string) => {
-      if (input[key] !== undefined) {
-        params.push(input[key]);
-        setClauses.push(`${column} = $${params.length}`);
-      }
-    };
-
-    setIfDefined('domain', 'domain');
-    setIfDefined('title', 'title');
-    setIfDefined('status', 'status');
-    setIfDefined('unit', 'unit');
-
-    if ('description' in input) { params.push(input.description ?? null); setClauses.push(`description = $${params.length}`); }
-    if ('masteryCriteria' in input) { params.push(input.masteryCriteria ?? null); setClauses.push(`mastery_criteria = $${params.length}`); }
-    if ('baselineValue' in input) { params.push(input.baselineValue ?? null); setClauses.push(`baseline_value = $${params.length}`); }
-    if ('targetValue' in input) { params.push(input.targetValue ?? null); setClauses.push(`target_value = $${params.length}`); }
-    if ('targetDate' in input) { params.push(input.targetDate ?? null); setClauses.push(`target_date = $${params.length}`); }
-    if ('notes' in input) { params.push(input.notes ?? null); setClauses.push(`notes = $${params.length}`); }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('goals', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE goals
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('goals', id, userId);
-    const result = await pool.query(`DELETE FROM goals WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

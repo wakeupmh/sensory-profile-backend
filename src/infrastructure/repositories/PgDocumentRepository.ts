@@ -6,101 +6,65 @@ import {
   DocumentUpdateInput,
   DocumentFilters,
 } from '../../domain/repositories/DocumentRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  resourceType: ['resource_type'],
-  resourceId: ['resource_id'],
-};
+const TABLE = defineTable({
+  table: 'documents',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    title: col.required('title', read.text),
+    description: col.nullable('description', read.textOrNull),
+    storageKey: col.immutable('storage_key', read.text),
+    mimeType: col.immutable('mime_type', read.text),
+    sizeBytes: col.immutable('size_bytes', read.numberOrNull),
+    resourceType: col.immutable('resource_type', read.textOrNull),
+    resourceId: col.immutable('resource_id', read.textOrNull),
+    expiresAt: col.nullable('expires_at', read.timestampOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<DocumentProps>,
+  filters: { childId: ['child_id'], resourceType: ['resource_type'], resourceId: ['resource_id'] },
+});
 
 export class PgDocumentRepository implements DocumentRepository {
-  private mapRow(row: Record<string, unknown>): Document {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      title: row.title as string,
-      description: (row.description as string | null) ?? null,
-      storageKey: row.storage_key as string,
-      mimeType: row.mime_type as string,
-      sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
-      resourceType: (row.resource_type as string | null) ?? null,
-      resourceId: (row.resource_id as string | null) ?? null,
-      expiresAt: row.expires_at == null ? null : new Date(row.expires_at as string),
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies DocumentProps;
-    return new Document(props);
+  private toEntity(row: Record<string, unknown>): Document {
+    return new Document(TABLE.mapRow(row));
   }
 
   async save(input: DocumentCreateInput): Promise<Document> {
-    const result = await pool.query(
-      `INSERT INTO documents
-         (id, user_id, author_user_id, child_id, title, description, storage_key, mime_type, size_bytes, resource_type, resource_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.title,
-        input.description ?? null,
-        input.storageKey,
-        input.mimeType,
-        input.sizeBytes ?? null,
-        input.resourceType ?? null,
-        input.resourceId ?? null,
-        input.expiresAt ?? null,
-      ],
-    );
-    return this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Document | null> {
-    const scope = scopedById('documents', id, userId);
-    const result = await pool.query(`SELECT * FROM documents WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: DocumentFilters): Promise<Document[]> {
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM documents WHERE ${where} ORDER BY created_at DESC`,
       params,
     );
-    return result.rows.map((row) => this.mapRow(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: DocumentUpdateInput): Promise<Document | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.title !== undefined) { params.push(input.title); setClauses.push(`title = $${params.length}`); }
-    if ('description' in input) { params.push(input.description ?? null); setClauses.push(`description = $${params.length}`); }
-    if ('expiresAt' in input) { params.push(input.expiresAt ?? null); setClauses.push(`expires_at = $${params.length}`); }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('documents', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE documents
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('documents', id, userId);
-    const result = await pool.query(`DELETE FROM documents WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

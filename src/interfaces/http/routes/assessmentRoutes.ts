@@ -1,4 +1,3 @@
-import { Router } from 'express';
 import { AssessmentController } from '../controllers/AssessmentController';
 import { EntityController } from '../controllers/EntityController';
 import { AssessmentService } from '../../../application/services/AssessmentService';
@@ -8,9 +7,7 @@ import { ChildService } from '../../../application/services/ChildService';
 import { ExaminerService } from '../../../application/services/ExaminerService';
 import { CaregiverService } from '../../../application/services/CaregiverService';
 import { SectionCommentService } from '../../../application/services/SectionCommentService';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { delegationMiddleware } from './childRoutes';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter } from './domainRouter';
 import { ResourceShareService } from '../../../application/services/ResourceShareService';
 import { PgAssessmentShareRepository } from '../../../infrastructure/repositories/PgResourceShareRepository';
 import { ResourceShareController } from '../controllers/ResourceShareController';
@@ -56,11 +53,7 @@ const assessmentShareController = new ResourceShareController(
 
 export { assessmentRepository, responseRepository, assessmentShareService };
 
-const router = Router();
-
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
+const router = domainRouter();
 
 // Child routes
 router.get('/children', entityController.getAllChildren.bind(entityController));

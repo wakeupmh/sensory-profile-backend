@@ -11,68 +11,51 @@ import {
   MilestoneUpdateInput,
   MilestoneFilters,
 } from '../../domain/repositories/DevelopmentalMilestoneRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  category: ['category'],
-  status: ['status'],
-};
+const TABLE = defineTable({
+  table: 'developmental_milestones',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    title: col.required('title', read.text),
+    category: col.required('category', read.raw<MilestoneCategory>()),
+    status: col.required('status', read.raw<MilestoneStatus>(), { insertDefault: 'not_yet' }),
+    achievedDate: col.nullable('achieved_date', read.rawOrNull<string>()),
+    targetDate: col.nullable('target_date', read.rawOrNull<string>()),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<DevelopmentalMilestoneProps>,
+  filters: { childId: ['child_id'], category: ['category'], status: ['status'] },
+});
 
 export class PgDevelopmentalMilestoneRepository implements DevelopmentalMilestoneRepository {
-  private mapRowToMilestone(row: Record<string, unknown>): DevelopmentalMilestone {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      title: row.title as string,
-      category: row.category as MilestoneCategory,
-      status: row.status as MilestoneStatus,
-      achievedDate: row.achieved_date as string | null,
-      targetDate: row.target_date as string | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies DevelopmentalMilestoneProps;
-    return new DevelopmentalMilestone(props);
+  private toEntity(row: Record<string, unknown>): DevelopmentalMilestone {
+    return new DevelopmentalMilestone(TABLE.mapRow(row));
   }
 
   async save(input: MilestoneCreateInput): Promise<DevelopmentalMilestone> {
-    const result = await pool.query(
-      `INSERT INTO developmental_milestones
-         (id, user_id, author_user_id, child_id, title, category, status, achieved_date, target_date, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.title,
-        input.category,
-        input.status ?? 'not_yet',
-        input.achievedDate ?? null,
-        input.targetDate ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToMilestone(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<DevelopmentalMilestone | null> {
-    const scope = scopedById('developmental_milestones', id, userId);
-    const result = await pool.query(`SELECT * FROM developmental_milestones WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToMilestone(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: MilestoneFilters): Promise<DevelopmentalMilestone[]> {
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM developmental_milestones WHERE ${where} ORDER BY title ASC`,
       params,
     );
-    return result.rows.map((row) => this.mapRowToMilestone(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(
@@ -80,53 +63,15 @@ export class PgDevelopmentalMilestoneRepository implements DevelopmentalMileston
     userId: string,
     input: MilestoneUpdateInput,
   ): Promise<DevelopmentalMilestone | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.title !== undefined) {
-      params.push(input.title);
-      setClauses.push(`title = $${params.length}`);
-    }
-    if (input.category !== undefined) {
-      params.push(input.category);
-      setClauses.push(`category = $${params.length}`);
-    }
-    if (input.status !== undefined) {
-      params.push(input.status);
-      setClauses.push(`status = $${params.length}`);
-    }
-    if ('achievedDate' in input) {
-      params.push(input.achievedDate ?? null);
-      setClauses.push(`achieved_date = $${params.length}`);
-    }
-    if ('targetDate' in input) {
-      params.push(input.targetDate ?? null);
-      setClauses.push(`target_date = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('developmental_milestones', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE developmental_milestones
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToMilestone(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('developmental_milestones', id, userId);
-    const result = await pool.query(`DELETE FROM developmental_milestones WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

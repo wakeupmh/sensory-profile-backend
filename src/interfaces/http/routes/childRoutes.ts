@@ -1,7 +1,4 @@
-import { Router } from 'express';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { createDelegationMiddleware } from '../middleware/delegationMiddleware';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter, accessLogService, caregiverShareService } from './domainRouter';
 import { ChildController } from '../controllers/ChildController';
 import { AccountController } from '../controllers/AccountController';
 import { ChildService } from '../../../application/services/ChildService';
@@ -21,12 +18,8 @@ import { ProfessionalNoteController } from '../controllers/ProfessionalNoteContr
 import { ProfessionalNoteService } from '../../../application/services/ProfessionalNoteService';
 import { PgProfessionalNoteRepository } from '../../../infrastructure/repositories/PgProfessionalNoteRepository';
 import { AccessLogController } from '../controllers/AccessLogController';
-import { AccessLogService } from '../../../application/services/AccessLogService';
-import { PgAccessLogRepository } from '../../../infrastructure/repositories/PgAccessLogRepository';
 
 import { CaregiverShareController } from '../controllers/CaregiverShareController';
-import { CaregiverShareService } from '../../../application/services/CaregiverShareService';
-import { PgCaregiverShareRepository } from '../../../infrastructure/repositories/PgCaregiverShareRepository';
 
 const repo = new PgChildRepository();
 const service = new ChildService(repo);
@@ -45,9 +38,6 @@ const childShareController = new ChildShareController(childShareService);
 const professionalNoteRepository = new PgProfessionalNoteRepository();
 const professionalNoteService = new ProfessionalNoteService(professionalNoteRepository, childShareRepository, pool);
 
-const accessLogRepository = new PgAccessLogRepository();
-const accessLogService = new AccessLogService(accessLogRepository, pool);
-
 const professionalNoteController = new ProfessionalNoteController(
   professionalNoteService,
   professionalService,
@@ -55,25 +45,21 @@ const professionalNoteController = new ProfessionalNoteController(
 );
 const accessLogController = new AccessLogController(accessLogService);
 
-const caregiverShareRepository = new PgCaregiverShareRepository();
-const caregiverShareService = new CaregiverShareService(caregiverShareRepository, pool);
 const caregiverShareController = new CaregiverShareController(caregiverShareService);
-const delegationMiddleware = createDelegationMiddleware(caregiverShareService, accessLogService);
 
+// `accessLogService` e `caregiverShareService` passaram a nascer em
+// `domainRouter` (a delegação precisa dos dois); seguem reexportados daqui
+// para não mudar o endereço de quem já os importava.
 export {
   childShareRepository,
   childShareService,
   professionalNoteService,
   accessLogService,
   caregiverShareService,
-  delegationMiddleware,
   erasureService,
 };
 
-const router = Router();
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
+const router = domainRouter();
 
 router.get('/', controller.list.bind(controller));
 router.post('/', controller.create.bind(controller));

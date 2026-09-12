@@ -1,5 +1,9 @@
 import pool from '../database/connection';
-import { TherapySession, TherapySessionProps, TherapySessionSummary } from '../../domain/entities/TherapySession';
+import {
+  TherapySession,
+  TherapySessionProps,
+  TherapySessionSummary,
+} from '../../domain/entities/TherapySession';
 import { TherapyType } from '../../domain/entities/Therapist';
 import {
   TherapySessionRepository,
@@ -7,64 +11,62 @@ import {
   TherapySessionFilters,
   TherapySessionUpdateInput,
 } from '../../domain/repositories/TherapySessionRepository';
-import { scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
+
+const TABLE = defineTable({
+  table: 'therapy_sessions',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    therapistId: col.nullable('therapist_id', read.textOrNull),
+    therapyType: col.required('therapy_type', read.raw<TherapyType>()),
+    occurredAt: col.required('occurred_at', read.timestamp),
+    durationMinutes: col.nullable('duration_minutes', read.numberOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<TherapySessionProps>,
+  // `therapy_sessions` é child-scoped, e esta listagem NÃO passava por
+  // `buildWhere`: montava `user_id = $1` à mão, então a concessão do care team
+  // não a alcançava.
+  filters: {
+    childId: ['child_id'],
+    therapyType: ['therapy_type'],
+    therapistId: ['therapist_id'],
+    from: ['occurred_at', '>='],
+    to: ['occurred_at', '<='],
+  },
+});
+
+/** A projeção da listagem: as colunas do SELECT e a leitura da linha saem daqui. */
+const SUMMARY = [
+  'id',
+  'childId',
+  'therapistId',
+  'therapyType',
+  'occurredAt',
+  'durationMinutes',
+  'notes',
+  'createdAt',
+] as const;
 
 export class PgTherapySessionRepository implements TherapySessionRepository {
-  private mapRowToSession(row: Record<string, unknown>): TherapySession {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      therapistId: row.therapist_id as string | null,
-      therapyType: row.therapy_type as TherapyType,
-      occurredAt: new Date(row.occurred_at as string),
-      durationMinutes: row.duration_minutes as number | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies TherapySessionProps;
-    return new TherapySession(props);
-  }
-
-  private mapRowToSummary(row: Record<string, unknown>): TherapySessionSummary {
-    return {
-      id: row.id as string,
-      childId: row.child_id as string,
-      therapistId: row.therapist_id as string | null,
-      therapyType: row.therapy_type as TherapyType,
-      occurredAt: new Date(row.occurred_at as string),
-      durationMinutes: row.duration_minutes as number | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-    };
+  private toEntity(row: Record<string, unknown>): TherapySession {
+    return new TherapySession(TABLE.mapRow(row));
   }
 
   async save(input: TherapySessionCreateInput): Promise<TherapySession> {
-    const result = await pool.query(
-      `INSERT INTO therapy_sessions
-         (id, user_id, author_user_id, child_id, therapist_id, therapy_type, occurred_at, duration_minutes, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.therapistId ?? null,
-        input.therapyType,
-        input.occurredAt,
-        input.durationMinutes ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToSession(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<TherapySession | null> {
-    const scope = scopedById('therapy_sessions', id, userId);
-    const result = await pool.query(`SELECT * FROM therapy_sessions WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToSession(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(
@@ -75,31 +77,7 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.therapyType) {
-      params.push(filters.therapyType);
-      conditions.push(`therapy_type = $${params.length}`);
-    }
-    if (filters.therapistId) {
-      params.push(filters.therapistId);
-      conditions.push(`therapist_id = $${params.length}`);
-    }
-    if (filters.from) {
-      params.push(filters.from);
-      conditions.push(`occurred_at >= $${params.length}`);
-    }
-    if (filters.to) {
-      params.push(filters.to);
-      conditions.push(`occurred_at <= $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = TABLE.listWhere(userId, filters);
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM therapy_sessions WHERE ${where}`,
@@ -108,7 +86,7 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
 
     params.push(limit, offset);
     const dataResult = await pool.query(
-      `SELECT id, child_id, therapist_id, therapy_type, occurred_at, duration_minutes, notes, created_at
+      `SELECT ${TABLE.columnsOf(SUMMARY)}
        FROM therapy_sessions
        WHERE ${where}
        ORDER BY occurred_at DESC
@@ -117,7 +95,7 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
     );
 
     return {
-      data: dataResult.rows.map((row) => this.mapRowToSummary(row)),
+      data: dataResult.rows.map((row) => TABLE.pick(row, SUMMARY) satisfies TherapySessionSummary),
       total: Number(countResult.rows[0].count),
       page,
       limit,
@@ -129,49 +107,15 @@ export class PgTherapySessionRepository implements TherapySessionRepository {
     userId: string,
     input: TherapySessionUpdateInput,
   ): Promise<TherapySession | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if ('therapistId' in input) {
-      params.push(input.therapistId ?? null);
-      setClauses.push(`therapist_id = $${params.length}`);
-    }
-    if (input.therapyType !== undefined) {
-      params.push(input.therapyType);
-      setClauses.push(`therapy_type = $${params.length}`);
-    }
-    if (input.occurredAt !== undefined) {
-      params.push(input.occurredAt);
-      setClauses.push(`occurred_at = $${params.length}`);
-    }
-    if ('durationMinutes' in input) {
-      params.push(input.durationMinutes ?? null);
-      setClauses.push(`duration_minutes = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('therapy_sessions', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE therapy_sessions
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToSession(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('therapy_sessions', id, userId);
-    const result = await pool.query(`DELETE FROM therapy_sessions WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }
