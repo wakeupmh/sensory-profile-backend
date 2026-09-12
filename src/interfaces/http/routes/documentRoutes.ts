@@ -1,8 +1,5 @@
-import { Router } from 'express';
 import { uploadUrlLimiter } from '../middleware/rateLimiters';
-import { authMiddleware } from '../middleware/authMiddleware';
-import { delegationMiddleware } from './childRoutes';
-import { careTeamScopeMiddleware } from '../middleware/careTeamScopeMiddleware';
+import { domainRouter } from './domainRouter';
 import pool from '../../../infrastructure/database/connection';
 
 import { DocumentController } from '../controllers/DocumentController';
@@ -15,11 +12,7 @@ const storageService = new S3StorageService();
 const documentService = new DocumentService(documentRepository, storageService, pool);
 const documentController = new DocumentController(documentService);
 
-const router = Router();
-
-router.use(authMiddleware);
-router.use(delegationMiddleware);
-router.use(careTeamScopeMiddleware);
+const router = domainRouter();
 
 router.get('/', documentController.list.bind(documentController));
 router.post('/upload-url', uploadUrlLimiter, documentController.requestUpload.bind(documentController));

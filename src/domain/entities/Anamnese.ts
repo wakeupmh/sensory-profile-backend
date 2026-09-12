@@ -103,7 +103,12 @@ export interface AnamneseSummary {
   caregiverName: string;
   createdAt: Date;
   updatedAt: Date;
-  shareToken: string | null;
+  /**
+   * Se está compartilhada — não o token. A listagem só precisa do selo
+   * "Compartilhada"/"Privada", e mandar a capacidade viva de cada anamnese em
+   * toda listagem era pagar caro por um booleano.
+   */
+  isShared: boolean;
 }
 
 export class Anamnese {

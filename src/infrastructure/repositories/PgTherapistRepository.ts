@@ -5,46 +5,42 @@ import {
   TherapistCreateInput,
   TherapistUpdateInput,
 } from '../../domain/repositories/TherapistRepository';
-import { scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
+
+const TABLE = defineTable({
+  table: 'therapists',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    name: col.required('name', read.text),
+    specialty: col.required('specialty', read.raw<TherapyType>()),
+    phone: col.nullable('phone', read.textOrNull),
+    email: col.nullable('email', read.textOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<TherapistProps>,
+  // Sem mapa de filtros de propósito: `therapists` é da CONTA, não da criança,
+  // e não tem coluna `child_id`. `buildWhere` acrescenta `child_id = $n` a uma
+  // listagem cujo mapping não é child-scoped — contra esta tabela isso seria
+  // SQL inválido. A listagem abaixo continua escrita à mão por esse motivo.
+});
 
 export class PgTherapistRepository implements TherapistRepository {
-  private mapRowToTherapist(row: Record<string, unknown>): Therapist {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      name: row.name as string,
-      specialty: row.specialty as TherapyType,
-      phone: row.phone as string | null,
-      email: row.email as string | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies TherapistProps;
-    return new Therapist(props);
+  private toEntity(row: Record<string, unknown>): Therapist {
+    return new Therapist(TABLE.mapRow(row));
   }
 
   async save(input: TherapistCreateInput): Promise<Therapist> {
-    const result = await pool.query(
-      `INSERT INTO therapists (id, user_id, name, specialty, phone, email, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.name,
-        input.specialty,
-        input.phone ?? null,
-        input.email ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRowToTherapist(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Therapist | null> {
-    const scope = scopedById('therapists', id, userId);
-    const result = await pool.query(`SELECT * FROM therapists WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRowToTherapist(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string): Promise<Therapist[]> {
@@ -52,53 +48,19 @@ export class PgTherapistRepository implements TherapistRepository {
       `SELECT * FROM therapists WHERE user_id = $1 ORDER BY name ASC`,
       [userId],
     );
-    return result.rows.map((row) => this.mapRowToTherapist(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: TherapistUpdateInput): Promise<Therapist | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.name !== undefined) {
-      params.push(input.name);
-      setClauses.push(`name = $${params.length}`);
-    }
-    if (input.specialty !== undefined) {
-      params.push(input.specialty);
-      setClauses.push(`specialty = $${params.length}`);
-    }
-    if ('phone' in input) {
-      params.push(input.phone ?? null);
-      setClauses.push(`phone = $${params.length}`);
-    }
-    if ('email' in input) {
-      params.push(input.email ?? null);
-      setClauses.push(`email = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('therapists', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE therapists
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRowToTherapist(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('therapists', id, userId);
-    const result = await pool.query(`DELETE FROM therapists WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

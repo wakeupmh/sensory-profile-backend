@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface MedicationProps {
   id: string;
   userId: string;
@@ -16,8 +18,7 @@ export interface MedicationProps {
   updatedAt: Date;
 }
 
-export class Medication {
-  constructor(private readonly props: MedicationProps) {}
+export class Medication extends Entity<MedicationProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -34,22 +35,4 @@ export class Medication {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      name: this.props.name,
-      dosage: this.props.dosage,
-      frequency: this.props.frequency,
-      startDate: this.props.startDate,
-      endDate: this.props.endDate,
-      prescribingDoctor: this.props.prescribingDoctor,
-      active: this.props.active,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

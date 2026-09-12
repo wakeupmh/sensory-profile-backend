@@ -49,6 +49,12 @@ export class PgReportShareRepository implements ReportShareRepository {
     return result.rows.map((row) => this.mapRow(row));
   }
 
+  async findById(id: string, userId: string): Promise<ReportShare | null> {
+    const scope = scopedById('report_shares', id, userId);
+    const result = await pool.query(`SELECT * FROM report_shares WHERE ${scope.where}`, scope.params);
+    return result.rows.length > 0 ? this.mapRow(result.rows[0]) : null;
+  }
+
   async deleteById(id: string, userId: string): Promise<void> {
     const scope = scopedById('report_shares', id, userId);
     await pool.query(`DELETE FROM report_shares WHERE ${scope.where}`, scope.params);

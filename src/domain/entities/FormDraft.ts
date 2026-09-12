@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface FormDraftProps {
   id: string;
   userId: string;
@@ -9,18 +11,10 @@ export interface FormDraftProps {
   updatedAt: Date;
 }
 
-export class FormDraft {
-  constructor(private readonly props: FormDraftProps) {}
+export class FormDraft extends Entity<FormDraftProps, 'userId'> {
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      formType: this.props.formType,
-      payload: this.props.payload,
-      currentStep: this.props.currentStep,
-      instrumentId: this.props.instrumentId,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
+  protected hiddenFields() {
+    return ['userId'] as const;
   }
+
 }

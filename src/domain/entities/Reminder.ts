@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type ReminderStatus = 'pending' | 'done' | 'dismissed';
 
 export interface ReminderProps {
@@ -16,8 +18,7 @@ export interface ReminderProps {
   updatedAt: Date;
 }
 
-export class Reminder {
-  constructor(private readonly props: ReminderProps) {}
+export class Reminder extends Entity<ReminderProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -32,20 +33,4 @@ export class Reminder {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      title: this.props.title,
-      dueAt: this.props.dueAt,
-      status: this.props.status,
-      resourceType: this.props.resourceType,
-      resourceId: this.props.resourceId,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

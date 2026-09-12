@@ -6,109 +6,65 @@ import {
   ReminderUpdateInput,
   ReminderFilters,
 } from '../../domain/repositories/ReminderRepository';
-import { buildWhere, FilterSpec, scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
 
-const FILTER_MAP: Record<string, FilterSpec> = {
-  childId: ['child_id'],
-  status: ['status'],
-};
+const TABLE = defineTable({
+  table: 'reminders',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    title: col.required('title', read.text),
+    dueAt: col.required('due_at', read.timestamp),
+    status: col.required('status', read.raw<ReminderStatus>(), { insertDefault: 'pending' }),
+    // O lembrete aponta para o registro que o originou e não muda de alvo:
+    // `ReminderUpdateInput` não tem os dois campos.
+    resourceType: col.immutable('resource_type', read.textOrNull),
+    resourceId: col.immutable('resource_id', read.textOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<ReminderProps>,
+  filters: { childId: ['child_id'], status: ['status'] },
+});
 
 export class PgReminderRepository implements ReminderRepository {
-  private mapRow(row: Record<string, unknown>): Reminder {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      title: row.title as string,
-      dueAt: new Date(row.due_at as string),
-      status: row.status as ReminderStatus,
-      resourceType: (row.resource_type as string | null) ?? null,
-      resourceId: (row.resource_id as string | null) ?? null,
-      notes: (row.notes as string | null) ?? null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies ReminderProps;
-    return new Reminder(props);
+  private toEntity(row: Record<string, unknown>): Reminder {
+    return new Reminder(TABLE.mapRow(row));
   }
 
   async save(input: ReminderCreateInput): Promise<Reminder> {
-    const result = await pool.query(
-      `INSERT INTO reminders
-         (id, user_id, author_user_id, child_id, title, due_at, status, resource_type, resource_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.title,
-        input.dueAt,
-        input.status ?? 'pending',
-        input.resourceType ?? null,
-        input.resourceId ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<Reminder | null> {
-    const scope = scopedById('reminders', id, userId);
-    const result = await pool.query(`SELECT * FROM reminders WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: ReminderFilters): Promise<Reminder[]> {
-    const { where, params } = buildWhere(userId, filters as unknown as Record<string, unknown>, FILTER_MAP);
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM reminders WHERE ${where} ORDER BY due_at ASC`,
       params,
     );
-    return result.rows.map((row) => this.mapRow(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(id: string, userId: string, input: ReminderUpdateInput): Promise<Reminder | null> {
-    const params: unknown[] = [];
-    const setClauses: string[] = [];
-
-    if (input.title !== undefined) {
-      params.push(input.title);
-      setClauses.push(`title = $${params.length}`);
-    }
-    if (input.dueAt !== undefined) {
-      params.push(input.dueAt);
-      setClauses.push(`due_at = $${params.length}`);
-    }
-    if (input.status !== undefined) {
-      params.push(input.status);
-      setClauses.push(`status = $${params.length}`);
-    }
-    if ('notes' in input) {
-      params.push(input.notes ?? null);
-      setClauses.push(`notes = $${params.length}`);
-    }
-
-    if (setClauses.length === 0) return this.findById(id, userId);
-
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('reminders', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE reminders
-       SET ${setClauses.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('reminders', id, userId);
-    const result = await pool.query(`DELETE FROM reminders WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }

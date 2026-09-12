@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface UserProfileProps {
   userId: string;
   email: string | null;
@@ -6,17 +8,14 @@ export interface UserProfileProps {
   updatedAt: Date;
 }
 
-export class UserProfile {
-  constructor(private readonly props: UserProfileProps) {}
+export class UserProfile extends Entity<UserProfileProps, 'userId' | 'createdAt' | 'updatedAt'> {
+
+  protected hiddenFields() {
+    return ['userId', 'createdAt', 'updatedAt'] as const;
+  }
 
   getUserId(): string { return this.props.userId; }
   getEmail(): string | null { return this.props.email; }
   isReminderEmailsEnabled(): boolean { return this.props.reminderEmailsEnabled; }
 
-  toJSON() {
-    return {
-      email: this.props.email,
-      reminderEmailsEnabled: this.props.reminderEmailsEnabled,
-    };
-  }
 }

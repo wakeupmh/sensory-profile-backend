@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export interface ComorbidityProps {
   id: string;
   userId: string;
@@ -13,8 +15,7 @@ export interface ComorbidityProps {
   updatedAt: Date;
 }
 
-export class Comorbidity {
-  constructor(private readonly props: ComorbidityProps) {}
+export class Comorbidity extends Entity<ComorbidityProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -28,19 +29,4 @@ export class Comorbidity {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      conditionName: this.props.conditionName,
-      icdCode: this.props.icdCode,
-      diagnosisDate: this.props.diagnosisDate,
-      diagnosingDoctor: this.props.diagnosingDoctor,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

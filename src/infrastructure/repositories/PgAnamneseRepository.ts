@@ -31,7 +31,10 @@ export class PgAnamneseRepository implements AnamneseRepository {
          id,
          child->>'name'     AS child_name,
          caregiver->>'name' AS caregiver_name,
-         share_token,
+         -- Só se ESTÁ compartilhada, não COM QUE token. A tela usa isto para
+         -- um selo "Compartilhada"/"Privada"; mandar o token vivo de cada
+         -- anamnese em toda listagem era pagar uma capacidade por um booleano.
+         (share_token IS NOT NULL) AS is_shared,
          created_at,
          updated_at
        FROM anamneses
@@ -44,7 +47,7 @@ export class PgAnamneseRepository implements AnamneseRepository {
       id: row.id as string,
       childName: (row.child_name as string) ?? '',
       caregiverName: (row.caregiver_name as string) ?? '',
-      shareToken: (row.share_token as string | null) ?? null,
+      isShared: Boolean(row.is_shared),
       createdAt: row.created_at as Date,
       updatedAt: row.updated_at as Date,
     }));

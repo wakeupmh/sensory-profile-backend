@@ -8,7 +8,8 @@ import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { Pool } from 'pg';
 import { buildWhere, CHILD_SCOPED_TABLES, FilterSpec, scopedById } from 'infrastructure/repositories/queryUtils';
-import { runWithScope } from 'infrastructure/database/requestScope';
+import { RegisteredTable, registeredTables } from 'infrastructure/repositories/defineTable';
+import { RequestScope, runWithScope } from 'infrastructure/database/requestScope';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 afterAll(async () => {
@@ -17,6 +18,22 @@ afterAll(async () => {
 
 const REPO_DIR = join(__dirname, '../../infrastructure/repositories');
 const SERVICE_DIR = join(__dirname, '../../application/services');
+
+function repositoryFiles(): string[] {
+  return readdirSync(REPO_DIR).filter((f) => f.startsWith('Pg') && f.endsWith('.ts'));
+}
+
+/**
+ * Carrega todo `Pg*` para que os descritores de tabela se REGISTREM. As
+ * guardas do descritor varrem o registro, e um repositório que não fosse
+ * carregado sairia da varredura em silêncio — que é o modo de falhar contra o
+ * qual elas existem. `o registro cobre todo repositório que declara um
+ * descritor`, mais abaixo, confere que a carga foi completa.
+ */
+for (const file of repositoryFiles()) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require(join(REPO_DIR, file));
+}
 
 /**
  * Repositórios cuja autorização NÃO passa por `user_id`, e por isso não têm o
@@ -223,13 +240,31 @@ describe('cobertura do escopo do care team', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('toda listagem child-scoped que passa por buildWhere mapeia child_id', () => {
+  test('toda listagem child-scoped mapeia child_id — no descritor ou no mapping local', () => {
     // `buildWhere` não recebe o nome da tabela (a assinatura é fixa), então o
     // sinal de que a listagem é child-scoped é o `child_id` no mapping. Um
     // mapping sem ele não vaza nada — só faz o profissional convidado não ver
     // o que lhe foi concedido, que é o tipo de bug que ninguém reporta.
+    //
+    // A varredura por fonte sozinha ficou CEGA quando os mapas passaram a
+    // morar nos descritores: `buildWhere(userId, filters, TABLE.filters)` não
+    // casa o padrão `buildWhere(..., NOME_DO_CONST)`, e a guarda passaria
+    // verde sem olhar para mapa nenhum. Por isso a fonte da verdade agora é o
+    // registro dos descritores, e o scan continua só para o que sobrou escrito
+    // à mão.
     const offenders: string[] = [];
-    for (const file of readdirSync(REPO_DIR).filter((f) => f.startsWith('Pg') && f.endsWith('.ts'))) {
+
+    for (const descriptor of registeredTables()) {
+      if (!CHILD_SCOPED_TABLES.has(descriptor.table)) continue;
+      // Mapa vazio = a tabela não tem listagem genérica (a busca é por outra
+      // chave). Só o mapa PREENCHIDO que esquece o child_id é o problema.
+      if (Object.keys(descriptor.filters).length === 0) continue;
+      if (!Object.values(descriptor.filters).some(([column]) => column === 'child_id')) {
+        offenders.push(`${descriptor.table}: filtros do descritor`);
+      }
+    }
+
+    for (const file of repositoryFiles()) {
       const src = readFileSync(join(REPO_DIR, file), 'utf8');
       if (!src.includes('buildWhere(')) continue;
       const tables = [...src.matchAll(/(?:FROM|UPDATE|INTO)\s+([a-z_]+)/g)].map((m) => m[1]);
@@ -254,6 +289,127 @@ describe('cobertura do escopo do care team', () => {
         '(user_id = $1 OR child_id = ANY($2::uuid[]))',
       );
     });
+  });
+});
+
+/**
+ * As instruções que o descritor de tabela GERA.
+ *
+ * A guarda estrutural acima procura `WHERE id = $...` escrito num repositório.
+ * Os repositórios convertidos não têm mais essa linha — o UPDATE e o DELETE
+ * nascem em `defineTable`, num arquivo só, com o nome da tabela interpolado.
+ * A varredura por fonte não alcança isso, e uma guarda que não alcança o
+ * código que deveria vigiar é pior que nenhuma: passa verde e dá a impressão
+ * de que alguém está olhando.
+ *
+ * Estas guardas não leem fonte: pedem ao descritor a instrução e comparam o
+ * predicado, letra por letra, com o que `scopedById` produziria — nos três
+ * escopos que existem. Tirar o `scopedById` do gerador quebra todas elas.
+ */
+describe('escopo das instruções geradas pelo descritor', () => {
+  const ID = '22222222-2222-4222-8222-222222222222';
+  const USER = 'owner-1';
+  const GRANTED = '11111111-1111-4111-8111-111111111111';
+
+  /** O WHERE que a instrução emitiu, sem o resto do SQL. */
+  function whereOf(sql: string): string {
+    const match = /WHERE\s+([\s\S]*?)(?:\s+RETURNING|\s*$)/.exec(sql);
+    if (!match) throw new Error(`instrução gerada sem WHERE: ${sql}`);
+    return match[1].trim();
+  }
+
+  /** Onde o predicado começa, deduzido dos placeholders que ele próprio usa. */
+  function startIndexOf(where: string, params: unknown[]): number {
+    return params.length - (where.match(/\$/g) ?? []).length + 1;
+  }
+
+  /** Toda instrução que o descritor gera endereçando UM registro pelo id. */
+  function generated(descriptor: RegisteredTable): { label: string; sql: string; params: unknown[] }[] {
+    const out = [
+      { label: 'selectById', ...descriptor.selectById(ID, USER) },
+      { label: 'deleteById', ...descriptor.deleteById(ID, USER) },
+    ];
+    const updatable = Object.entries(descriptor.columns).find(
+      ([, column]) => column.mode === 'set-if-defined' || column.mode === 'clear-on-null',
+    );
+    if (updatable) {
+      const update = descriptor.update(ID, USER, { [updatable[0]]: 'valor' });
+      if (update) out.push({ label: 'update', ...update });
+    }
+    return out;
+  }
+
+  const SCOPES: [string, RequestScope][] = [
+    ['sem escopo', {}],
+    ['sob delegação', { restrictedToChildId: GRANTED }],
+    ['com concessão do care team', { careTeamChildIds: [GRANTED] }],
+  ];
+
+  test.each(SCOPES)('o predicado é o de scopedById, e nenhum outro (%s)', (_label, scope) => {
+    runWithScope(scope, () => {
+      const offenders: string[] = [];
+      for (const descriptor of registeredTables()) {
+        for (const { label, sql, params } of generated(descriptor)) {
+          const where = whereOf(sql);
+          const esperado = scopedById(descriptor.table, ID, USER, startIndexOf(where, params)).where;
+          if (where !== esperado) {
+            offenders.push(`${descriptor.table}.${label}: "${where}" ≠ "${esperado}"`);
+          }
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
+
+  test('sob delegação, toda instrução de tabela child-scoped CARREGA a criança', () => {
+    // A comparação acima é de forma; esta é do efeito. Se o predicado deixar
+    // de ser o de `scopedById`, o id da criança some dos parâmetros e a
+    // instrução volta a alcançar as outras crianças do mesmo dono — que foi
+    // exatamente o vazamento das três vezes anteriores.
+    runWithScope({ restrictedToChildId: GRANTED }, () => {
+      const semCrianca: string[] = [];
+      for (const descriptor of registeredTables()) {
+        if (!CHILD_SCOPED_TABLES.has(descriptor.table)) continue;
+        for (const { label, params } of generated(descriptor)) {
+          if (!params.includes(GRANTED)) semCrianca.push(`${descriptor.table}.${label}`);
+        }
+      }
+      expect(semCrianca).toEqual([]);
+    });
+  });
+
+  test('com concessão, toda instrução de tabela child-scoped ganha a disjunção', () => {
+    runWithScope({ careTeamChildIds: [GRANTED] }, () => {
+      const semDisjuncao: string[] = [];
+      for (const descriptor of registeredTables()) {
+        if (!CHILD_SCOPED_TABLES.has(descriptor.table)) continue;
+        for (const { label, sql } of generated(descriptor)) {
+          if (!/child_id = ANY\(\$\d+::uuid\[\]\)/.test(sql)) {
+            semDisjuncao.push(`${descriptor.table}.${label}`);
+          }
+        }
+      }
+      expect(semDisjuncao).toEqual([]);
+    });
+  });
+
+  test('o registro cobre todo repositório que declara um descritor', () => {
+    // Sem isto, um repositório que não carregasse sairia das varreduras acima
+    // sem que nenhuma delas ficasse vermelha.
+    const declaram = repositoryFiles().filter((file) =>
+      readFileSync(join(REPO_DIR, file), 'utf8').includes('defineTable('),
+    );
+    expect(declaram.length).toBeGreaterThan(0);
+    expect(registeredTables()).toHaveLength(declaram.length);
+  });
+
+  test('e as tabelas child-scoped estão MESMO entre elas', () => {
+    // Uma varredura que só encontrasse tabelas da conta (sem `child_id`)
+    // passaria os testes acima sem exercitar nada do que importa.
+    const cobertas = registeredTables()
+      .map((d) => d.table)
+      .filter((t) => CHILD_SCOPED_TABLES.has(t));
+    expect(cobertas.length).toBeGreaterThanOrEqual(10);
   });
 });
 

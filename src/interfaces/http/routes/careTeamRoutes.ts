@@ -3,7 +3,7 @@ import { authMiddleware } from '../middleware/authMiddleware';
 import { CareTeamController } from '../controllers/CareTeamController';
 import { CareTeamService } from '../../../application/services/CareTeamService';
 import { PgCareTeamMemberRepository } from '../../../infrastructure/repositories/PgCareTeamMemberRepository';
-import { delegationMiddleware } from './childRoutes';
+import { delegationMiddleware } from './domainRouter';
 import pool from '../../../infrastructure/database/connection';
 
 const repository = new PgCareTeamMemberRepository();
@@ -23,6 +23,13 @@ const controller = new CareTeamController(careTeamService);
  * `/api/children/:childId/caregivers`: assim uma requisição delegada é
  * recusada explicitamente (403 em `requireOwnUserId`) em vez de passar como se
  * o cabeçalho não existisse.
+ *
+ * É o único router que monta o encadeamento à mão em vez de chamar
+ * `domainRouter()`: os dois prefixos querem middlewares DIFERENTES, e nenhum
+ * dos dois quer a concessão da equipe (resolver concessão para decidir quem
+ * pode conceder seria circular — todo endpoint daqui usa `requireOwnUserId` e
+ * roda sempre como o titular). A recusa está declarada, com motivo, em
+ * `__tests__/careTeamScopeMounted.test.ts`.
  */
 const router = Router();
 router.use('/children/:childId/care-team', authMiddleware, delegationMiddleware);

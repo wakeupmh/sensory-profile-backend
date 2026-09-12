@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 import { GoalStatus } from './Goal';
 
 export interface GoalProgressEntryProps {
@@ -14,8 +16,7 @@ export interface GoalProgressEntryProps {
   createdAt: Date;
 }
 
-export class GoalProgressEntry {
-  constructor(private readonly props: GoalProgressEntryProps) {}
+export class GoalProgressEntry extends Entity<GoalProgressEntryProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -24,18 +25,4 @@ export class GoalProgressEntry {
   getRecordedAt(): Date { return this.props.recordedAt; }
   getValue(): number | null { return this.props.value; }
 
-  toJSON() {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      goalId: this.props.goalId,
-      recordedAt: this.props.recordedAt,
-      value: this.props.value,
-      statusSnapshot: this.props.statusSnapshot,
-      notes: this.props.notes,
-      therapySessionId: this.props.therapySessionId,
-      createdAt: this.props.createdAt,
-    };
-  }
 }

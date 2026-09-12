@@ -18,7 +18,7 @@ export class ProfessionalController {
     const userId = requireUserId(req);
     logger.info(`[professional.list] owner=${userId}`);
     const items = await this.service.listForOwner(userId);
-    jsonResponse(res, items.map((p) => p.toOwnerView()), 200, { count: items.length });
+    jsonResponse(res, items.map((p) => p.toListView()), 200, { count: items.length });
   });
 
   getById = asyncHandler(async (req: Request, res: Response): Promise<void> => {

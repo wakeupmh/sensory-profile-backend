@@ -47,6 +47,18 @@ export class ConsolidatedReportController {
     jsonResponse(res, { shares: shares.map((s) => s.toJSON()) });
   });
 
+  /**
+   * O token de UM compartilhamento, quando o dono clica em copiar. A listagem
+   * deixou de carregá-los todos; este endpoint entrega um de cada vez.
+   */
+  revealShareToken = asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUserId(req);
+    const { id } = req.params;
+    assertValidId(id, 'share ID');
+    const share = await this.shareService.getOwnShare(id, userId);
+    jsonResponse(res, { token: share.toOwnerView().token });
+  });
+
   deleteShare = asyncHandler(async (req: Request, res: Response) => {
     const userId = requireUserId(req);
     const { id } = req.params;

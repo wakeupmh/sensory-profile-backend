@@ -1,3 +1,5 @@
+import { Entity } from './Entity';
+
 export type SchoolCommType = 'reuniao' | 'bilhete' | 'email' | 'telefone' | 'incidente' | 'relatorio' | 'outro';
 
 export interface SchoolCommunicationSummary {
@@ -28,8 +30,7 @@ export interface SchoolCommunicationProps {
   updatedAt: Date;
 }
 
-export class SchoolCommunication {
-  constructor(private readonly props: SchoolCommunicationProps) {}
+export class SchoolCommunication extends Entity<SchoolCommunicationProps> {
 
   getId(): string { return this.props.id; }
   getUserId(): string { return this.props.userId; }
@@ -45,21 +46,4 @@ export class SchoolCommunication {
   getCreatedAt(): Date { return this.props.createdAt; }
   getUpdatedAt(): Date { return this.props.updatedAt; }
 
-  toJSON(): SchoolCommunicationProps {
-    return {
-      id: this.props.id,
-      userId: this.props.userId,
-      authorUserId: this.props.authorUserId,
-      childId: this.props.childId,
-      occurredAt: this.props.occurredAt,
-      commType: this.props.commType,
-      subject: this.props.subject,
-      description: this.props.description,
-      attendees: this.props.attendees,
-      followUpDate: this.props.followUpDate,
-      notes: this.props.notes,
-      createdAt: this.props.createdAt,
-      updatedAt: this.props.updatedAt,
-    };
-  }
 }

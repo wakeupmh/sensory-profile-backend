@@ -42,6 +42,8 @@ const USER_COLUMNS = [
   'granted_by_user_id',
   'accepted_user_id',
   'member_user_id',
+  'invited_by_user_id',
+  'created_by_user_id',
 ];
 
 /** Deleted by name — either in ACCOUNT_SCOPED_DELETES, or explicitly inside eraseAccount's transaction. */
@@ -111,6 +113,18 @@ const ERASED_BY_CASCADE = new Map([
  * behaviour cannot drift apart the way the old table-level list did.
  */
 const NEUTRALISED_ON_ERASURE = new Map<string, string>([
+  [
+    'clinic_members.member_user_id',
+    'a clínica é do quadro dela, não de quem apaga a conta: eraseAccount zera member_user_id e marca revoked_at, tirando a pessoa do quadro na hora',
+  ],
+  [
+    'clinic_members.invited_by_user_id',
+    'quem convidou pode ter apagado a conta; a linha do convidado fica, sem apontar mais para essa pessoa (coluna nullable de propósito)',
+  ],
+  [
+    'clinics.created_by_user_id',
+    'a clínica continua existindo para o resto do quadro; só deixa de registrar quem a criou (coluna nullable de propósito)',
+  ],
   [
     'professionals.accepted_user_id',
     'the row belongs to whoever invited this person (owner_user_id); UPDATE professionals SET accepted_user_id = NULL WHERE accepted_user_id = $1 in eraseAccount',

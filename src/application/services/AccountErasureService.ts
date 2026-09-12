@@ -229,6 +229,33 @@ export class AccountErasureService {
         );
       }
 
+      // A clínica é do quadro dela, não de quem apaga a conta: as linhas ficam
+      // e param de apontar para esta pessoa. `member_user_id` zerado com
+      // `revoked_at` marcado tira a pessoa do quadro na hora;
+      // `invited_by_user_id` e `clinics.created_by_user_id` são nullable
+      // justamente para poderem ser zerados aqui sem apagar a clínica dos
+      // outros. Guardado por information_schema, como a equipe de cuidado.
+      const clinicTablesExist = await client.query(
+        `SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'clinic_members'`,
+      );
+      if (clinicTablesExist.rows.length > 0) {
+        await client.query(
+          `UPDATE clinic_members
+              SET member_user_id = NULL, revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+            WHERE member_user_id = $1`,
+          [userId],
+        );
+        await client.query(
+          `UPDATE clinic_members SET invited_by_user_id = NULL WHERE invited_by_user_id = $1`,
+          [userId],
+        );
+        await client.query(
+          `UPDATE clinics SET created_by_user_id = NULL WHERE created_by_user_id = $1`,
+          [userId],
+        );
+      }
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');

@@ -10,84 +10,61 @@ import {
   EducationPlanUpdateInput,
   EducationPlanFilters,
 } from '../../domain/repositories/EducationPlanRepository';
-import { scopedById } from './queryUtils';
+import { col, ColumnsFor, defineTable, read } from './defineTable';
+
+const TABLE = defineTable({
+  table: 'education_plans',
+  columns: {
+    id: col.immutable('id', read.text),
+    userId: col.immutable('user_id', read.text),
+    authorUserId: col.immutable('author_user_id', read.textOrNull),
+    childId: col.immutable('child_id', read.text),
+    schoolName: col.required('school_name', read.text),
+    academicYear: col.required('academic_year', read.text),
+    planType: col.required('plan_type', read.raw<EducationPlanType>()),
+    startDate: col.required('start_date', read.raw<string>()),
+    reviewDate: col.nullable('review_date', read.rawOrNull<string>()),
+    endDate: col.nullable('end_date', read.rawOrNull<string>()),
+    goals: col.nullable('goals', read.textOrNull),
+    accommodations: col.nullable('accommodations', read.textOrNull),
+    notes: col.nullable('notes', read.textOrNull),
+    createdAt: col.createdAt(),
+    updatedAt: col.updatedAt(),
+  } satisfies ColumnsFor<EducationPlanProps>,
+  // `education_plans` é child-scoped, e esta listagem NÃO passava por
+  // `buildWhere`: montava `user_id = $1` à mão, então a concessão do care team
+  // não a alcançava.
+  filters: {
+    childId: ['child_id'],
+    planType: ['plan_type'],
+    academicYear: ['academic_year'],
+  },
+});
 
 export class PgEducationPlanRepository implements EducationPlanRepository {
-  private mapRow(row: Record<string, unknown>): EducationPlan {
-    const props = {
-      id: row.id as string,
-      userId: row.user_id as string,
-      authorUserId: (row.author_user_id as string | null) ?? null,
-      childId: row.child_id as string,
-      schoolName: row.school_name as string,
-      academicYear: row.academic_year as string,
-      planType: row.plan_type as EducationPlanType,
-      startDate: row.start_date as string,
-      reviewDate: row.review_date as string | null,
-      endDate: row.end_date as string | null,
-      goals: row.goals as string | null,
-      accommodations: row.accommodations as string | null,
-      notes: row.notes as string | null,
-      createdAt: new Date(row.created_at as string),
-      updatedAt: new Date(row.updated_at as string),
-    } satisfies EducationPlanProps;
-    return new EducationPlan(props);
+  private toEntity(row: Record<string, unknown>): EducationPlan {
+    return new EducationPlan(TABLE.mapRow(row));
   }
 
   async save(input: EducationPlanCreateInput): Promise<EducationPlan> {
-    const result = await pool.query(
-      `INSERT INTO education_plans
-         (id, user_id, author_user_id, child_id, school_name, academic_year, plan_type, start_date, review_date, end_date, goals, accommodations, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING *`,
-      [
-        input.id,
-        input.userId,
-        input.authorUserId ?? null,
-        input.childId,
-        input.schoolName,
-        input.academicYear,
-        input.planType,
-        input.startDate,
-        input.reviewDate ?? null,
-        input.endDate ?? null,
-        input.goals ?? null,
-        input.accommodations ?? null,
-        input.notes ?? null,
-      ],
-    );
-    return this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.insert(input);
+    const result = await pool.query(sql, params);
+    return this.toEntity(result.rows[0]);
   }
 
   async findById(id: string, userId: string): Promise<EducationPlan | null> {
-    const scope = scopedById('education_plans', id, userId);
-    const result = await pool.query(`SELECT * FROM education_plans WHERE ${scope.where}`, scope.params);
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const { sql, params } = TABLE.selectById(id, userId);
+    const result = await pool.query(sql, params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async findAllByUser(userId: string, filters: EducationPlanFilters): Promise<EducationPlan[]> {
-    const conditions: string[] = ['user_id = $1'];
-    const params: unknown[] = [userId];
-
-    if (filters.childId) {
-      params.push(filters.childId);
-      conditions.push(`child_id = $${params.length}`);
-    }
-    if (filters.planType) {
-      params.push(filters.planType);
-      conditions.push(`plan_type = $${params.length}`);
-    }
-    if (filters.academicYear) {
-      params.push(filters.academicYear);
-      conditions.push(`academic_year = $${params.length}`);
-    }
-
-    const where = conditions.join(' AND ');
+    const { where, params } = TABLE.listWhere(userId, filters);
     const result = await pool.query(
       `SELECT * FROM education_plans WHERE ${where} ORDER BY start_date DESC, created_at DESC`,
       params,
     );
-    return result.rows.map((row) => this.mapRow(row));
+    return result.rows.map((row) => this.toEntity(row));
   }
 
   async update(
@@ -95,39 +72,15 @@ export class PgEducationPlanRepository implements EducationPlanRepository {
     userId: string,
     input: EducationPlanUpdateInput,
   ): Promise<EducationPlan | null> {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-
-    if (input.schoolName !== undefined) { sets.push(`school_name = $${idx++}`); params.push(input.schoolName); }
-    if (input.academicYear !== undefined) { sets.push(`academic_year = $${idx++}`); params.push(input.academicYear); }
-    if (input.planType !== undefined) { sets.push(`plan_type = $${idx++}`); params.push(input.planType); }
-    if (input.startDate !== undefined) { sets.push(`start_date = $${idx++}`); params.push(input.startDate); }
-    if ('reviewDate' in input) { sets.push(`review_date = $${idx++}`); params.push(input.reviewDate ?? null); }
-    if ('endDate' in input) { sets.push(`end_date = $${idx++}`); params.push(input.endDate ?? null); }
-    if ('goals' in input) { sets.push(`goals = $${idx++}`); params.push(input.goals ?? null); }
-    if ('accommodations' in input) { sets.push(`accommodations = $${idx++}`); params.push(input.accommodations ?? null); }
-    if ('notes' in input) { sets.push(`notes = $${idx++}`); params.push(input.notes ?? null); }
-
-    if (sets.length === 0) return this.findById(id, userId);
-
-    sets.push('updated_at = CURRENT_TIMESTAMP');
-    const scope = scopedById('education_plans', id, userId, params.length + 1);
-    params.push(...scope.params);
-
-    const result = await pool.query(
-      `UPDATE education_plans
-       SET ${sets.join(', ')}
-       WHERE ${scope.where}
-       RETURNING *`,
-      params,
-    );
-    return result.rows.length === 0 ? null : this.mapRow(result.rows[0]);
+    const statement = TABLE.update(id, userId, input);
+    if (!statement) return this.findById(id, userId);
+    const result = await pool.query(statement.sql, statement.params);
+    return result.rows.length === 0 ? null : this.toEntity(result.rows[0]);
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const scope = scopedById('education_plans', id, userId);
-    const result = await pool.query(`DELETE FROM education_plans WHERE ${scope.where}`, scope.params);
+    const { sql, params } = TABLE.deleteById(id, userId);
+    const result = await pool.query(sql, params);
     return (result.rowCount ?? 0) > 0;
   }
 }
