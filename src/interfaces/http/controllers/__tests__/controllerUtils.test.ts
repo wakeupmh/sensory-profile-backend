@@ -34,3 +34,11 @@ describe('assertDelegatedChildMatches', () => {
     expect(() => assertDelegatedChildMatches(req, CHILD_B)).toThrow(AuthorizationError);
   });
 });
+
+describe('assertValidId — mensagem em português', () => {
+  test('id malformado responde ValidationError em português', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { assertValidId } = require('../controllerUtils');
+    expect(() => assertValidId('abc', 'child ID')).toThrow(/Identificador inválido/);
+  });
+});

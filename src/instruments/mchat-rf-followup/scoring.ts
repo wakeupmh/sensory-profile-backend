@@ -1,10 +1,17 @@
 import { ScoringStrategy } from '../types';
+import { ScoringError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export const mchatRFFollowupStrategy: ScoringStrategy = (responses, _instrument) => {
   let failCount = 0;
   const perItem: { probeItemId: number; screenItemId: number; result: 'passou' | 'falhou' }[] = [];
 
   for (const [itemId, response] of responses) {
+    if (itemId < 4001 || itemId > 4020) {
+      throw new ScoringError(
+        `Item inválido para o M-CHAT-R/F: ${itemId}`,
+        [String(itemId)],
+      );
+    }
     let result: 'passou' | 'falhou';
     if (response === 'passou') {
       result = 'passou';
@@ -12,8 +19,9 @@ export const mchatRFFollowupStrategy: ScoringStrategy = (responses, _instrument)
       result = 'falhou';
       failCount++;
     } else {
-      throw new Error(
+      throw new ScoringError(
         `Resposta inválida para M-CHAT-R/F item ${itemId}: '${response}'`,
+        [String(itemId)],
       );
     }
     // Reverse the offset: probe items are 4001-4020, screen items are 3001-3020

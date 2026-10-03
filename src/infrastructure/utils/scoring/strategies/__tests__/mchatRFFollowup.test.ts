@@ -12,6 +12,7 @@
 
 import { mchatRFFollowupStrategy } from '../../../../../instruments/mchat-rf-followup/scoring';
 import { getInstrument } from '../../../../../instruments';
+import { ScoringError } from '../../../../../infrastructure/utils/errors/CustomErrors';
 
 // Side-effect: register instruments
 import '../../../../../instruments/mchat-r';
@@ -185,5 +186,16 @@ describe('mchatRFFollowupStrategy', () => {
         expect(['baixo', 'alto']).toContain(risk);
       }
     });
+  });
+});
+
+describe('mchatRFFollowupStrategy — invalid input', () => {
+  it('throws ScoringError (400) on an invalid response value', () => {
+    expect(() => mchatRFFollowupStrategy(new Map([[4001, 'sim']]), instrument)).toThrow(ScoringError);
+  });
+
+  it('throws ScoringError on a probe id outside 4001-4020', () => {
+    expect(() => mchatRFFollowupStrategy(new Map([[3001, 'falhou']]), instrument)).toThrow(ScoringError);
+    expect(() => mchatRFFollowupStrategy(new Map([[4021, 'falhou']]), instrument)).toThrow(ScoringError);
   });
 });

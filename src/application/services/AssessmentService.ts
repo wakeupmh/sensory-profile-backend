@@ -148,7 +148,7 @@ export class AssessmentService {
           [assessmentData.child.id, userId]
         );
         if (ownerCheck.rows.length === 0) {
-          throw new NotFoundError('Child', assessmentData.child.id);
+          throw new NotFoundError('Criança', assessmentData.child.id);
         }
         childId = assessmentData.child.id;
         logger.debug(`[AssessmentService] Child id validated: ${childId}`);
@@ -182,6 +182,22 @@ export class AssessmentService {
         }
         if (parent.getChildId() && parent.getChildId() !== childId) {
           throw new ValidationError('Avaliação de acompanhamento deve referenciar a mesma criança da avaliação pai');
+        }
+        // A entrevista cobre exatamente os itens que falharam na triagem: sem
+        // um probe, o item some da contagem e o risco final sai subestimado.
+        const parentFailed = (parentScores as { failedItemIds?: unknown }).failedItemIds;
+        if (Array.isArray(parentFailed) && parentFailed.length > 0) {
+          const expected = new Set(parentFailed.map((id: number) => id - 3000 + 4000));
+          const sent = new Set(assessmentData.responses.map(r => r.itemId));
+          const missing = [...expected].filter(id => !sent.has(id)).map(id => id - 4000);
+          const extra = [...sent].filter(id => !expected.has(id)).map(id => id - 4000);
+          if (missing.length > 0 || extra.length > 0) {
+            throw new ValidationError(
+              'A entrevista de acompanhamento deve responder exatamente os itens que falharam na triagem'
+                + (missing.length ? ` (faltam: ${missing.join(', ')})` : '')
+                + (extra.length ? ` (não aplicáveis: ${extra.join(', ')})` : '')
+            );
+          }
         }
       }
 
@@ -356,7 +372,7 @@ export class AssessmentService {
             [assessmentData.child.id, userId]
           );
           if (ownerCheck.rows.length === 0) {
-            throw new NotFoundError('Child', assessmentData.child.id);
+            throw new NotFoundError('Criança', assessmentData.child.id);
           }
           childId = assessmentData.child.id;
           logger.debug(`[AssessmentService] Updated child id (direct): ${childId}`);

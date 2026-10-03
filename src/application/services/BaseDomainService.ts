@@ -1,6 +1,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 import { currentScope } from '../../infrastructure/database/requestScope';
+import pool from '../../infrastructure/database/connection';
 
 /**
  * Minimal repository contract shared by all domain services.
@@ -50,7 +51,26 @@ export class BaseDomainService<
     return entity;
   }
 
-  create(payload: TPayload, userId: string): Promise<TEntity> {
+  /**
+   * `childId` vem do corpo, e a FK só prova que a criança EXISTE — não que é
+   * de quem escreve. Sem esta checagem, qualquer usuário autenticado grava
+   * linhas penduradas na criança de outro (e as vê aparecer para a equipe /
+   * compartilhamentos daquela criança). Vale o dono, ou uma concessão ativa do
+   * care team resolvida para esta requisição. Responde 404, igual a "não
+   * existe", para não confirmar que o id pertence a alguém.
+   */
+  protected async assertChildAccess(childId: string, userId: string): Promise<void> {
+    if (currentScope().careTeamChildIds?.includes(childId)) return;
+    const result = await pool.query(
+      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
+      [childId, userId],
+    );
+    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
+  }
+
+  async create(payload: TPayload, userId: string): Promise<TEntity> {
+    const childId = (payload as { childId?: unknown } | null)?.childId;
+    if (typeof childId === 'string') await this.assertChildAccess(childId, userId);
     // `actingUserId` é quem de fato está escrevendo (ver requestScope.ts);
     // `userId` é sempre o dono, que é quem a linha continua pertencendo a.
     // Só grava author_user_id quando os dois divergem — quando o próprio

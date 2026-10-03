@@ -123,10 +123,10 @@ export class SharedAccessController {
     const profIds = await this.myProfessionalIds(userId);
 
     const ok = await this.assessmentShareService.hasAccess(id, profIds);
-    if (!ok) throw new NotFoundError('Assessment', id);
+    if (!ok) throw new NotFoundError('Avaliação', id);
 
     const assessment = await this.assessmentRepo.findByIdAnyOwner(id);
-    if (!assessment) throw new NotFoundError('Assessment', id);
+    if (!assessment) throw new NotFoundError('Avaliação', id);
 
     const responses = await this.responseRepo.findByAssessmentId(id);
 

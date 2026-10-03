@@ -16,6 +16,6 @@ export function assertValidFormType(
   value: string | undefined
 ): asserts value is (typeof FORM_TYPES)[number] {
   if (!value || !FORM_TYPES.includes(value as (typeof FORM_TYPES)[number])) {
-    throw new ValidationError(`Invalid form_type: must be one of ${FORM_TYPES.join(', ')}`);
+    throw new ValidationError(`Tipo de formulário inválido. Use um destes: ${FORM_TYPES.join(', ')}`);
   }
 }

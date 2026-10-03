@@ -143,7 +143,7 @@ export class DailyReportService {
 
   private async assertChildOwned(userId: string, childId: string): Promise<void> {
     const result = await this.pool.query(`SELECT 1 FROM children WHERE id = $1 AND user_id = $2`, [childId, userId]);
-    if (result.rows.length === 0) throw new NotFoundError('Child', childId);
+    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
   }
 
   async createDraft(
@@ -313,7 +313,13 @@ export class DailyReportService {
       void this.transcription.deleteJob(row.transcribe_job_name as string);
       return toDailyReport(result.rows[0] as DailyReportRow);
     } catch (e) {
-      return this.fail(row, e instanceof Error ? e.message : String(e));
+      // O detalhe (S3, SDK, SQL) vai para o log; a mensagem gravada em `error`
+      // é devolvida ao usuário e não deve expor internos.
+      logger.warn('[DailyReportService] processing failed', {
+        id: row.id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return this.fail(row, 'Não foi possível processar a gravação. Tente gravar novamente.');
     }
   }
 

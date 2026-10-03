@@ -3,6 +3,7 @@ import { TherapySessionRepository, TherapySessionCreateInput, TherapySessionUpda
 import { TherapistRepository } from '../../domain/repositories/TherapistRepository';
 import { TherapyType } from '../../domain/entities/Therapist';
 import { BaseDomainService } from './BaseDomainService';
+import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 
 export interface CreateSessionPayload {
   childId: string;
@@ -43,7 +44,7 @@ export class TherapySessionService extends BaseDomainService<
   async create(payload: CreateSessionPayload, userId: string): Promise<TherapySession> {
     if (payload.therapistId) {
       const therapist = await this.therapistRepo.findById(payload.therapistId, userId);
-      if (!therapist) throw new Error(`Therapist ${payload.therapistId} not found`);
+      if (!therapist) throw new NotFoundError('Terapeuta', payload.therapistId);
     }
     return super.create(payload, userId);
   }
@@ -52,7 +53,7 @@ export class TherapySessionService extends BaseDomainService<
   async update(id: string, payload: UpdateSessionPayload, userId: string): Promise<TherapySession> {
     if (payload.therapistId) {
       const therapist = await this.therapistRepo.findById(payload.therapistId, userId);
-      if (!therapist) throw new Error(`Therapist ${payload.therapistId} not found`);
+      if (!therapist) throw new NotFoundError('Terapeuta', payload.therapistId);
     }
     return super.update(id, payload, userId);
   }

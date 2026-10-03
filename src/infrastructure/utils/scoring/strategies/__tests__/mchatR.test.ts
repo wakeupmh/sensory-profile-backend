@@ -13,6 +13,7 @@
 
 import { mchatRStrategy } from '../../../../../instruments/mchat-r/scoring';
 import { getInstrument } from '../../../../../instruments';
+import { ScoringError } from '../../../../../infrastructure/utils/errors/CustomErrors';
 
 // Side-effect: register mchat-r instrument
 import '../../../../../instruments/mchat-r';
@@ -185,6 +186,27 @@ describe('mchatRStrategy', () => {
       [3001, 3003, 3004, 3006, 3007, 3008, 3009, 3010].forEach((id) => map.set(id, 'nao'));
       const result = mchatRStrategy(map, instrument);
       expect((result.scores_json as Record<string, unknown>).risk).toBe('alto');
+    });
+  });
+
+  describe('incomplete or invalid input is rejected (ScoringError, 400)', () => {
+    it('throws when an item is missing', () => {
+      const map = allPassMap();
+      map.delete(3010);
+      expect(() => mchatRStrategy(map, instrument)).toThrow(ScoringError);
+      expect(() => mchatRStrategy(map, instrument)).toThrow(/Faltam: 10/);
+    });
+
+    it('throws on an item outside 3001-3020', () => {
+      const map = allPassMap();
+      map.set(3021, 'sim');
+      expect(() => mchatRStrategy(map, instrument)).toThrow(ScoringError);
+    });
+
+    it('throws on a value other than sim/nao', () => {
+      const map = allPassMap();
+      map.set(3002, 'talvez');
+      expect(() => mchatRStrategy(map, instrument)).toThrow(/sim ou nao/);
     });
   });
 });

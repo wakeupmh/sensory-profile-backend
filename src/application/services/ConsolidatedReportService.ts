@@ -45,7 +45,7 @@ export class ConsolidatedReportService {
       [childId, userId],
     );
     if (childResult.rows.length === 0) {
-      throw new NotFoundError('Child not found');
+      throw new NotFoundError('Criança');
     }
     const child = childResult.rows[0] as { id: string; name: string; birth_date: Date | string | null; notes: string | null };
 

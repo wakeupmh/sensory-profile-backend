@@ -46,7 +46,7 @@ export class AuthenticationError extends BaseError {
   readonly statusCode = 401;
   readonly isOperational = true;
 
-  constructor(message: string = 'Authentication required', cause?: Error) {
+  constructor(message: string = 'Autenticação necessária', cause?: Error) {
     super(message, cause);
   }
 }
@@ -56,7 +56,7 @@ export class AuthorizationError extends BaseError {
   readonly statusCode = 403;
   readonly isOperational = true;
 
-  constructor(message: string = 'Access denied', public readonly requiredPermission?: string, cause?: Error) {
+  constructor(message: string = 'Acesso negado', public readonly requiredPermission?: string, cause?: Error) {
     super(message, cause);
   }
 }
@@ -67,22 +67,24 @@ export class NotFoundError extends BaseError {
   readonly isOperational = true;
 
   constructor(resource: string, identifier?: string, cause?: Error) {
-    const message = identifier 
-      ? `${resource} with identifier '${identifier}' not found`
-      : `${resource} not found`;
-    super(message, cause);
+    // Vários chamadores já passam o rótulo pronto ("Lembrete não encontrado");
+    // não duplicar o "não encontrado".
+    const base = /não encontrad[oa]/i.test(resource)
+      ? resource
+      : `${resource} não encontrado(a)`;
+    super(identifier ? `${base} (${identifier})` : base, cause);
   }
 }
 
 export class AssessmentNotFoundError extends NotFoundError {
   constructor(id: string, cause?: Error) {
-    super('Assessment', id, cause);
+    super('Avaliação', id, cause);
   }
 }
 
 export class ChildNotFoundError extends NotFoundError {
   constructor(id: string, cause?: Error) {
-    super('Child', id, cause);
+    super('Criança', id, cause);
   }
 }
 
@@ -94,7 +96,7 @@ export class AnamneseNotFoundError extends NotFoundError {
 
 export class AnamneseAccessDeniedError extends AuthorizationError {
   constructor(cause?: Error) {
-    super('Access to this anamnese is not permitted', 'anamnese:owner', cause);
+    super('Você não tem permissão para acessar esta anamnese', 'anamnese:owner', cause);
   }
 }
 
@@ -103,19 +105,19 @@ export class GoneError extends BaseError {
   readonly statusCode = 410;
   readonly isOperational = true;
 
-  constructor(message: string = 'Resource is no longer available', cause?: Error) {
+  constructor(message: string = 'Este recurso não está mais disponível', cause?: Error) {
     super(message, cause);
   }
 }
 
 export class ProfessionalNotFoundError extends NotFoundError {
   constructor(id: string, cause?: Error) {
-    super('Professional', id, cause);
+    super('Profissional', id, cause);
   }
 }
 
 export class InvitationInvalidError extends ValidationError {
-  constructor(message: string = 'Invitation token is invalid or has already been used', cause?: Error) {
+  constructor(message: string = 'O convite é inválido ou já foi utilizado', cause?: Error) {
     super(message, undefined, cause);
   }
 }
@@ -131,14 +133,14 @@ export class ConflictError extends BaseError {
 }
 
 export class DuplicateResourceError extends ConflictError {
-  constructor(resource: string, identifier: string, cause?: Error) {
-    super(`${resource} with identifier '${identifier}' already exists`, resource, cause);
+  constructor(resource: string, _identifier: string, cause?: Error) {
+    super(`${resource} já existe`, resource, cause);
   }
 }
 
 export class InvitationAlreadyAcceptedError extends ConflictError {
   constructor(cause?: Error) {
-    super('This invitation has already been accepted by another user', 'professional', cause);
+    super('Este convite já foi aceito por outro usuário', 'professional', cause);
   }
 }
 
@@ -169,7 +171,7 @@ export class InternalServerError extends BaseError {
   readonly statusCode = 500;
   readonly isOperational = false;
 
-  constructor(message: string = 'Internal server error', cause?: Error) {
+  constructor(message: string = 'Erro interno do servidor', cause?: Error) {
     super(message, cause);
   }
 }

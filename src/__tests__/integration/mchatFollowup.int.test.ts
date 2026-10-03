@@ -133,11 +133,11 @@ function makeService(assessmentRepoOverrides: Partial<{
 }
 
 /** Standard follow-up payload for mchat-rf-followup. */
-function followupPayload(overrides: { instrumentId?: string } = {}) {
+function followupPayload(overrides: { instrumentId?: string; responses?: Array<{ itemId: number; response: string }> } = {}) {
   return {
     instrumentId: overrides.instrumentId ?? 'mchat-rf-followup',
     child: CHILD_PAYLOAD,
-    responses: [{ itemId: 4001, response: 'passou' }],
+    responses: overrides.responses ?? [{ itemId: 4001, response: 'passou' }],
     rawScores: ZERO_RAW_SCORES,
     sectionComments: [],
     parentAssessmentId: VALID_PARENT_ID,
@@ -276,7 +276,41 @@ describe('AssessmentService.createAssessment — parentAssessmentId validation',
     // Should resolve without throwing. Any error here would be from downstream
     // (DB save etc.) which are all mocked to succeed.
     await expect(
-      service.createAssessment(followupPayload(), USER_ID),
+      service.createAssessment(
+        followupPayload({
+          responses: [
+            { itemId: 4001, response: 'passou' },
+            { itemId: 4002, response: 'falhou' },
+          ],
+        }),
+        USER_ID,
+      ),
     ).resolves.toBeDefined();
+  });
+
+  test('rejects follow-up that omits a failed screening item', async () => {
+    const parent = makeParentAssessment('mchat-r', { risk: 'medio', failedItemIds: [3001, 3002] });
+    const service = makeService({ findById: jest.fn().mockResolvedValue(parent as Assessment) });
+
+    await expect(
+      service.createAssessment(followupPayload(), USER_ID),
+    ).rejects.toThrow(/faltam: 2/);
+  });
+
+  test('rejects follow-up with a probe for an item that did not fail', async () => {
+    const parent = makeParentAssessment('mchat-r', { risk: 'medio', failedItemIds: [3001] });
+    const service = makeService({ findById: jest.fn().mockResolvedValue(parent as Assessment) });
+
+    await expect(
+      service.createAssessment(
+        followupPayload({
+          responses: [
+            { itemId: 4001, response: 'passou' },
+            { itemId: 4005, response: 'falhou' },
+          ],
+        }),
+        USER_ID,
+      ),
+    ).rejects.toThrow(/não aplicáveis: 5/);
   });
 });

@@ -94,19 +94,19 @@ export function createDelegationMiddleware(
     if (!childId) return next();
 
     if (!UUID_REGEX.test(childId)) {
-      return next(new ValidationError('Invalid X-Delegate-Child-Id format'));
+      return next(new ValidationError('Cabeçalho X-Delegate-Child-Id inválido'));
     }
     if (!req.userId) return next(new AuthorizationError());
 
     try {
       const ownerUserId = await caregiverShareService.resolveEffectiveOwner(childId, req.userId);
       if (!ownerUserId) {
-        return next(new AuthorizationError('No caregiver relationship to this child'));
+        return next(new AuthorizationError('Você não tem vínculo de cuidador com esta criança'));
       }
 
       const requestedChildId = extractRequestedChildId(req);
       if (requestedChildId && requestedChildId !== childId) {
-        return next(new AuthorizationError('Delegated access does not cover this child'));
+        return next(new AuthorizationError('O acesso delegado não cobre esta criança'));
       }
 
       req.effectiveUserId = ownerUserId;

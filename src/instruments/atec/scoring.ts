@@ -1,4 +1,5 @@
 import { ScoringStrategy, ScoringResult } from '../types';
+import { ScoringError } from '../../infrastructure/utils/errors/CustomErrors';
 
 /**
  * ATEC scoring strategy.
@@ -22,7 +23,7 @@ export const atecStrategy: ScoringStrategy = (responses, instrument): ScoringRes
       if (responseValue !== undefined && responseValue !== null) {
         const numeric = numericMap.get(responseValue);
         if (numeric === undefined) {
-          throw new Error(`Resposta ATEC inválida "${responseValue}" para item ${itemId}`);
+          throw new ScoringError(`Resposta ATEC inválida "${responseValue}" para item ${itemId}`, [String(itemId)]);
         }
         sectionScore += numeric;
       }

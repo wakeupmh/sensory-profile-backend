@@ -19,7 +19,7 @@ const handleZodError = (error: ZodError): ValidationError => {
     received: 'received' in err ? err.received : undefined
   }));
 
-  const message = `Validation failed: ${details.map(d => `${d.field}: ${d.message}`).join(', ')}`;
+  const message = `Dados inválidos: ${details.map(d => `${d.field}: ${d.message}`).join(', ')}`;
   return new ValidationError(message, details);
 };
 
@@ -41,9 +41,9 @@ const handleDatabaseError = (error: Error): BaseError => {
     case '23505': // unique_violation
       return new ConflictError('Este registro já existe');
     case '23503': // foreign_key_violation
-      return new ValidationError('Referenced resource does not exist', { originalError: error.message });
+      return new ValidationError('O registro referenciado não existe', { originalError: error.message });
     case '23502': // not_null_violation
-      return new ValidationError('Required field is missing', { originalError: error.message });
+      return new ValidationError('Campo obrigatório ausente', { originalError: error.message });
     case '23514': // check_violation
       return new ValidationError('Valor fora do permitido para este campo', { originalError: error.message });
     case '22P02': // invalid_text_representation (ex.: uuid malformado)
@@ -52,7 +52,7 @@ const handleDatabaseError = (error: Error): BaseError => {
     case '40P01': // deadlock_detected
       return new ConflictError('Conflito de concorrência, tente novamente');
     default:
-      return new InternalServerError('Database operation failed', error);
+      return new InternalServerError('Não foi possível concluir a operação. Tente novamente.', error);
   }
 };
 
@@ -76,7 +76,7 @@ export const errorHandler = (
     customError = handleDatabaseError(error);
   } else {
     // Unknown error - treat as internal server error
-    customError = new InternalServerError('An unexpected error occurred', error);
+    customError = new InternalServerError('Ocorreu um erro inesperado. Tente novamente.', error);
   }
 
   // Log the error with appropriate level
@@ -137,7 +137,7 @@ export const asyncHandler = <T extends Request, U extends Response>(
 
 // 404 handler for undefined routes
 export const notFoundHandler = (req: Request, res: Response): void => {
-  const message = `Route ${req.method} ${req.path} not found`;
+  const message = `Rota ${req.method} ${req.path} não encontrada`;
   
   logger.warn('Route not found', {
     method: req.method,
