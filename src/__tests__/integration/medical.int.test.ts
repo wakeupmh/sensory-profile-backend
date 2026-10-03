@@ -37,6 +37,13 @@ import { MedicalAppointment } from 'domain/entities/MedicalAppointment';
 import type { MedicationRepository } from 'domain/repositories/MedicationRepository';
 import type { ComorbidityRepository } from 'domain/repositories/ComorbidityRepository';
 import type { MedicalAppointmentRepository } from 'domain/repositories/MedicalAppointmentRepository';
+import { BaseDomainService } from 'application/services/BaseDomainService';
+
+// A checagem de propriedade da criança tem teste próprio (childOwnershipOnCreate);
+// aqui os repositórios são stubs e os ids, fictícios.
+beforeEach(() => {
+  jest.spyOn(BaseDomainService.prototype as any, 'assertChildAccess').mockResolvedValue(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // Constants

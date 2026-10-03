@@ -32,6 +32,13 @@ import { DevelopmentalMilestone } from 'domain/entities/DevelopmentalMilestone';
 import { CommunicationLog } from 'domain/entities/CommunicationLog';
 import type { DevelopmentalMilestoneRepository } from 'domain/repositories/DevelopmentalMilestoneRepository';
 import type { CommunicationLogRepository } from 'domain/repositories/CommunicationLogRepository';
+import { BaseDomainService } from 'application/services/BaseDomainService';
+
+// A checagem de propriedade da criança tem teste próprio (childOwnershipOnCreate);
+// aqui os repositórios são stubs e os ids, fictícios.
+beforeEach(() => {
+  jest.spyOn(BaseDomainService.prototype as any, 'assertChildAccess').mockResolvedValue(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -31,6 +31,13 @@ import { TherapySession, TherapySessionSummary } from 'domain/entities/TherapySe
 import { Therapist } from 'domain/entities/Therapist';
 import { TherapySessionRepository } from 'domain/repositories/TherapySessionRepository';
 import { TherapistRepository } from 'domain/repositories/TherapistRepository';
+import { BaseDomainService } from 'application/services/BaseDomainService';
+
+// A checagem de propriedade da criança tem teste próprio (childOwnershipOnCreate);
+// aqui os repositórios são stubs e os ids, fictícios.
+beforeEach(() => {
+  jest.spyOn(BaseDomainService.prototype as any, 'assertChildAccess').mockResolvedValue(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // Constants

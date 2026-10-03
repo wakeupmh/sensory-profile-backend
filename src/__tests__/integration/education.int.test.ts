@@ -32,6 +32,13 @@ import { EducationPlan } from 'domain/entities/EducationPlan';
 import { SchoolCommunication } from 'domain/entities/SchoolCommunication';
 import type { EducationPlanRepository } from 'domain/repositories/EducationPlanRepository';
 import type { SchoolCommunicationRepository } from 'domain/repositories/SchoolCommunicationRepository';
+import { BaseDomainService } from 'application/services/BaseDomainService';
+
+// A checagem de propriedade da criança tem teste próprio (childOwnershipOnCreate);
+// aqui os repositórios são stubs e os ids, fictícios.
+beforeEach(() => {
+  jest.spyOn(BaseDomainService.prototype as any, 'assertChildAccess').mockResolvedValue(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // Constants
