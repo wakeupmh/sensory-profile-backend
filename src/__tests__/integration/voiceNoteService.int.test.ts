@@ -188,6 +188,21 @@ describe('VoiceNoteService', () => {
     expect(calls.some((c) => c.sql.includes("status = 'failed'"))).toBe(true);
   });
 
+  test('erro inesperado não vaza detalhe interno no campo error', async () => {
+    const row = baseRow({ status: 'transcribing', transcribe_job_name: 'job-1', transcript_key: 'out.json' });
+    const { pool, calls } = makePool({ selectRow: row, updatedRow: baseRow({ status: 'failed' }) });
+    const { storage, transcription } = makeCollaborators({
+      getJob: jest.fn().mockResolvedValue({ status: 'completed', outputKey: 'out.json' }),
+      getObjectText: jest.fn().mockRejectedValue(new Error('AccessDenied: arn:aws:s3:::bucket-interno/key')),
+    });
+    const service = new VoiceNoteService(pool, storage, transcription);
+
+    expect((await service.get(USER, NOTE)).status).toBe('failed');
+    const failCall = calls.find((c) => c.sql.includes("status = 'failed'"));
+    expect(failCall?.params?.[0]).toMatch(/gravar novamente/);
+    expect(JSON.stringify(failCall?.params)).not.toContain('bucket-interno');
+  });
+
   test("another user's dictation is invisible", async () => {
     const { pool, calls } = makePool({ selectRow: null });
     const { storage, transcription } = makeCollaborators();

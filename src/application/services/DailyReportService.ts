@@ -313,7 +313,13 @@ export class DailyReportService {
       void this.transcription.deleteJob(row.transcribe_job_name as string);
       return toDailyReport(result.rows[0] as DailyReportRow);
     } catch (e) {
-      return this.fail(row, e instanceof Error ? e.message : String(e));
+      // O detalhe (S3, SDK, SQL) vai para o log; a mensagem gravada em `error`
+      // é devolvida ao usuário e não deve expor internos.
+      logger.warn('[DailyReportService] processing failed', {
+        id: row.id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return this.fail(row, 'Não foi possível processar a gravação. Tente gravar novamente.');
     }
   }
 
