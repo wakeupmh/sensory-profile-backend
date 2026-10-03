@@ -148,7 +148,7 @@ export class AssessmentService {
           [assessmentData.child.id, userId]
         );
         if (ownerCheck.rows.length === 0) {
-          throw new NotFoundError('Child', assessmentData.child.id);
+          throw new NotFoundError('Criança', assessmentData.child.id);
         }
         childId = assessmentData.child.id;
         logger.debug(`[AssessmentService] Child id validated: ${childId}`);
@@ -372,7 +372,7 @@ export class AssessmentService {
             [assessmentData.child.id, userId]
           );
           if (ownerCheck.rows.length === 0) {
-            throw new NotFoundError('Child', assessmentData.child.id);
+            throw new NotFoundError('Criança', assessmentData.child.id);
           }
           childId = assessmentData.child.id;
           logger.debug(`[AssessmentService] Updated child id (direct): ${childId}`);

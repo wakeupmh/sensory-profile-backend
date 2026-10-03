@@ -33,7 +33,7 @@ export function requireUserId(req: Request): string {
  */
 export function assertDelegatedChildMatches(req: Request, id: string): void {
   if (req.delegatedChildId && req.delegatedChildId !== id) {
-    throw new AuthorizationError('Delegated access does not cover this child');
+    throw new AuthorizationError('O acesso delegado não cobre esta criança');
   }
 }
 

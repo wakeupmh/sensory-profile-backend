@@ -40,7 +40,7 @@ export class ChildController {
     assertDelegatedChildMatches(req, id);
     logger.info(`[child.get] userId=${userId} id=${id}`);
     const child = await this.service.get(id, userId);
-    if (!child) throw new NotFoundError('Child', id);
+    if (!child) throw new NotFoundError('Criança', id);
     jsonResponse(res, child.toJSON());
   });
 
@@ -64,7 +64,7 @@ export class ChildController {
     const body = updateChildSchema.parse(req.body);
     logger.info(`[child.update] userId=${userId} id=${id}`);
     const child = await this.service.update(id, userId, body);
-    if (!child) throw new NotFoundError('Child', id);
+    if (!child) throw new NotFoundError('Criança', id);
     jsonResponse(res, child.toJSON());
   });
 
@@ -81,7 +81,7 @@ export class ChildController {
     if (deleted === false) {
       // repo returns false when child has assessments
       const child = await this.service.get(id, userId);
-      if (!child) throw new NotFoundError('Child', id);
+      if (!child) throw new NotFoundError('Criança', id);
       throw new ConflictError(
         'Não é possível excluir esta criança pois ela possui avaliações associadas.',
         'Child'

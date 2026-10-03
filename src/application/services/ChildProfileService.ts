@@ -48,7 +48,7 @@ export class ChildProfileService {
       [childId, userId],
     );
     if (result.rows.length === 0) {
-      throw new NotFoundError('Child not found');
+      throw new NotFoundError('Criança');
     }
     return result.rows[0] as { id: string; name: string; birth_date: string | null; gender: string | null; national_identity: string | null; notes: string | null; created_at: Date };
   }

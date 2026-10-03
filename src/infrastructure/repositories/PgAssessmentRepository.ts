@@ -222,7 +222,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
     );
 
     if (result.rows.length === 0) {
-      throw new NotFoundError('Assessment', assessment.getId());
+      throw new NotFoundError('Avaliação', assessment.getId());
     }
 
     return this.mapRowToAssessment(result.rows[0]);

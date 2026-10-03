@@ -24,6 +24,7 @@
  * 15.  update non-existent → throws
  */
 
+import { NotFoundError } from 'infrastructure/utils/errors/CustomErrors';
 import { TherapySessionService } from 'application/services/TherapySessionService';
 import { TherapistService } from 'application/services/TherapistService';
 import { TherapySession, TherapySessionSummary } from 'domain/entities/TherapySession';
@@ -174,7 +175,7 @@ describe('TherapySessionService — CRUD', () => {
         { childId: CHILD_ID_A, therapyType: 'aba', occurredAt: NOW, therapistId: THERAPIST_ID },
         USER_ID,
       ),
-    ).rejects.toThrow(THERAPIST_ID);
+    ).rejects.toThrow(NotFoundError); // 404, não 500
     expect(sessionRepo.save).not.toHaveBeenCalled();
   });
 

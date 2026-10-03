@@ -126,7 +126,7 @@ export class DataExportService {
   async exportChild(userId: string, childId: string): Promise<DataExportResult> {
     const childResult = await this.pool.query(`SELECT * FROM children WHERE id = $1 AND user_id = $2`, [childId, userId]);
     if (childResult.rows.length === 0) {
-      throw new NotFoundError('Child', childId);
+      throw new NotFoundError('Criança', childId);
     }
 
     const data = {

@@ -18,7 +18,7 @@ const SHARE_TOKEN_REGEX = /^[A-Za-z0-9_-]{16,128}$/;
 
 function assertValidShareToken(token: string | undefined): asserts token is string {
   if (!token || !SHARE_TOKEN_REGEX.test(token)) {
-    throw new ValidationError('Invalid share token format');
+    throw new ValidationError('Formato de link de compartilhamento inválido');
   }
 }
 

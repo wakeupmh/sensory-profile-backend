@@ -4,6 +4,7 @@ import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 import { scopedById } from './queryUtils';
+import { NotFoundError } from '../utils/errors/CustomErrors';
 
 export class PgResponseRepository implements ResponseRepository {
   async findByAssessmentId(assessmentId: string, userId?: string): Promise<Response[]> {
@@ -34,7 +35,7 @@ export class PgResponseRepository implements ResponseRepository {
     );
     
     if (assessmentCheck.rows.length === 0) {
-      throw new Error(`Assessment with ID ${response.getAssessmentId()} not found for this user`);
+      throw new NotFoundError('Avaliação', response.getAssessmentId());
     }
     
     const id = response.getId() || uuidv7();
@@ -67,7 +68,7 @@ export class PgResponseRepository implements ResponseRepository {
       const _s = scopedById('sensory_assessments', assessmentId, userId);
       const assessmentCheck = await externalClient.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
-        throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+        throw new NotFoundError('Avaliação', assessmentId);
       }
 
       // Single batched INSERT
@@ -89,7 +90,7 @@ export class PgResponseRepository implements ResponseRepository {
       const _s = scopedById('sensory_assessments', assessmentId, userId);
       const assessmentCheck = await client.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
-        throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+        throw new NotFoundError('Avaliação', assessmentId);
       }
 
       // Single batched INSERT
@@ -127,7 +128,7 @@ export class PgResponseRepository implements ResponseRepository {
       const assessmentCheck = await pool.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
     
     if (assessmentCheck.rows.length === 0) {
-      throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+      throw new NotFoundError('Avaliação', assessmentId);
     }
     
     await pool.query('DELETE FROM sensory_responses WHERE id = $1', [id]);
@@ -141,7 +142,7 @@ export class PgResponseRepository implements ResponseRepository {
       const assessmentCheck = await queryable.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
 
     if (assessmentCheck.rows.length === 0) {
-      throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+      throw new NotFoundError('Avaliação', assessmentId);
     }
 
     await queryable.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
@@ -154,7 +155,7 @@ export class PgResponseRepository implements ResponseRepository {
       const _s = scopedById('sensory_assessments', assessmentId, userId);
       const assessmentCheck = await externalClient.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
-        throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+        throw new NotFoundError('Avaliação', assessmentId);
       }
 
       await externalClient.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);
@@ -177,7 +178,7 @@ export class PgResponseRepository implements ResponseRepository {
       const _s = scopedById('sensory_assessments', assessmentId, userId);
       const assessmentCheck = await client.query(`SELECT 1 FROM sensory_assessments WHERE ${_s.where}`, _s.params);
       if (assessmentCheck.rows.length === 0) {
-        throw new Error(`Assessment with ID ${assessmentId} not found for this user`);
+        throw new NotFoundError('Avaliação', assessmentId);
       }
 
       await client.query('DELETE FROM sensory_responses WHERE assessment_id = $1', [assessmentId]);

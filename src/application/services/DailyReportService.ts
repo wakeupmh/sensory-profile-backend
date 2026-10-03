@@ -143,7 +143,7 @@ export class DailyReportService {
 
   private async assertChildOwned(userId: string, childId: string): Promise<void> {
     const result = await this.pool.query(`SELECT 1 FROM children WHERE id = $1 AND user_id = $2`, [childId, userId]);
-    if (result.rows.length === 0) throw new NotFoundError('Child', childId);
+    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
   }
 
   async createDraft(
