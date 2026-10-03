@@ -94,7 +94,7 @@ export function createDelegationMiddleware(
     if (!childId) return next();
 
     if (!UUID_REGEX.test(childId)) {
-      return next(new ValidationError('Invalid X-Delegate-Child-Id format'));
+      return next(new ValidationError('Cabeçalho X-Delegate-Child-Id inválido'));
     }
     if (!req.userId) return next(new AuthorizationError());
 

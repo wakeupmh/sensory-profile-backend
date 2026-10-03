@@ -19,7 +19,7 @@ export const acceptInvitationSchema = z.object({
   token: z
     .string()
     .trim()
-    .regex(/^[A-Za-z0-9_-]{16,128}$/, 'Invalid invitation token format'),
+    .regex(/^[A-Za-z0-9_-]{16,128}$/, 'Formato de convite inválido'),
 });
 
 // Match UUIDv7 (which zod's .uuid() rejects on some versions because the
@@ -28,7 +28,7 @@ export const acceptInvitationSchema = z.object({
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const shareGrantBodySchema = z.object({
-  professionalId: z.string().regex(uuidRegex, 'Invalid professional ID format'),
+  professionalId: z.string().regex(uuidRegex, 'Identificador de profissional inválido'),
 });
 
 export type CreateProfessionalPayload = z.infer<typeof createProfessionalSchema>;

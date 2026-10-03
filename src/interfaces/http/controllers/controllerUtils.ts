@@ -5,7 +5,7 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 export function assertValidId(id: string | undefined, entityName = 'ID'): asserts id is string {
   if (!id || !UUID_REGEX.test(id)) {
-    throw new ValidationError(`Invalid ${entityName} format`);
+    throw new ValidationError(`Identificador inválido (${entityName})`);
   }
 }
 

@@ -101,7 +101,7 @@ const limiter = rateLimit({
     success: false,
     error: {
       type: 'RateLimitError',
-      message: 'Too many requests from this IP, please try again later.',
+      message: 'Muitas requisições deste IP. Tente novamente em instantes.',
       statusCode: 429,
       timestamp: new Date().toISOString()
     }
