@@ -206,3 +206,42 @@ describe('timelineQuerySchema', () => {
     expect(result.to).toBe('2025-12-31T23:59:59.000Z');
   });
 });
+
+describe('createChildSchema — datas e limites', () => {
+  const base = { name: 'Ana', birthDate: '2018-03-15' };
+
+  test('rejeita data impossível que passa no formato', () => {
+    expect(createChildSchema.safeParse({ ...base, birthDate: '2018-13-45' }).success).toBe(false);
+    expect(createChildSchema.safeParse({ ...base, birthDate: '2019-02-29' }).success).toBe(false);
+  });
+
+  test('rejeita data de nascimento futura', () => {
+    const next = new Date(Date.now() + 2 * 365 * 86400000).toISOString().slice(0, 10);
+    expect(createChildSchema.safeParse({ ...base, birthDate: next }).success).toBe(false);
+  });
+
+  test('aceita 29 de fevereiro de ano bissexto', () => {
+    expect(createChildSchema.safeParse({ ...base, birthDate: '2020-02-29' }).success).toBe(true);
+  });
+
+  test('rejeita textos sem limite', () => {
+    expect(createChildSchema.safeParse({ ...base, name: 'a'.repeat(101) }).success).toBe(false);
+    expect(createChildSchema.safeParse({ ...base, nationalIdentity: '1'.repeat(51) }).success).toBe(false);
+    expect(createChildSchema.safeParse({ ...base, otherInfo: 'x'.repeat(1001) }).success).toBe(false);
+  });
+
+  test('nome só com espaços é recusado', () => {
+    expect(createChildSchema.safeParse({ ...base, name: '   ' }).success).toBe(false);
+  });
+});
+
+describe('timelineQuerySchema — from/to', () => {
+  test('rejeita data inválida (antes virava erro do Postgres, 500)', () => {
+    expect(timelineQuerySchema.safeParse({ from: 'ontem' }).success).toBe(false);
+    expect(timelineQuerySchema.safeParse({ to: '2025-13-01' }).success).toBe(false);
+  });
+
+  test('aceita data e instante ISO', () => {
+    expect(timelineQuerySchema.safeParse({ from: '2025-01-01', to: '2025-02-01T10:00:00Z' }).success).toBe(true);
+  });
+});
