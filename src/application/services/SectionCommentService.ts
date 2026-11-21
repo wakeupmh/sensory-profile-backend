@@ -1,5 +1,4 @@
 import { v7 as uuidv7 } from 'uuid';
-import pool from '../../infrastructure/database/connection';
 import { PoolClient } from 'pg';
 
 export interface SectionComment {
@@ -8,21 +7,17 @@ export interface SectionComment {
 }
 
 export class SectionCommentService {
-  async deleteByAssessmentId(assessmentId: string, externalClient?: PoolClient, userId?: string): Promise<void> {
-    const queryable = externalClient ?? pool;
-    if (userId) {
-      await queryable.query(
-        `DELETE FROM section_comments sc
-         WHERE sc.assessment_id = $1
-           AND EXISTS (SELECT 1 FROM sensory_assessments sa WHERE sa.id = sc.assessment_id AND sa.user_id = $2)`,
-        [assessmentId, userId]
-      );
-    } else {
-      await queryable.query('DELETE FROM section_comments WHERE assessment_id = $1', [assessmentId]);
-    }
+  async deleteByAssessmentId(assessmentId: string, client: PoolClient, userId: string): Promise<void> {
+    await client.query(
+      `DELETE FROM section_comments sc
+       WHERE sc.assessment_id = $1
+         AND EXISTS (SELECT 1 FROM sensory_assessments sa WHERE sa.id = sc.assessment_id AND sa.user_id = $2)`,
+      [assessmentId, userId]
+    );
   }
 
-  async saveSectionComments(assessmentId: string, comments: SectionComment[], externalClient?: PoolClient): Promise<void> {
+  // The caller owns the transaction (BEGIN/COMMIT/ROLLBACK) on `client`.
+  async saveSectionComments(assessmentId: string, comments: SectionComment[], client: PoolClient): Promise<void> {
     if (!comments || comments.length === 0) return;
 
     const values: string[] = [];
@@ -34,26 +29,9 @@ export class SectionCommentService {
       idx += 4;
     }
 
-    const sql = `INSERT INTO section_comments (id, assessment_id, section_name, comments) VALUES ${values.join(', ')}`;
-
-    // When an external client (shared transaction) is provided, skip
-    // local transaction management — the caller owns BEGIN/COMMIT/ROLLBACK.
-    if (externalClient) {
-      await externalClient.query(sql, params);
-      return;
-    }
-
-    // Stand-alone path: manage our own transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(sql, params);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    await client.query(
+      `INSERT INTO section_comments (id, assessment_id, section_name, comments) VALUES ${values.join(', ')}`,
+      params
+    );
   }
 }
