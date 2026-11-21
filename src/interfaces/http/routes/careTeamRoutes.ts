@@ -7,7 +7,7 @@ import { delegationMiddleware } from './domainRouter';
 import pool from '../../../infrastructure/database/connection';
 
 const repository = new PgCareTeamMemberRepository();
-export const careTeamService = new CareTeamService(repository, pool);
+const careTeamService = new CareTeamService(repository, pool);
 const controller = new CareTeamController(careTeamService);
 
 /**

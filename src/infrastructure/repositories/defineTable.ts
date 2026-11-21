@@ -93,13 +93,7 @@ export const read = {
    * Valor entregue como o pg o devolve, tipado pelo domínio: enums, `jsonb`
    * tipado e as colunas `date`.
    *
-   * As colunas `date` merecem um aviso: o pg as devolve como `Date`, e várias
-   * props as declaram `string` (`diagnosisDate`, `achievedDate`, `targetDate`,
-   * `followUpDate`, `startDate`, `endDate`, `reviewDate`). O tipo mente desde
-   * antes deste descritor; `formatDateString` existe para resolver isso e só é
-   * usado em `children.birth_date`. Aqui o comportamento é preservado LETRA POR
-   * LETRA de propósito — corrigir muda a resposta da API, e isso é decisão de
-   * quem cuida das entidades, não deste refactor.
+   * As colunas `date` chegam como texto `YYYY-MM-DD` (parser em `connection.ts`).
    */
   raw:
     <T>() =>

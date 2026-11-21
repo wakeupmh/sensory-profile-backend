@@ -5,6 +5,7 @@ import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 import { scopedById } from './queryUtils';
+import { calculateAgeUTC } from '../utils/date';
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
@@ -76,6 +77,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
   }
 
   async findById(id: string, userId: string): Promise<Assessment | null> {
+    const scope = scopedById('sensory_assessments', id, userId);
     const query = `
       SELECT 
         sa.*,
@@ -89,19 +91,17 @@ export class PgAssessmentRepository implements AssessmentRepository {
         cg.name as caregiver_name,
         cg.relationship as caregiver_relationship,
         cg.contact as caregiver_contact
-      FROM 
-        sensory_assessments sa
+      FROM
+        (SELECT * FROM sensory_assessments WHERE ${scope.where}) sa
       LEFT JOIN 
         children c ON sa.child_id = c.id
       LEFT JOIN
         examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
       LEFT JOIN
         caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
-      WHERE
-        sa.id = $1 AND sa.user_id = $2
     `;
 
-    const result = await pool.query(query, [id, userId]);
+    const result = await pool.query(query, scope.params);
 
     if (result.rows.length === 0) {
       return null;
@@ -234,56 +234,22 @@ export class PgAssessmentRepository implements AssessmentRepository {
     await queryable.query(`DELETE FROM sensory_assessments WHERE ${scope.where}`, scope.params);
   }
 
-  async findByChildId(childId: string, userId: string, page: number = 1, limit: number = 20): Promise<AssessmentWithRelations[]> {
-    const offset = (page - 1) * limit;
-    const query = `
-      SELECT
-        sa.*,
-        c.name as child_name,
-        c.birth_date as child_birth_date,
-        c.gender as child_gender,
-        c.other_info as child_other_info,
-        e.name as examiner_name,
-        e.profession as examiner_profession,
-        e.contact as examiner_contact,
-        cg.name as caregiver_name,
-        cg.relationship as caregiver_relationship,
-        cg.contact as caregiver_contact
-      FROM
-        sensory_assessments sa
-      LEFT JOIN
-        children c ON sa.child_id = c.id
-      LEFT JOIN
-        examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
-      LEFT JOIN
-        caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
-      WHERE
-        sa.child_id = $1 AND sa.user_id = $2
-      ORDER BY
-        sa.assessment_date DESC
-      LIMIT $3 OFFSET $4
-    `;
-
-    const result = await pool.query(query, [childId, userId, limit, offset]);
-
-    return result.rows.map(row => this.mapRowToAssessment(row));
-  }
-
+  // NUMERIC chega do pg como string; converte aqui para o tipo da entidade valer.
   private mapRowToAssessment(row: Record<string, unknown>): AssessmentWithRelations {
     const assessment = new Assessment(
       row.child_id as string,
       row.examiner_id as string | null,
       row.caregiver_id as string | null,
       row.assessment_date as Date,
-      row.auditory_processing_raw_score as number | undefined,
-      row.visual_processing_raw_score as number | undefined,
-      row.tactile_processing_raw_score as number | undefined,
-      row.movement_processing_raw_score as number | undefined,
-      row.body_position_processing_raw_score as number | undefined,
-      row.oral_sensitivity_processing_raw_score as number | undefined,
-      row.behavioral_responses_raw_score as number | undefined,
-      row.social_emotional_responses_raw_score as number | undefined,
-      row.attention_responses_raw_score as number | undefined,
+      num(row.auditory_processing_raw_score),
+      num(row.visual_processing_raw_score),
+      num(row.tactile_processing_raw_score),
+      num(row.movement_processing_raw_score),
+      num(row.body_position_processing_raw_score),
+      num(row.oral_sensitivity_processing_raw_score),
+      num(row.behavioral_responses_raw_score),
+      num(row.social_emotional_responses_raw_score),
+      num(row.attention_responses_raw_score),
       row.id as string,
       row.created_at as Date,
       row.updated_at as Date,
@@ -294,10 +260,10 @@ export class PgAssessmentRepository implements AssessmentRepository {
 
     if (row.child_name) {
       assessment.childName = row.child_name as string;
-      assessment.childBirthDate = row.child_birth_date as Date;
+      assessment.childBirthDate = row.child_birth_date as string;
       assessment.childGender = row.child_gender as string;
       assessment.childOtherInfo = row.child_other_info as string;
-      assessment.childAge = this.calculateAge(row.child_birth_date as Date);
+      assessment.childAge = calculateAgeUTC(row.child_birth_date as string);
     }
 
     if (row.examiner_name) {
@@ -315,20 +281,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return assessment;
   }
 
-  private calculateAge(birthDate: Date): number {
-    if (!birthDate) return 0;
-    
-    const today = new Date();
-    const birth = new Date(birthDate);
-    
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDifference = today.getMonth() - birth.getMonth();
-    
-    // If birthday hasn't occurred yet this year, subtract one year
-    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    
-    return age;
-  }
+}
+
+function num(v: unknown): number | undefined {
+  return v == null ? undefined : Number(v);
 }

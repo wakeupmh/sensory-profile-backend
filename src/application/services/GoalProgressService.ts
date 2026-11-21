@@ -65,8 +65,12 @@ export class GoalProgressService {
 
   async remove(goalId: string, entryId: string, userId: string): Promise<void> {
     await this.assertGoalOwnership(goalId, userId);
-    const ok = await this.progressRepo.delete(entryId, userId);
-    if (!ok) throw new NotFoundError('Registro de progresso', entryId);
+    // O lançamento não tem `child_id`: só a meta da URL passa pelo escopo de
+    // criança, então ele precisa ser dessa meta.
+    const entry = await this.progressRepo.findById(entryId, userId);
+    if (entry?.getGoalId() !== goalId || !(await this.progressRepo.delete(entryId, userId))) {
+      throw new NotFoundError('Registro de progresso', entryId);
+    }
   }
 
   async getSummary(goalId: string, userId: string): Promise<GoalProgressSummary> {

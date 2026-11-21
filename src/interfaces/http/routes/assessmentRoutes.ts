@@ -1,5 +1,4 @@
 import { AssessmentController } from '../controllers/AssessmentController';
-import { EntityController } from '../controllers/EntityController';
 import { AssessmentService } from '../../../application/services/AssessmentService';
 import { PgAssessmentRepository } from '../../../infrastructure/repositories/PgAssessmentRepository';
 import { PgResponseRepository } from '../../../infrastructure/repositories/PgResponseRepository';
@@ -31,7 +30,6 @@ const assessmentService = new AssessmentService(
 );
 
 const assessmentController = new AssessmentController(assessmentService);
-const entityController = new EntityController(childService, examinerService, caregiverService);
 
 const assessmentShareRepository = new PgAssessmentShareRepository();
 const assessmentShareService = new ResourceShareService(
@@ -54,18 +52,6 @@ const assessmentShareController = new ResourceShareController(
 export { assessmentRepository, responseRepository, assessmentShareService };
 
 const router = domainRouter();
-
-// Child routes
-router.get('/children', entityController.getAllChildren.bind(entityController));
-router.get('/children/:id', entityController.getChildById.bind(entityController));
-
-// Examiner routes
-router.get('/examiners', entityController.getAllExaminers.bind(entityController));
-router.get('/examiners/:id', entityController.getExaminerById.bind(entityController));
-
-// Caregiver routes
-router.get('/caregivers', entityController.getAllCaregivers.bind(entityController));
-router.get('/caregivers/:id', entityController.getCaregiverById.bind(entityController));
 
 // Assessment specific routes
 router.get('/:id/report', assessmentController.generateReport.bind(assessmentController));

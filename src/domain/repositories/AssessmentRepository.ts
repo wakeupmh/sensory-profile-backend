@@ -2,7 +2,7 @@ import { Assessment } from '../entities/Assessment';
 
 export interface AssessmentWithRelations extends Assessment {
   childName?: string;
-  childBirthDate?: Date;
+  childBirthDate?: string;
   childGender?: string;
   childOtherInfo?: string;
   childAge?: number;
@@ -42,5 +42,4 @@ export interface AssessmentRepository {
   save(assessment: Assessment, userId: string): Promise<Assessment>;
   update(assessment: Assessment, userId: string): Promise<Assessment>;
   delete(id: string, userId: string): Promise<void>;
-  findByChildId(childId: string, userId: string, page?: number, limit?: number): Promise<AssessmentWithRelations[]>;
 }

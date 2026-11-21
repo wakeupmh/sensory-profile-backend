@@ -142,10 +142,7 @@ export class PgChildRepository implements ChildRepository {
   }
 
   private mapRow(row: Record<string, unknown>): Child {
-    const birthDate = row.birth_date as Date | string | null;
-    const birthDateStr = birthDate
-      ? (birthDate instanceof Date ? birthDate.toISOString().split('T')[0] : String(birthDate).split('T')[0])
-      : '';
+    const birthDateStr = (row.birth_date as string | null) ?? '';
 
     return new Child({
       id: row.id as string,

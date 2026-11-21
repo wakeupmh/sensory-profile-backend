@@ -4,7 +4,6 @@ import {
   createAssessmentSchema, 
   updateAssessmentSchema,
   assessmentQuerySchema,
-  transformPayloadForService,
   validateChildAge,
   validateRequiredResponses
 } from '../validations/assessmentValidation';
@@ -85,19 +84,9 @@ export class AssessmentController {
     validateChildAge(validatedData.child.birthDate, validatedData.instrumentId);
     validateRequiredResponses(validatedData.responses, validatedData.instrumentId);
 
-    // Transform and validate scoring
-    const transformedData = transformPayloadForService(validatedData);
-    logger.debug(`[createAssessment] Assessment data transformed, creating assessment`);
-
     const assessment = await this.assessmentService.createAssessment({
-      instrumentId: transformedData.instrumentId,
-      child: transformedData.child,
-      examiner: transformedData.examiner,
-      caregiver: transformedData.caregiver,
-      responses: transformedData.responses,
-      rawScores: transformedData.rawScores,
-      sectionComments: transformedData.sectionComments as SectionComment[],
-      parentAssessmentId: transformedData.parentAssessmentId
+      ...validatedData,
+      sectionComments: validatedData.sectionComments as SectionComment[],
     }, userId);
     
     logger.info(`[createAssessment] Assessment created successfully with id: ${assessment.getId()}`);

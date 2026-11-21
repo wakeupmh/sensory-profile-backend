@@ -13,8 +13,7 @@
  * neste caminho, então a informação cabe sem esticar o schema.
  */
 import { Request } from 'express';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID_REGEX } from '../controllers/controllerUtils';
 
 /** Largura de `access_logs.resource_type`. */
 export const RESOURCE_TYPE_MAX_LENGTH = 50;

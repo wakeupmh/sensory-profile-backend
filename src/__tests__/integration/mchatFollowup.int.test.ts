@@ -63,17 +63,6 @@ const CHILD_PAYLOAD = {
 };
 
 const VALID_PARENT_ID = '018f4e8a-0000-7000-8000-000000000001';
-const ZERO_RAW_SCORES = {
-  auditoryProcessing: 0,
-  visualProcessing: 0,
-  tactileProcessing: 0,
-  movementProcessing: 0,
-  bodyPositionProcessing: 0,
-  oralSensitivityProcessing: 0,
-  behavioralResponses: 0,
-  socialEmotionalResponses: 0,
-  attentionResponses: 0,
-};
 
 // ---------------------------------------------------------------------------
 // Build the service with full mocks
@@ -85,7 +74,6 @@ function makeService(assessmentRepoOverrides: Partial<{
   findAll: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
-  findByChildId: jest.Mock;
 }> = {}) {
   const assessmentRepository = {
     findAll: jest.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
@@ -93,7 +81,6 @@ function makeService(assessmentRepoOverrides: Partial<{
     save: jest.fn().mockImplementation((a) => Promise.resolve(a)),
     update: jest.fn().mockImplementation((a) => Promise.resolve(a)),
     delete: jest.fn().mockResolvedValue(undefined),
-    findByChildId: jest.fn().mockResolvedValue([]),
     ...assessmentRepoOverrides,
   };
 
@@ -105,7 +92,6 @@ function makeService(assessmentRepoOverrides: Partial<{
 
   const childService = {
     findOrCreateChild: jest.fn().mockResolvedValue('child-uuid-001'),
-    getChildById: jest.fn().mockResolvedValue(null),
   };
 
   const examinerService = {
@@ -117,9 +103,8 @@ function makeService(assessmentRepoOverrides: Partial<{
   };
 
   const sectionCommentService = {
-    createSectionComments: jest.fn().mockResolvedValue([]),
-    getSectionCommentsByAssessmentId: jest.fn().mockResolvedValue([]),
-    deleteSectionCommentsByAssessmentId: jest.fn().mockResolvedValue(undefined),
+    saveSectionComments: jest.fn().mockResolvedValue(undefined),
+    deleteByAssessmentId: jest.fn().mockResolvedValue(undefined),
   };
 
   return new AssessmentService(
@@ -138,7 +123,6 @@ function followupPayload(overrides: { instrumentId?: string; responses?: Array<{
     instrumentId: overrides.instrumentId ?? 'mchat-rf-followup',
     child: CHILD_PAYLOAD,
     responses: overrides.responses ?? [{ itemId: 4001, response: 'passou' }],
-    rawScores: ZERO_RAW_SCORES,
     sectionComments: [],
     parentAssessmentId: VALID_PARENT_ID,
   };

@@ -4,9 +4,8 @@ import { DEFAULT_INSTRUMENT_ID } from '../../../domain/entities/Assessment';
 import { getInstrument } from '../../../instruments';
 import { calculateAgeUTC } from '../../../infrastructure/utils/date';
 
-// Instruments that use the legacy Criança 3-14 validation + scoring stack.
-// Other instrument IDs are accepted but skip the 3-14-specific checks and
-// are persisted with zeroed raw scores (scoring lives in the frontend).
+// Instrument whose 3-14 age and required-response checks run here; its raw
+// scores are computed from responses in AssessmentService.
 const LEGACY_INSTRUMENT_ID = DEFAULT_INSTRUMENT_ID;
 
 export const isLegacyInstrument = (instrumentId?: string): boolean =>
@@ -19,17 +18,6 @@ const instrumentIdSchema = z
   .regex(/^[a-z0-9-]+$/i, 'Instrument ID contains invalid characters')
   .default(LEGACY_INSTRUMENT_ID);
 
-const ZERO_RAW_SCORES = {
-  auditoryProcessing: 0,
-  visualProcessing: 0,
-  tactileProcessing: 0,
-  movementProcessing: 0,
-  bodyPositionProcessing: 0,
-  oralSensitivityProcessing: 0,
-  behavioralResponses: 0,
-  socialEmotionalResponses: 0,
-  attentionResponses: 0,
-};
 
 // Open response string — per-instrument value validation is done via
 // superRefine on the responses array (see assessmentSchema / createAssessmentSchema).
@@ -319,59 +307,6 @@ export type CreateAssessmentPayload = z.infer<typeof createAssessmentSchema>;
 export type UpdateAssessmentPayload = z.infer<typeof updateAssessmentSchema>;
 export type AssessmentQuery = z.infer<typeof assessmentQuerySchema>;
 
-// Transform function with enhanced validation.
-// For the legacy Criança 3-14 instrument we auto-calculate section raw scores
-// from responses and validate against the official ranges. For any other
-// instrument we short-circuit with zeroed raw scores — scoring for those
-// instruments lives in the frontend.
-export const transformPayloadForService = (payload: CreateAssessmentPayload) => {
-  const base = {
-    instrumentId: payload.instrumentId,
-    child: payload.child,
-    examiner: payload.examiner,
-    caregiver: payload.caregiver,
-    responses: payload.responses,
-    sectionComments: payload.sectionComments || [],
-    parentAssessmentId: payload.parentAssessmentId,
-  };
-
-  if (!isLegacyInstrument(payload.instrumentId)) {
-    return { ...base, rawScores: { ...ZERO_RAW_SCORES } };
-  }
-
-  try {
-    // Import scoring functions dynamically to avoid circular imports
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- quebra um ciclo real de imports
-    const { calculateScores, validateScores } = require('../../../infrastructure/utils/scoring/scoringService');
-
-    const scoringResults = calculateScores(payload.responses);
-
-    if (scoringResults.invalidResponses.length > 0) {
-      throw new ValidationError(
-        'Invalid responses detected',
-        { invalidResponses: scoringResults.invalidResponses }
-      );
-    }
-
-    const scoreWarnings = validateScores(scoringResults);
-    if (scoreWarnings.length > 0) {
-      throw new ValidationError(
-        'Calculated scores are outside expected ranges',
-        { warnings: scoreWarnings }
-      );
-    }
-
-    return { ...base, rawScores: scoringResults.sectionScores };
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      throw error;
-    }
-    throw new ValidationError(
-      'Failed to process assessment data',
-      { originalError: error instanceof Error ? error.message : 'Unknown error' }
-    );
-  }
-};
 
 // Validation helper functions.
 // The 3-14 age range only applies to the legacy Criança 3-14 instrument.

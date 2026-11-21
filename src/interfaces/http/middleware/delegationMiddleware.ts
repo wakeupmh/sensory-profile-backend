@@ -4,6 +4,7 @@ import { CaregiverShareService } from '../../../application/services/CaregiverSh
 import { AccessLogService } from '../../../application/services/AccessLogService';
 import { AuthorizationError, ValidationError } from '../../../infrastructure/utils/errors/CustomErrors';
 import { auditTargetFromPath } from './auditTarget';
+import { UUID_REGEX } from '../controllers/controllerUtils';
 
 declare global {
   namespace Express {
@@ -29,8 +30,6 @@ declare global {
     }
   }
 }
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Este middleware é montado com `router.use`, e numa camada `use` do Express o

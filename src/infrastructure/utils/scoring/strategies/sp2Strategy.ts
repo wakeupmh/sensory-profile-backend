@@ -19,14 +19,7 @@ import {
 
 
 
-/**
- * SP-2 ScoringStrategy implementation.
- *
- * Accepts responses as a Map<itemId, responseString> (the ScoringStrategy
- * contract) and returns a ScoringResult whose scores_json matches the shape
- * produced by the legacy calculateScores() helper so that no downstream
- * consumers need to change.
- */
+/** The single SP-2 scorer: section and quadrant totals from item responses. */
 export const sp2Strategy: ScoringStrategy = (
   responses: Map<number, string>,
   // instrument arg is part of the contract but SP-2 doesn't need it
