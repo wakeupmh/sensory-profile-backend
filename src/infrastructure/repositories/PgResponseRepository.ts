@@ -215,7 +215,7 @@ export class PgResponseRepository implements ResponseRepository {
   private mapRowToResponse(row: any): Response {
     return new Response(
       row.assessment_id,
-      row.item_id,
+      Number(row.item_id), // a coluna é VARCHAR; o domínio e o front comparam por número
       row.response,
       row.id,
       row.created_at
