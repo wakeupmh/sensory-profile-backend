@@ -103,9 +103,8 @@ function makeService(assessmentRepoOverrides: Partial<{
   };
 
   const sectionCommentService = {
-    createSectionComments: jest.fn().mockResolvedValue([]),
-    getSectionCommentsByAssessmentId: jest.fn().mockResolvedValue([]),
-    deleteSectionCommentsByAssessmentId: jest.fn().mockResolvedValue(undefined),
+    saveSectionComments: jest.fn().mockResolvedValue(undefined),
+    deleteByAssessmentId: jest.fn().mockResolvedValue(undefined),
   };
 
   return new AssessmentService(
