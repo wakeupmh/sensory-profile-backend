@@ -63,3 +63,12 @@ test('"não se aplica" sai do total sem barrar a criação', async () => {
   );
   expect(created.getAuditoryProcessingRawScore()).toBe(7);
 });
+
+test('respostas lidas do banco trazem itemId numérico, como a entidade declara', async () => {
+  const created = await service.createAssessment(
+    { child: { name: 'Criança teste', birthDate: '2019-05-01' }, responses: allItems('quase nunca') },
+    userId,
+  );
+  const { responses } = await service.getAssessmentWithResponses(created.getId()!, userId);
+  expect(responses[0].getItemId()).toEqual(expect.any(Number));
+});

@@ -34,7 +34,9 @@ const TABLE = defineTable({
 });
 
 /** A projeção da listagem: as colunas do SELECT e a leitura da linha saem daqui. */
-const SUMMARY = ['id', 'childId', 'logType', 'occurredAt', 'notes', 'createdAt'] as const;
+// `data` vai junto: a lista mostra o que foi registrado (humor, sono) e o
+// resumo do mês soma os valores.
+const SUMMARY = ['id', 'childId', 'logType', 'occurredAt', 'data', 'notes', 'createdAt'] as const;
 
 export class PgDailyLogRepository implements DailyLogRepository {
   private toEntity(row: Record<string, unknown>): DailyLog {
