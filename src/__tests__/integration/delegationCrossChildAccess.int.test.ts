@@ -11,6 +11,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { PgDailyLogRepository } from 'infrastructure/repositories/PgDailyLogRepository';
 import { PgDocumentRepository } from 'infrastructure/repositories/PgDocumentRepository';
+import { PgAssessmentRepository } from 'infrastructure/repositories/PgAssessmentRepository';
 import { runWithScope } from 'infrastructure/database/requestScope';
 import { DailyReportService } from 'application/services/DailyReportService';
 import type { S3StorageService } from 'infrastructure/storage/S3StorageService';
@@ -25,6 +26,7 @@ const childB = randomUUID();
 const logB = randomUUID();
 const docB = randomUUID();
 const reportB = randomUUID();
+const assessmentB = randomUUID();
 
 beforeAll(async () => {
   await pool.query(
@@ -47,9 +49,14 @@ beforeAll(async () => {
      VALUES ($1,$2,$3,'2026-08-24','ready','relato privado da B')`,
     [reportB, owner, childB],
   );
+  await pool.query(
+    `INSERT INTO sensory_assessments (id,user_id,child_id,assessment_date) VALUES ($1,$2,$3,NOW())`,
+    [assessmentB, owner, childB],
+  );
 });
 
 afterAll(async () => {
+  await pool.query('DELETE FROM sensory_assessments WHERE user_id = $1', [owner]);
   await pool.query('DELETE FROM children WHERE user_id = $1', [owner]);
   await pool.end();
 });
@@ -101,6 +108,14 @@ describe('acesso entre crianças sob delegação', () => {
     // O título vive em props privadas; ler direto do banco é a prova que importa.
     const { rows } = await pool.query('SELECT title FROM documents WHERE id = $1', [docB]);
     expect(rows[0].title).toBe('Laudo da B');
+  });
+
+  test("a caregiver delegated to child A cannot read child B's assessment by id", async () => {
+    const assessments = new PgAssessmentRepository();
+    expect(await assessments.findById(assessmentB, owner)).not.toBeNull();
+    await runWithScope({ restrictedToChildId: childA }, async () => {
+      expect(await assessments.findById(assessmentB, owner)).toBeNull();
+    });
   });
 
   test('delegation to the right child still works normally', async () => {

@@ -27,38 +27,4 @@ export class ExaminerService {
     return result.rows[0].id;
   }
 
-  async getExaminerById(examinerId: string, userId: string): Promise<(ExaminerData & { id: string }) | null> {
-    const result = await pool.query(
-      'SELECT * FROM examiners WHERE id = $1 AND user_id = $2',
-      [examinerId, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return null;
-    }
-
-    const examiner = result.rows[0];
-    return {
-      id: examiner.id,
-      name: examiner.name,
-      profession: examiner.profession,
-      contact: examiner.contact
-    };
-  }
-
-  async getAllExaminers(userId: string): Promise<Array<ExaminerData & { id: string }>> {
-    const result = await pool.query(
-      `SELECT * FROM examiners
-       WHERE user_id = $1
-       ORDER BY name`,
-      [userId]
-    );
-
-    return result.rows.map(examiner => ({
-      id: examiner.id,
-      name: examiner.name,
-      profession: examiner.profession,
-      contact: examiner.contact
-    }));
-  }
 }

@@ -76,6 +76,7 @@ export class PgAssessmentRepository implements AssessmentRepository {
   }
 
   async findById(id: string, userId: string): Promise<Assessment | null> {
+    const scope = scopedById('sensory_assessments', id, userId);
     const query = `
       SELECT 
         sa.*,
@@ -89,19 +90,17 @@ export class PgAssessmentRepository implements AssessmentRepository {
         cg.name as caregiver_name,
         cg.relationship as caregiver_relationship,
         cg.contact as caregiver_contact
-      FROM 
-        sensory_assessments sa
+      FROM
+        (SELECT * FROM sensory_assessments WHERE ${scope.where}) sa
       LEFT JOIN 
         children c ON sa.child_id = c.id
       LEFT JOIN
         examiners e ON sa.examiner_id = e.id AND e.user_id = sa.user_id
       LEFT JOIN
         caregivers cg ON sa.caregiver_id = cg.id AND cg.user_id = sa.user_id
-      WHERE
-        sa.id = $1 AND sa.user_id = $2
     `;
 
-    const result = await pool.query(query, [id, userId]);
+    const result = await pool.query(query, scope.params);
 
     if (result.rows.length === 0) {
       return null;

@@ -230,7 +230,7 @@ describe('as rotas ainda resolvem', () => {
     [`/api/children/${CHILD_ID}/access-logs`, ['GET', 'HEAD']],
     [`/api/children/${CHILD_ID}/care-team`, ['GET', 'HEAD', 'POST']],
     ['/api/care-team/my-children', ['GET', 'HEAD']],
-    [`/api/assessments/children/${CHILD_ID}`, ['GET', 'HEAD']],
+    [`/api/assessments/${CHILD_ID}/report`, ['GET', 'HEAD']],
     [`/api/medical/medications/${CHILD_ID}`, ['DELETE', 'GET', 'HEAD', 'PATCH']],
     ['/api/development/milestones', ['GET', 'HEAD', 'POST']],
     ['/api/development/logs', ['GET', 'HEAD', 'POST']],

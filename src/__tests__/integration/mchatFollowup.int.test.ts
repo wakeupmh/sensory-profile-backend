@@ -94,7 +94,6 @@ function makeService(assessmentRepoOverrides: Partial<{
 
   const childService = {
     findOrCreateChild: jest.fn().mockResolvedValue('child-uuid-001'),
-    getChildById: jest.fn().mockResolvedValue(null),
   };
 
   const examinerService = {
