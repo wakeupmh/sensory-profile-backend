@@ -6,6 +6,10 @@ const nullableInt = (min: number, max: number) =>
 const nullablePositiveNumber = (max: number) =>
   z.number().min(0).max(max).nullable().optional();
 
+// Sim/não do formulário. `''` (registro antigo, ainda sem resposta) é "não respondido".
+const yesNo = () =>
+  z.preprocess((v) => (v === '' ? null : v), z.boolean().nullable().optional());
+
 const longText = (max = 2000) =>
   z.string().max(max, `Text must not exceed ${max} characters`).default('');
 
@@ -33,7 +37,7 @@ const queixaSchema = z.object({
 });
 
 const gestationSchema = z.object({
-  plannedPregnancy: longText(200),
+  plannedPregnancy: yesNo(),
   deliveryType: z.enum(['vaginal', 'cesarean', 'forceps', 'other', '']).default(''),
   prenatalCareDetails: longText(),
   complications: longText(),
@@ -70,13 +74,13 @@ const healthSchema = z.object({
 });
 
 const schoolSchema = z.object({
-  attendsSchool: longText(50),
+  attendsSchool: yesNo(),
   shift: z.enum(['morning', 'afternoon', 'full', '']).default(''),
   schoolName: longText(200),
   grade: longText(100),
   academicPerformance: longText(),
   socialBehaviorAtSchool: longText(),
-  hasSupportTeacher: longText(50),
+  hasSupportTeacher: yesNo(),
   supportDetails: longText(),
 });
 

@@ -20,7 +20,7 @@ export interface ClinicalHistoryQueixa {
 }
 
 export interface ClinicalHistoryGestation {
-  plannedPregnancy: string;
+  plannedPregnancy?: boolean | null;
   deliveryType: string;
   prenatalCareDetails: string;
   complications: string;
@@ -57,13 +57,13 @@ export interface ClinicalHistoryHealth {
 }
 
 export interface ClinicalHistorySchool {
-  attendsSchool: string;
+  attendsSchool?: boolean | null;
   shift: string;
   schoolName: string;
   grade: string;
   academicPerformance: string;
   socialBehaviorAtSchool: string;
-  hasSupportTeacher: string;
+  hasSupportTeacher?: boolean | null;
   supportDetails: string;
 }
 
