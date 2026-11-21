@@ -35,7 +35,7 @@ async function insertLog(occurredAt: string): Promise<string> {
   const id = uuidv7();
   await pool.query(
     `INSERT INTO daily_logs (id, user_id, child_id, log_type, occurred_at, data, notes)
-     VALUES ($1, $2, $3, 'mood', $4, '{}'::jsonb, NULL)`,
+     VALUES ($1, $2, $3, 'mood', $4, '{"level": 4}'::jsonb, NULL)`,
     [id, USER_ID, CHILD_ID, occurredAt],
   );
   return id;
@@ -142,7 +142,7 @@ describe('PgDailyLogRepository.findAllByUser — page size cap (real Postgres)',
       occurredAt.setUTCHours(occurredAt.getUTCHours() - i * 3.6); // spans ~30 days
       return pool.query(
         `INSERT INTO daily_logs (id, user_id, child_id, log_type, occurred_at, data, notes)
-         VALUES ($1, $2, $3, 'mood', $4, '{}'::jsonb, NULL)`,
+         VALUES ($1, $2, $3, 'mood', $4, '{"level": 4}'::jsonb, NULL)`,
         [uuidv7(), MANY_USER_ID, MANY_CHILD_ID, occurredAt.toISOString()],
       );
     });
@@ -182,5 +182,10 @@ describe('PgDailyLogRepository.findAllByUser — page size cap (real Postgres)',
     // truncation by itself, but it does prove the clamp math still applies
     // a ceiling rather than passing an unbounded LIMIT straight to Postgres.
     expect(result.limit).toBe(1000);
+  });
+
+  test('cada item da lista traz o que foi registrado', async () => {
+    const result = await repo.findAllByUser(USER_ID, { childId: CHILD_ID, page: 1, limit: 1 });
+    expect(result.data[0].data).toEqual({ level: 4 });
   });
 });

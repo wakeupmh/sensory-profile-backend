@@ -36,6 +36,7 @@ export interface DailyLogSummary {
   childId: string;
   logType: LogType;
   occurredAt: Date;
+  data: LogData;
   notes: string | null;
   createdAt: Date;
 }
