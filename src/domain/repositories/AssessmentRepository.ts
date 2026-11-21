@@ -2,7 +2,7 @@ import { Assessment } from '../entities/Assessment';
 
 export interface AssessmentWithRelations extends Assessment {
   childName?: string;
-  childBirthDate?: Date;
+  childBirthDate?: string;
   childGender?: string;
   childOtherInfo?: string;
   childAge?: number;

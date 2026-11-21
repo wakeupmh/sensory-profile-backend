@@ -5,6 +5,7 @@ import pool from '../database/connection';
 import { PoolClient } from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 import { scopedById } from './queryUtils';
+import { calculateAgeUTC } from '../utils/date';
 
 export class PgAssessmentRepository implements AssessmentRepository {
   async findAll(userId: string, options?: AssessmentQueryOptions): Promise<PaginatedResult<Assessment>> {
@@ -294,10 +295,10 @@ export class PgAssessmentRepository implements AssessmentRepository {
 
     if (row.child_name) {
       assessment.childName = row.child_name as string;
-      assessment.childBirthDate = row.child_birth_date as Date;
+      assessment.childBirthDate = row.child_birth_date as string;
       assessment.childGender = row.child_gender as string;
       assessment.childOtherInfo = row.child_other_info as string;
-      assessment.childAge = this.calculateAge(row.child_birth_date as Date);
+      assessment.childAge = calculateAgeUTC(row.child_birth_date as string);
     }
 
     if (row.examiner_name) {
@@ -315,22 +316,6 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return assessment;
   }
 
-  private calculateAge(birthDate: Date): number {
-    if (!birthDate) return 0;
-    
-    const today = new Date();
-    const birth = new Date(birthDate);
-    
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDifference = today.getMonth() - birth.getMonth();
-    
-    // If birthday hasn't occurred yet this year, subtract one year
-    if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    
-    return age;
-  }
 }
 
 function num(v: unknown): number | undefined {
