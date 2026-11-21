@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { AccessLogRepository, AccessLogCreateInput, AccessLogListResult } from '../../domain/repositories/AccessLogRepository';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 import logger from '../../infrastructure/utils/logger';
+import { assertChildOwned } from './childAccess';
 
 export class AccessLogService {
   constructor(
@@ -36,11 +36,7 @@ export class AccessLogService {
   }
 
   async listForChild(childId: string, ownerUserId: string, page: number, limit: number): Promise<AccessLogListResult> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, ownerUserId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.listForChild(childId, page, limit);
   }
 }

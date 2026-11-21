@@ -5,6 +5,7 @@ import { ReportShare } from '../../domain/entities/ReportShare';
 import { ReportShareRepository } from '../../domain/repositories/ReportShareRepository';
 import { ConsolidatedReportService, ConsolidatedSummary } from './ConsolidatedReportService';
 import { NotFoundError, GoneError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 export class ReportShareService {
   constructor(
@@ -15,13 +16,7 @@ export class ReportShareService {
 
   async createShare(userId: string, childId: string, expiresInDays: number, periodDays: number = 90): Promise<ReportShare> {
     // Cheap ownership check (avoid running full consolidated summary)
-    const result = await this.pool.query(
-      'SELECT 1 FROM children WHERE id = $1 AND user_id = $2 LIMIT 1',
-      [childId, userId],
-    );
-    if (result.rowCount === 0) {
-      throw new NotFoundError('Criança não encontrada', childId);
-    }
+    await assertChildOwned(this.pool, childId, userId);
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000);

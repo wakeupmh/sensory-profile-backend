@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
 import { currentScope } from '../../infrastructure/database/requestScope';
 import pool from '../../infrastructure/database/connection';
+import { assertChildOwned } from './childAccess';
 
 /**
  * Minimal repository contract shared by all domain services.
@@ -61,11 +62,7 @@ export class BaseDomainService<
    */
   protected async assertChildAccess(childId: string, userId: string): Promise<void> {
     if (currentScope().careTeamChildIds?.includes(childId)) return;
-    const result = await pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, userId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
+    await assertChildOwned(pool, childId, userId);
   }
 
   async create(payload: TPayload, userId: string): Promise<TEntity> {

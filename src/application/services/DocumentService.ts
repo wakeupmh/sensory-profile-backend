@@ -9,7 +9,7 @@ import {
 } from '../../domain/repositories/DocumentRepository';
 import { S3StorageService } from '../../infrastructure/storage/S3StorageService';
 import { BaseDomainService } from './BaseDomainService';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 export interface RequestUploadPayload {
   childId: string;
@@ -43,16 +43,9 @@ export class DocumentService extends BaseDomainService<
     super(repo, 'Documento não encontrado');
   }
 
-  private async assertChildOwnership(childId: string, userId: string): Promise<void> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, userId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
-  }
 
   async requestUpload(payload: RequestUploadPayload, userId: string): Promise<RequestUploadResult> {
-    await this.assertChildOwnership(payload.childId, userId);
+    await assertChildOwned(this.pool, payload.childId, userId);
 
     const id = uuidv7();
     // Storage key deliberately excludes user-supplied filename text — avoids

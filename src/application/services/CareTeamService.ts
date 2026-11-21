@@ -8,6 +8,7 @@ import {
   CareTeamCaseloadEntry,
 } from '../../domain/repositories/CareTeamMemberRepository';
 import { NotFoundError, InvitationInvalidError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 const INVITATION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 dias
 
@@ -37,25 +38,13 @@ export class CareTeamService {
     private readonly pool: Pool,
   ) {}
 
-  /**
-   * O dono é `children.user_id`, e só ele. Um 404 (e não um 403) quando a
-   * criança não é dele: quem não é dono não deveria conseguir descobrir que a
-   * criança existe.
-   */
-  private async assertChildOwnership(childId: string, ownerUserId: string): Promise<void> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, ownerUserId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
-  }
 
   async invite(
     childId: string,
     input: InviteCareTeamMemberInput,
     ownerUserId: string,
   ): Promise<CareTeamMember> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.save({
       id: uuidv7(),
       childId,
@@ -68,7 +57,7 @@ export class CareTeamService {
   }
 
   async listForChild(childId: string, ownerUserId: string): Promise<CareTeamMember[]> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.listForChild(childId, ownerUserId);
   }
 

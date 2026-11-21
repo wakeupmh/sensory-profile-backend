@@ -9,6 +9,7 @@ import { LOG_TYPES } from '../../domain/entities/DailyLog';
 import { scopedById } from '../../infrastructure/repositories/queryUtils';
 import { currentScope } from '../../infrastructure/database/requestScope';
 import logger from '../../infrastructure/utils/logger';
+import { assertChildOwned } from './childAccess';
 
 /**
  * A saída do modelo é texto de um terceiro, não um contrato: pode vir com um
@@ -141,10 +142,6 @@ export class DailyReportService {
     private readonly ai: AISummaryService,
   ) {}
 
-  private async assertChildOwned(userId: string, childId: string): Promise<void> {
-    const result = await this.pool.query(`SELECT 1 FROM children WHERE id = $1 AND user_id = $2`, [childId, userId]);
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
-  }
 
   async createDraft(
     userId: string,
@@ -152,7 +149,7 @@ export class DailyReportService {
     reportDate: string,
     mimeType: string,
   ): Promise<{ report: DailyReport; uploadUrl: string }> {
-    await this.assertChildOwned(userId, childId);
+    await assertChildOwned(this.pool, childId, userId);
 
     // Regravar o relato do mesmo dia substitui o anterior em vez de criar um
     // segundo: é "o relato do dia 12", não "mais um relato". As chaves do
@@ -347,7 +344,7 @@ export class DailyReportService {
   }
 
   async list(userId: string, childId: string, limit = 30): Promise<DailyReport[]> {
-    await this.assertChildOwned(userId, childId);
+    await assertChildOwned(this.pool, childId, userId);
     const result = await this.pool.query(
       `SELECT * FROM daily_reports WHERE user_id = $1 AND child_id = $2
         ORDER BY report_date DESC LIMIT $3`,

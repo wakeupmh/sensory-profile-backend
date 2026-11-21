@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 export interface BehaviorInsights {
   childId: string;
@@ -31,13 +31,7 @@ export class BehaviorInsightsService {
   constructor(private readonly pool: Pool) {}
 
   async getInsights(childId: string, userId: string, periodDays: number): Promise<BehaviorInsights> {
-    const ownerCheck = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, userId],
-    );
-    if (ownerCheck.rows.length === 0) {
-      throw new NotFoundError('Criança', childId);
-    }
+    await assertChildOwned(this.pool, childId, userId);
 
     const periodStart = new Date();
     periodStart.setDate(periodStart.getDate() - periodDays);

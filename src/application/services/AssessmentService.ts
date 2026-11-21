@@ -16,6 +16,7 @@ import { CaregiverService } from './CaregiverService';
 import { SectionCommentService } from './SectionCommentService';
 import logger from '../../infrastructure/utils/logger';
 import { getInstrument } from '../../instruments/index';
+import { assertChildOwned } from './childAccess';
 
 // Zero values for the 9 SP-2 raw-score columns; used when persisting a new-
 // instrument assessment so the INSERT still satisfies the schema.
@@ -131,13 +132,7 @@ export class AssessmentService {
       let childId: string;
       if (assessmentData.child.id) {
         logger.debug(`[AssessmentService] Validating child ownership id=${assessmentData.child.id} for user ${userId}`);
-        const ownerCheck = await pool.query(
-          `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-          [assessmentData.child.id, userId]
-        );
-        if (ownerCheck.rows.length === 0) {
-          throw new NotFoundError('Criança', assessmentData.child.id);
-        }
+        await assertChildOwned(pool, assessmentData.child.id, userId);
         childId = assessmentData.child.id;
         logger.debug(`[AssessmentService] Child id validated: ${childId}`);
       } else {
@@ -321,13 +316,7 @@ export class AssessmentService {
       if (assessmentData.child) {
         if (assessmentData.child.id) {
           logger.debug(`[AssessmentService] Validating child ownership id=${assessmentData.child.id} for user ${userId}`);
-          const ownerCheck = await pool.query(
-            `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-            [assessmentData.child.id, userId]
-          );
-          if (ownerCheck.rows.length === 0) {
-            throw new NotFoundError('Criança', assessmentData.child.id);
-          }
+          await assertChildOwned(pool, assessmentData.child.id, userId);
           childId = assessmentData.child.id;
           logger.debug(`[AssessmentService] Updated child id (direct): ${childId}`);
         } else {

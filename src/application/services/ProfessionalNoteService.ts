@@ -4,6 +4,7 @@ import { ProfessionalNote } from '../../domain/entities/ProfessionalNote';
 import { ProfessionalNoteRepository } from '../../domain/repositories/ProfessionalNoteRepository';
 import { ChildShareRepository } from '../../domain/repositories/ChildShareRepository';
 import { NotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 export interface CreateProfessionalNotePayload {
   childId: string;
@@ -74,11 +75,7 @@ export class ProfessionalNoteService {
 
   /** Owner-side: every note left by any professional for their child. */
   async listForOwner(childId: string, ownerUserId: string): Promise<ProfessionalNote[]> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, ownerUserId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.findAllByChild(childId);
   }
 }
