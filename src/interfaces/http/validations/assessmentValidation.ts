@@ -28,15 +28,34 @@ const SP2_VALID_RESPONSES = new Set([
   'always', 'rarely', 'never',
 ]);
 
-// Enhanced child validation
+// Nome de pessoa: letras de qualquer alfabeto (com acento), espaço, apóstrofo,
+// hífen e ponto — "Dra. Júlia", "José da S. Lima", "Łucja" são nomes reais.
+const personName = (label: string) => z.string()
+  .trim()
+  .min(1, `${label} é obrigatório`)
+  .max(100, `${label} deve ter no máximo 100 caracteres`)
+  .regex(/^[\p{L}\p{M}\s'.-]+$/u, `${label} só pode ter letras, espaços, apóstrofo, hífen e ponto`);
+
+// Campo opcional: em branco quer dizer "não informado", não um valor inválido.
+const optionalText = (max: number, label: string) => z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().max(max, `${label} deve ter no máximo ${max} caracteres`).optional(),
+);
+
+// O que o formulário envia, mais os valores antigos, que seguem válidos para o
+// que já está gravado.
+export const CAREGIVER_RELATIONSHIPS = [
+  'mother', 'father', 'grandparent', 'sibling',
+  'parent', 'guardian', 'teacher', 'therapist', 'caregiver', 'other',
+] as const;
+
 const childSchema = z.object({
-  name: z.string()
-    .min(1, 'Child name is required')
-    .max(100, 'Child name must not exceed 100 characters')
-    .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Child name contains invalid characters'),
-  
+  /** Criança já cadastrada: a avaliação fica ligada a ela em vez de criar outra. */
+  id: z.string().uuid('Criança inválida').optional(),
+  name: personName('Nome da criança'),
+
   birthDate: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be in YYYY-MM-DD format')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de nascimento deve estar no formato AAAA-MM-DD')
     .refine((d) => {
       const [y, m, day] = d.split('-').map(Number);
       const parsed = new Date(`${d}T12:00:00Z`);
@@ -45,55 +64,30 @@ const childSchema = z.object({
     .refine((date) => {
       return new Date(`${date}T12:00:00Z`) <= new Date();
     }, 'Data de nascimento não pode ser futura'),
-  
+
   gender: z.enum(['male', 'female', 'other'], {
-    errorMap: () => ({ message: 'Gender must be male, female, or other' })
+    errorMap: () => ({ message: 'Gênero deve ser masculino, feminino ou outro' })
   }).optional(),
-  
-  nationalIdentity: z.string()
-    .min(1, 'National identity cannot be empty if provided')
-    .max(50, 'National identity must not exceed 50 characters')
-    .optional(),
-  
-  otherInfo: z.string()
-    .max(1000, 'Additional information must not exceed 1000 characters')
-    .optional()
+
+  nationalIdentity: optionalText(50, 'Documento'),
+  otherInfo: optionalText(1000, 'Informações adicionais'),
 }).strict();
 
-// Enhanced examiner validation
 const examinerSchema = z.object({
-  name: z.string()
-    .min(1, 'Examiner name is required')
-    .max(100, 'Examiner name must not exceed 100 characters')
-    .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Examiner name contains invalid characters'),
-  
+  name: personName('Nome do examinador'),
   profession: z.string()
-    .min(1, 'Profession is required')
-    .max(100, 'Profession must not exceed 100 characters'),
-  
-  contact: z.string()
-    .max(200, 'Contact information must not exceed 200 characters')
-    .optional()
+    .trim()
+    .min(1, 'Profissão é obrigatória')
+    .max(100, 'Profissão deve ter no máximo 100 caracteres'),
+  contact: optionalText(200, 'Contato'),
 }).strict();
 
-// Enhanced caregiver validation
 const caregiverSchema = z.object({
-  name: z.string()
-    .min(1, 'Caregiver name is required')
-    .max(100, 'Caregiver name must not exceed 100 characters')
-    .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Caregiver name contains invalid characters'),
-  
-  relationship: z.string()
-    .min(1, 'Relationship is required')
-    .max(50, 'Relationship must not exceed 50 characters')
-    .refine((rel) => {
-      const validRelationships = ['parent', 'guardian', 'teacher', 'therapist', 'caregiver', 'other'];
-      return validRelationships.includes(rel.toLowerCase());
-    }, 'Invalid relationship type'),
-  
-  contact: z.string()
-    .max(200, 'Contact information must not exceed 200 characters')
-    .optional()
+  name: personName('Nome do responsável'),
+  relationship: z.enum(CAREGIVER_RELATIONSHIPS, {
+    errorMap: () => ({ message: 'Parentesco inválido' }),
+  }),
+  contact: optionalText(200, 'Contato'),
 }).strict();
 
 // Individual response item schema — response value is an open string.

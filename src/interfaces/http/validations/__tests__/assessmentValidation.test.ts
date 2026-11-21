@@ -394,3 +394,40 @@ describe('parentAssessmentId — UUID validation', () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// O que o formulário de avaliação realmente envia
+// ---------------------------------------------------------------------------
+
+describe('payload do formulário de avaliação', () => {
+  const base = {
+    child: { id: '018f4e8a-0000-7000-8000-000000000001', name: 'Léo Souza', birthDate: '2022-02-03', gender: 'male', nationalIdentity: '', otherInfo: '' },
+    examiner: { name: 'Dra. Júlia Lima', profession: 'Terapeuta ocupacional', contact: '' },
+    caregiver: { name: "Maria D'Ávila", relationship: 'mother', contact: '' },
+    responses: makeResponses(86, 'quase nunca'),
+  };
+
+  test.each(['mother', 'father', 'grandparent', 'sibling', 'other'])('aceita parentesco %s', (relationship) => {
+    expect(createAssessmentSchema.safeParse({ ...base, caregiver: { ...base.caregiver, relationship } }).success).toBe(true);
+  });
+
+  test('campos opcionais em branco viram "não informado"', () => {
+    const parsed = createAssessmentSchema.parse(base);
+    expect(parsed.child.nationalIdentity).toBeUndefined();
+    expect(parsed.examiner?.contact).toBeUndefined();
+  });
+
+  test('mantém o id da criança escolhida', () => {
+    expect(createAssessmentSchema.parse(base).child.id).toBe(base.child.id);
+  });
+
+  test.each(['Dra. Júlia Lima', 'José da S. Lima', 'Łucja Nowak'])('aceita o nome %s', (name) => {
+    expect(createAssessmentSchema.safeParse({ ...base, examiner: { ...base.examiner, name } }).success).toBe(true);
+  });
+
+  test('nome com dígito é recusado, com mensagem em português', () => {
+    const r = createAssessmentSchema.safeParse({ ...base, child: { ...base.child, name: 'Léo 2' } });
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r)).toContain('Nome da criança só pode ter letras');
+  });
+});
