@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { CaregiverShare } from '../../domain/entities/CaregiverShare';
 import { CaregiverShareRepository } from '../../domain/repositories/CaregiverShareRepository';
 import { NotFoundError, InvitationInvalidError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 const INVITATION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
@@ -17,16 +18,9 @@ export class CaregiverShareService {
     private readonly pool: Pool,
   ) {}
 
-  private async assertChildOwnership(childId: string, ownerUserId: string): Promise<void> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, ownerUserId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
-  }
 
   async invite(childId: string, caregiverName: string, ownerUserId: string): Promise<CaregiverShare> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.save({
       id: uuidv7(),
       childId,
@@ -56,7 +50,7 @@ export class CaregiverShareService {
   }
 
   async listForChild(childId: string, ownerUserId: string): Promise<CaregiverShare[]> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.listForChild(childId, ownerUserId);
   }
 

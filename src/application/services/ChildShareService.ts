@@ -3,6 +3,7 @@ import { ChildShareGrant, ChildShareScope } from '../../domain/entities/ChildSha
 import { ChildShareRepository } from '../../domain/repositories/ChildShareRepository';
 import { ProfessionalRepository } from '../../domain/repositories/ProfessionalRepository';
 import { NotFoundError, ProfessionalNotFoundError } from '../../infrastructure/utils/errors/CustomErrors';
+import { assertChildOwned } from './childAccess';
 
 export class ChildShareService {
   constructor(
@@ -11,13 +12,6 @@ export class ChildShareService {
     private readonly pool: Pool,
   ) {}
 
-  private async assertChildOwnership(childId: string, ownerUserId: string): Promise<void> {
-    const result = await this.pool.query(
-      `SELECT 1 FROM children WHERE id = $1 AND user_id = $2`,
-      [childId, ownerUserId],
-    );
-    if (result.rows.length === 0) throw new NotFoundError('Criança', childId);
-  }
 
   async grant(
     childId: string,
@@ -25,7 +19,7 @@ export class ChildShareService {
     scopes: ChildShareScope[],
     ownerUserId: string,
   ): Promise<ChildShareGrant> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
 
     const professional = await this.professionalRepo.findByIdForOwner(professionalId, ownerUserId);
     if (!professional) throw new ProfessionalNotFoundError(professionalId);
@@ -34,13 +28,13 @@ export class ChildShareService {
   }
 
   async revoke(childId: string, professionalId: string, ownerUserId: string): Promise<void> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     const ok = await this.repo.revoke(childId, professionalId);
     if (!ok) throw new NotFoundError('Compartilhamento', `${childId}/${professionalId}`);
   }
 
   async listForChild(childId: string, ownerUserId: string): Promise<ChildShareGrant[]> {
-    await this.assertChildOwnership(childId, ownerUserId);
+    await assertChildOwned(this.pool, childId, ownerUserId);
     return this.repo.listForChild(childId);
   }
 }
