@@ -63,17 +63,6 @@ const CHILD_PAYLOAD = {
 };
 
 const VALID_PARENT_ID = '018f4e8a-0000-7000-8000-000000000001';
-const ZERO_RAW_SCORES = {
-  auditoryProcessing: 0,
-  visualProcessing: 0,
-  tactileProcessing: 0,
-  movementProcessing: 0,
-  bodyPositionProcessing: 0,
-  oralSensitivityProcessing: 0,
-  behavioralResponses: 0,
-  socialEmotionalResponses: 0,
-  attentionResponses: 0,
-};
 
 // ---------------------------------------------------------------------------
 // Build the service with full mocks
@@ -138,7 +127,6 @@ function followupPayload(overrides: { instrumentId?: string; responses?: Array<{
     instrumentId: overrides.instrumentId ?? 'mchat-rf-followup',
     child: CHILD_PAYLOAD,
     responses: overrides.responses ?? [{ itemId: 4001, response: 'passou' }],
-    rawScores: ZERO_RAW_SCORES,
     sectionComments: [],
     parentAssessmentId: VALID_PARENT_ID,
   };

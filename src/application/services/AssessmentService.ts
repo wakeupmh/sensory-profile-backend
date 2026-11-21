@@ -2,7 +2,6 @@ import { Assessment, DEFAULT_INSTRUMENT_ID } from '../../domain/entities/Assessm
 import { Response } from '../../domain/entities/Response';
 import { AssessmentRepository, AssessmentQueryOptions, PaginatedResult } from '../../domain/repositories/AssessmentRepository';
 import { ResponseRepository } from '../../domain/repositories/ResponseRepository';
-import { DataConsistencyValidator } from '../../infrastructure/utils/validation/DataConsistencyValidator';
 import {
   NotFoundError,
   ValidationError
@@ -31,6 +30,21 @@ const ZERO_RAW_SCORES = {
   socialEmotionalResponses: 0,
   attentionResponses: 0,
 } as const;
+
+type Answers = Array<{ itemId: number; response: string }>;
+type Sp2RawScores = { -readonly [K in keyof typeof ZERO_RAW_SCORES]: number };
+
+// O SP-2 guarda as nove pontuações brutas em colunas. Elas saem sempre das
+// respostas, por esta única função — nunca do que o cliente mandou.
+function sp2RawScores(answers: Answers): Sp2RawScores {
+  const sp2 = getInstrument(DEFAULT_INSTRUMENT_ID)!;
+  const { scores_json } = sp2.scoringStrategy(new Map(answers.map(a => [a.itemId, a.response])), sp2);
+  const { sectionScores, invalidResponses } = scores_json as { sectionScores: Sp2RawScores; invalidResponses: string[] };
+  if (invalidResponses.length > 0) {
+    throw new ValidationError('Respostas inválidas', { invalidResponses });
+  }
+  return sectionScores;
+}
 
 export class AssessmentService {
   constructor(
@@ -61,21 +75,6 @@ export class AssessmentService {
     if (!assessment) {
       logger.warn(`[AssessmentService] Assessment with id ${id} not found for user ${userId}`);
       return null;
-    }
-
-    // Validate data consistency for retrieved assessment. The current
-    // validator is hard-coded to the Criança 3-14 scoring map; skip it for
-    // other instruments so we don't emit spurious mismatch warnings.
-    if (assessment.getInstrumentId() === DEFAULT_INSTRUMENT_ID) {
-      const responses = await this.responseRepository.findByAssessmentId(id, userId);
-      const validationResult = DataConsistencyValidator.validateAssessmentScoreConsistency(assessment, responses);
-
-      if (!validationResult.isValid) {
-        logger.warn(`[AssessmentService] Data consistency issues found for assessment ${id}`, {
-          errors: validationResult.errors,
-          warnings: validationResult.warnings
-        });
-      }
     }
 
     logger.info(`[AssessmentService] Retrieved assessment with id ${id} for user ${userId}`);
@@ -124,18 +123,7 @@ export class AssessmentService {
       contact?: string;
     };
     parentAssessmentId?: string;
-    responses: Array<{ itemId: number, response: string }>;
-    rawScores: {
-      auditoryProcessing: number;
-      visualProcessing: number;
-      tactileProcessing: number;
-      movementProcessing: number;
-      bodyPositionProcessing: number;
-      oralSensitivityProcessing: number;
-      behavioralResponses: number;
-      socialEmotionalResponses: number;
-      attentionResponses: number;
-    };
+    responses: Answers;
     sectionComments?: Array<{ section: string, comments: string }>;
   }, userId: string): Promise<Assessment> {
     logger.info(`[AssessmentService] Creating new assessment for user ${userId}`);
@@ -223,53 +211,30 @@ export class AssessmentService {
           logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
         }
 
-        let assessment: Assessment;
-        if (isLegacy) {
-          assessment = new Assessment(
-            childId,
-            examinerId,
-            caregiverId,
-            new Date(),
-            assessmentData.rawScores.auditoryProcessing,
-            assessmentData.rawScores.visualProcessing,
-            assessmentData.rawScores.tactileProcessing,
-            assessmentData.rawScores.movementProcessing,
-            assessmentData.rawScores.bodyPositionProcessing,
-            assessmentData.rawScores.oralSensitivityProcessing,
-            assessmentData.rawScores.behavioralResponses,
-            assessmentData.rawScores.socialEmotionalResponses,
-            assessmentData.rawScores.attentionResponses,
-            assessmentId,
-            undefined,
-            undefined,
-            instrumentId
-          );
-        } else {
-          const responsesMap = new Map<number, string>(
-            assessmentData.responses.map(r => [r.itemId, r.response])
-          );
-          const scoringResult = instrument.scoringStrategy(responsesMap, instrument);
-          logger.debug(`[AssessmentService] New instrument scoring complete for ${instrumentId}`);
-
-          assessment = new Assessment(
-            childId,
-            examinerId,
-            caregiverId,
-            new Date(),
-            ZERO_RAW_SCORES.auditoryProcessing,
-            ZERO_RAW_SCORES.visualProcessing,
-            ZERO_RAW_SCORES.tactileProcessing,
-            ZERO_RAW_SCORES.movementProcessing,
-            ZERO_RAW_SCORES.bodyPositionProcessing,
-            ZERO_RAW_SCORES.oralSensitivityProcessing,
-            ZERO_RAW_SCORES.behavioralResponses,
-            ZERO_RAW_SCORES.socialEmotionalResponses,
-            ZERO_RAW_SCORES.attentionResponses,
-            assessmentId,
-            undefined,
-            undefined,
-            instrumentId
-          );
+        const scoringResult = isLegacy
+          ? null
+          : instrument.scoringStrategy(new Map(assessmentData.responses.map(r => [r.itemId, r.response])), instrument);
+        const raw = isLegacy ? sp2RawScores(assessmentData.responses) : ZERO_RAW_SCORES;
+        const assessment = new Assessment(
+          childId,
+          examinerId,
+          caregiverId,
+          new Date(),
+          raw.auditoryProcessing,
+          raw.visualProcessing,
+          raw.tactileProcessing,
+          raw.movementProcessing,
+          raw.bodyPositionProcessing,
+          raw.oralSensitivityProcessing,
+          raw.behavioralResponses,
+          raw.socialEmotionalResponses,
+          raw.attentionResponses,
+          assessmentId,
+          undefined,
+          undefined,
+          instrumentId
+        );
+        if (scoringResult) {
           assessment.setScoresJson(scoringResult.scores_json);
         }
 
@@ -337,18 +302,7 @@ export class AssessmentService {
     examinerId?: string | null;
     caregiverId?: string | null;
     assessmentDate?: Date;
-    responses?: Array<{ itemId: number, response: string }>;
-    rawScores?: {
-      auditoryProcessing?: number;
-      visualProcessing?: number;
-      tactileProcessing?: number;
-      movementProcessing?: number;
-      bodyPositionProcessing?: number;
-      oralSensitivityProcessing?: number;
-      behavioralResponses?: number;
-      socialEmotionalResponses?: number;
-      attentionResponses?: number;
-    };
+    responses?: Answers;
     sectionComments?: Array<{ section: string, comments: string }>;
   }, userId: string): Promise<Assessment | null> {
     logger.info(`[AssessmentService] Updating assessment with id ${id} for user ${userId}`);
@@ -430,40 +384,18 @@ export class AssessmentService {
       );
       
       if (updatedIsLegacy) {
-        // Legacy SP-2 path — recompute scores server-side from responses (ignore client rawScores).
-        // Distinguish "no responses provided" (keep existing scores) from "empty responses" (clear scores).
+        // Respostas ausentes mantêm as pontuações; `[]` as zera.
         if (assessmentData.responses !== undefined) {
-          if (assessmentData.responses.length > 0) {
-            const sp2 = getInstrument(updatedInstrumentId);
-            if (sp2?.scoringStrategy) {
-              const responsesMap = new Map<number, string>(
-                assessmentData.responses.map(r => [r.itemId, r.response])
-              );
-              const result = sp2.scoringStrategy(responsesMap, sp2);
-              if (result.perSection) {
-                const ps = result.perSection;
-                updatedAssessment.setAuditoryProcessingRawScore(ps['auditivo'] ?? 0);
-                updatedAssessment.setVisualProcessingRawScore(ps['visual'] ?? 0);
-                updatedAssessment.setTactileProcessingRawScore(ps['tato'] ?? 0);
-                updatedAssessment.setMovementProcessingRawScore(ps['movimento'] ?? 0);
-                updatedAssessment.setBodyPositionProcessingRawScore(ps['posicao_corporal'] ?? 0);
-                updatedAssessment.setOralSensitivityProcessingRawScore(ps['oral'] ?? 0);
-                updatedAssessment.setBehavioralResponsesRawScore(ps['conduta'] ?? 0);
-                updatedAssessment.setSocialEmotionalResponsesRawScore(ps['socio_emocional'] ?? 0);
-                updatedAssessment.setAttentionResponsesRawScore(ps['atencao'] ?? 0);
-              }
-            }
-          } else {
-            updatedAssessment.setAuditoryProcessingRawScore(0);
-            updatedAssessment.setVisualProcessingRawScore(0);
-            updatedAssessment.setTactileProcessingRawScore(0);
-            updatedAssessment.setMovementProcessingRawScore(0);
-            updatedAssessment.setBodyPositionProcessingRawScore(0);
-            updatedAssessment.setOralSensitivityProcessingRawScore(0);
-            updatedAssessment.setBehavioralResponsesRawScore(0);
-            updatedAssessment.setSocialEmotionalResponsesRawScore(0);
-            updatedAssessment.setAttentionResponsesRawScore(0);
-          }
+          const raw = sp2RawScores(assessmentData.responses);
+          updatedAssessment.setAuditoryProcessingRawScore(raw.auditoryProcessing);
+          updatedAssessment.setVisualProcessingRawScore(raw.visualProcessing);
+          updatedAssessment.setTactileProcessingRawScore(raw.tactileProcessing);
+          updatedAssessment.setMovementProcessingRawScore(raw.movementProcessing);
+          updatedAssessment.setBodyPositionProcessingRawScore(raw.bodyPositionProcessing);
+          updatedAssessment.setOralSensitivityProcessingRawScore(raw.oralSensitivityProcessing);
+          updatedAssessment.setBehavioralResponsesRawScore(raw.behavioralResponses);
+          updatedAssessment.setSocialEmotionalResponsesRawScore(raw.socialEmotionalResponses);
+          updatedAssessment.setAttentionResponsesRawScore(raw.attentionResponses);
         }
       } else {
         // New instrument path — re-compute scores from the incoming or existing responses.
@@ -479,8 +411,8 @@ export class AssessmentService {
         updatedAssessment.setScoresJson(scoringResult.scores_json);
       }
 
-        // If responses are provided, atomically replace them via the repository
-        if (assessmentData.responses && assessmentData.responses.length > 0) {
+        // Respostas enviadas (inclusive `[]`) substituem as gravadas, junto com as pontuações.
+        if (assessmentData.responses !== undefined) {
           logger.debug(`[AssessmentService] Replacing ${assessmentData.responses.length} responses for assessment ${id}`);
           const responseEntities = assessmentData.responses.map(
             r => new Response(id, r.itemId, r.response, uuidv7())

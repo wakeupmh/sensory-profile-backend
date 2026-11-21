@@ -269,21 +269,22 @@ export class PgAssessmentRepository implements AssessmentRepository {
     return result.rows.map(row => this.mapRowToAssessment(row));
   }
 
+  // NUMERIC chega do pg como string; converte aqui para o tipo da entidade valer.
   private mapRowToAssessment(row: Record<string, unknown>): AssessmentWithRelations {
     const assessment = new Assessment(
       row.child_id as string,
       row.examiner_id as string | null,
       row.caregiver_id as string | null,
       row.assessment_date as Date,
-      row.auditory_processing_raw_score as number | undefined,
-      row.visual_processing_raw_score as number | undefined,
-      row.tactile_processing_raw_score as number | undefined,
-      row.movement_processing_raw_score as number | undefined,
-      row.body_position_processing_raw_score as number | undefined,
-      row.oral_sensitivity_processing_raw_score as number | undefined,
-      row.behavioral_responses_raw_score as number | undefined,
-      row.social_emotional_responses_raw_score as number | undefined,
-      row.attention_responses_raw_score as number | undefined,
+      num(row.auditory_processing_raw_score),
+      num(row.visual_processing_raw_score),
+      num(row.tactile_processing_raw_score),
+      num(row.movement_processing_raw_score),
+      num(row.body_position_processing_raw_score),
+      num(row.oral_sensitivity_processing_raw_score),
+      num(row.behavioral_responses_raw_score),
+      num(row.social_emotional_responses_raw_score),
+      num(row.attention_responses_raw_score),
       row.id as string,
       row.created_at as Date,
       row.updated_at as Date,
@@ -331,4 +332,8 @@ export class PgAssessmentRepository implements AssessmentRepository {
     
     return age;
   }
+}
+
+function num(v: unknown): number | undefined {
+  return v == null ? undefined : Number(v);
 }
