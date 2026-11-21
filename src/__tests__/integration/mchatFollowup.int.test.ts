@@ -74,7 +74,6 @@ function makeService(assessmentRepoOverrides: Partial<{
   findAll: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
-  findByChildId: jest.Mock;
 }> = {}) {
   const assessmentRepository = {
     findAll: jest.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
@@ -82,7 +81,6 @@ function makeService(assessmentRepoOverrides: Partial<{
     save: jest.fn().mockImplementation((a) => Promise.resolve(a)),
     update: jest.fn().mockImplementation((a) => Promise.resolve(a)),
     delete: jest.fn().mockResolvedValue(undefined),
-    findByChildId: jest.fn().mockResolvedValue([]),
     ...assessmentRepoOverrides,
   };
 
