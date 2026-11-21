@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import {
+  RequestBodyError,
   ConflictError,
   BaseError,
   ValidationError,
@@ -56,6 +57,12 @@ const handleDatabaseError = (error: Error): BaseError => {
   }
 };
 
+// Erros do body-parser (http-errors) trazem o status 4xx e `expose: true`.
+function clientErrorStatus(error: Error): number | undefined {
+  const { status, expose } = error as { status?: unknown; expose?: unknown };
+  return expose === true && typeof status === 'number' && status >= 400 && status < 500 ? status : undefined;
+}
+
 // Main error handling middleware
 export const errorHandler = (
   error: Error,
@@ -74,6 +81,8 @@ export const errorHandler = (
     customError = handleZodError(error);
   } else if (pgErrorCode(error) !== undefined) {
     customError = handleDatabaseError(error);
+  } else if (clientErrorStatus(error) !== undefined) {
+    customError = new RequestBodyError(clientErrorStatus(error)!, error);
   } else {
     // Unknown error - treat as internal server error
     customError = new InternalServerError('Ocorreu um erro inesperado. Tente novamente.', error);

@@ -81,8 +81,10 @@ app.use(cors({
       ? []
       : ['http://localhost:5173'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Delegate-Child-Id'],
+  // A cota de IA e a contagem regressiva do 429 vêm destes cabeçalhos.
+  exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset', 'Retry-After'],
 }));
 app.use(helmet({
   // Ligada por padrão: só um ambiente declaradamente de desenvolvimento a desliga.

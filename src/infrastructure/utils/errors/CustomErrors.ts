@@ -14,6 +14,15 @@ export abstract class BaseError extends Error {
 }
 
 // 400 Bad Request Errors
+/** Corpo que o express não conseguiu ler: JSON inválido (400), grande demais (413) etc. */
+export class RequestBodyError extends BaseError {
+  readonly isOperational = true;
+
+  constructor(readonly statusCode: number, cause: Error) {
+    super(statusCode === 413 ? 'Corpo da requisição grande demais.' : 'Corpo da requisição inválido.', cause);
+  }
+}
+
 export class ValidationError extends BaseError {
   readonly statusCode = 400;
   readonly isOperational = true;

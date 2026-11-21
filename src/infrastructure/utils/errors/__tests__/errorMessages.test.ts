@@ -52,3 +52,24 @@ describe('mensagens de erro voltadas ao usuário', () => {
     expect(body.error.message).toMatch(/Tente novamente/);
   });
 });
+
+describe('corpo de requisição malformado', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const express = require('express');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const request = require('supertest');
+  const app = express();
+  app.use(express.json({ limit: '10b' }));
+  app.post('/x', (_req: Request, res: Response) => res.json({ ok: true }));
+  app.use(errorHandler);
+
+  it('JSON inválido é 400, não 500', async () => {
+    const res = await request(app).post('/x').set('Content-Type', 'application/json').send('{bad');
+    expect(res.status).toBe(400);
+  });
+
+  it('corpo grande demais é 413', async () => {
+    const res = await request(app).post('/x').set('Content-Type', 'application/json').send('{"a":"0123456789"}');
+    expect(res.status).toBe(413);
+  });
+});
