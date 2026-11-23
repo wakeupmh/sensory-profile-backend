@@ -99,6 +99,8 @@ const CHILD_LINKED_QUERIES = {
 /** Tabelas do usuário que não pendem de nenhuma criança. Todas usam `[userId]`. */
 const ACCOUNT_LEVEL_QUERIES = {
   userProfile: `SELECT * FROM user_profiles WHERE user_id = $1`,
+  // Registro do consentimento (LGPD art. 11/14): o titular tem direito de ver quando e o quê aceitou.
+  consents: `SELECT version, accepted_at FROM consents WHERE user_id = $1 ORDER BY accepted_at`,
   anamneses: `SELECT * FROM anamneses WHERE user_id = $1 ORDER BY created_at`,
   professionals: `SELECT * FROM professionals WHERE owner_user_id = $1 ORDER BY created_at`,
   formDrafts: `SELECT * FROM form_drafts WHERE user_id = $1 ORDER BY updated_at`,
