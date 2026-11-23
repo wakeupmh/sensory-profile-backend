@@ -94,6 +94,7 @@ const NOT_PROPS_SHAPED = new Map<string, string>([
   ['Entity', 'é a própria base'],
   ['Assessment', 'recebe os campos por argumento de construtor, não por um objeto Props'],
   ['Response', 'idem'],
+  ['Consent', 'só tipos de dado e a versão atual do termo; sem classe, e nada ali é segredo'],
 ]);
 
 const skipped: string[] = [];
