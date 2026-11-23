@@ -60,6 +60,7 @@ const ERASED_DIRECTLY = new Set([
   'examiners.user_id',
   'caregivers.user_id',
   'voice_notes.user_id',
+  'consents.user_id',
   'user_profiles.user_id',
 ]);
 

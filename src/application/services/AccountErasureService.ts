@@ -58,6 +58,8 @@ const ACCOUNT_SCOPED_DELETES = [
   // Ditados avulsos: o áudio normalmente já foi descartado na transcrição,
   // mas a transcrição em si é fala do usuário e não tem child_id.
   `DELETE FROM voice_notes WHERE user_id = $1`,
+  // O registro do consentimento (LGPD Art. 11/14) sai com a conta.
+  `DELETE FROM consents WHERE user_id = $1`,
   // Por último: as tabelas acima podem ser lidas por triggers/FKs antes disto.
   `DELETE FROM user_profiles WHERE user_id = $1`,
 ] as const;

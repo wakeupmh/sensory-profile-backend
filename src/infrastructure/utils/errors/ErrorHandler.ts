@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { captureException } from '@sentry/node';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import {
@@ -106,6 +107,12 @@ export const errorHandler = (
     logger.error('System error occurred', logContext);
   }
 
+  // A no-op until initSentry runs with a DSN. 4xx are the client's mistakes,
+  // not ours to page on.
+  if (customError.statusCode >= 500) {
+    captureException(error, { tags: { requestId: String(logContext.requestId) } });
+  }
+
   // Prepare response
   const response: any = {
     success: false,
@@ -166,16 +173,34 @@ export const notFoundHandler = (req: Request, res: Response): void => {
   });
 };
 
+/**
+ * Stops accepting connections, waits for in-flight requests, then releases
+ * resources (the pg pool). In that order: closing the pool first would fail
+ * the requests still running.
+ */
+export const closeGracefully = async (
+  server: import('http').Server,
+  cleanup: () => Promise<void>,
+): Promise<void> => {
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  await cleanup();
+};
+
 // Graceful shutdown handler
-export const setupGracefulShutdown = (server?: import('http').Server): void => {
+export const setupGracefulShutdown = (
+  server: import('http').Server,
+  cleanup: () => Promise<void>,
+): void => {
   const gracefulShutdown = (signal: string) => {
     logger.info(`Received ${signal}. Starting graceful shutdown...`);
-    if (server) {
-      server.close(() => process.exit(0));
-      setTimeout(() => process.exit(1), 10000);
-    } else {
-      process.exit(0);
-    }
+    setTimeout(() => process.exit(1), 10000).unref();
+    closeGracefully(server, cleanup).then(
+      () => process.exit(0),
+      (error) => {
+        logger.error('Graceful shutdown failed', { error: serializeError(error) });
+        process.exit(1);
+      },
+    );
   };
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

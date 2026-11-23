@@ -1,14 +1,6 @@
+import { inspect } from 'util';
 import winston from 'winston';
-import fs from 'fs';
-import path from 'path';
 
-// Ensure logs directory exists
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
-
-// Define log levels
 const levels = {
   error: 0,
   warn: 1,
@@ -17,53 +9,51 @@ const levels = {
   debug: 4,
 };
 
-// Define log level based on environment
-const level = () => {
-  const env = process.env.NODE_ENV || 'development';
-  const isDevelopment = env === 'development';
-  return isDevelopment ? 'debug' : 'info';
-};
-
-// Define colors for each level
-const colors = {
+winston.addColors({
   error: 'red',
   warn: 'yellow',
   info: 'green',
   http: 'magenta',
   debug: 'blue',
-};
+});
 
-// Add colors to winston
-winston.addColors(colors);
+const isProduction = process.env.NODE_ENV === 'production';
 
-// Define the format for logs
-const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.colorize({ all: true }),
-  winston.format.printf(
-    (info) => `${info.timestamp} ${info.level}: ${info.message}`,
-  ),
+// Debug only when development is declared; an unset NODE_ENV must not leak
+// debug output in a deployed container.
+const level = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+
+// An Error in the metadata serializes to `{}` in JSON. Expand it so the stack
+// reaches the log.
+const expandErrors = winston.format((info) => {
+  for (const [key, value] of Object.entries(info)) {
+    if (value instanceof Error) {
+      info[key] = { ...value, name: value.name, message: value.message, stack: value.stack };
+    }
+  }
+  return info;
+});
+
+const base = [winston.format.errors({ stack: true }), expandErrors(), winston.format.timestamp()];
+
+// Production: one JSON line per entry on stdout, for the platform's log
+// collector. The container disk is not persistent, so no file transports.
+const productionFormat = winston.format.combine(...base, winston.format.json());
+
+const developmentFormat = winston.format.combine(
+  ...base,
+  winston.format.colorize({ level: true }),
+  winston.format.printf(({ timestamp, level, message, ...meta }) => {
+    const rest = Object.keys(meta).length > 0 ? ` ${inspect(meta, { depth: 5 })}` : '';
+    return `${timestamp} ${level}: ${message}${rest}`;
+  }),
 );
 
-// Define which transports to use
-const transports = [
-  // Console transport for all logs
-  new winston.transports.Console(),
-  // File transport for error logs
-  new winston.transports.File({
-    filename: 'logs/error.log',
-    level: 'error',
-  }),
-  // File transport for all logs
-  new winston.transports.File({ filename: 'logs/all.log' }),
-];
-
-// Create the logger
 const logger = winston.createLogger({
-  level: level(),
+  level,
   levels,
-  format,
-  transports,
+  format: isProduction ? productionFormat : developmentFormat,
+  transports: [new winston.transports.Console()],
 });
 
 export default logger;

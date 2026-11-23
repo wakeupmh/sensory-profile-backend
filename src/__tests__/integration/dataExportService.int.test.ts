@@ -113,6 +113,7 @@ describe('DataExportService', () => {
       expect(parsed.scope).toBe('account');
       expect(parsed.children).toHaveLength(1);
       expect(parsed.children[0].child).toEqual({ id: CHILD_ID, name: 'Ana' });
+      expect(parsed).toHaveProperty('consents');
       expect(parsed).toHaveProperty('anamneses');
       expect(parsed).toHaveProperty('professionals');
       expect(parsed).toHaveProperty('formDrafts');

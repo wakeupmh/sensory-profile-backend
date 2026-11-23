@@ -194,14 +194,12 @@ export class AssessmentService {
 
         let examinerId = null;
         if (assessmentData.examiner) {
-          logger.debug(`[AssessmentService] Creating examiner: ${assessmentData.examiner.name}`);
           examinerId = await this.examinerService.createExaminer(assessmentData.examiner, userId, client);
           logger.debug(`[AssessmentService] Examiner id: ${examinerId}`);
         }
 
         let caregiverId = null;
         if (assessmentData.caregiver) {
-          logger.debug(`[AssessmentService] Creating caregiver: ${assessmentData.caregiver.name}`);
           caregiverId = await this.caregiverService.createCaregiver(assessmentData.caregiver, userId, client);
           logger.debug(`[AssessmentService] Caregiver id: ${caregiverId}`);
         }

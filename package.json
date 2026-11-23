@@ -4,13 +4,13 @@
   "description": "Backend para o formulário de Perfil Sensorial 2",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node dist/migrate.js && node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "lint": "eslint . --ext .ts",
-    "migrate": "ts-node scripts/migrate.ts"
+    "migrate": "ts-node src/migrate.ts"
   },
   "keywords": [
     "sensory",
@@ -26,29 +26,26 @@
     "@aws-sdk/client-sesv2": "^3.1079.0",
     "@aws-sdk/client-transcribe": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
+    "@sentry/node": "^10.78.0",
     "@types/pg": "^8.11.12",
-    "bcrypt": "^5.1.1",
-    "compression": "^1.7.4",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.2.0",
     "jose": "^6.2.3",
-    "morgan": "^1.10.0",
     "pg": "^8.14.1",
-    "uuid": "^11.1.0",
+    "uuid": "^11.1.1",
     "web-push": "^3.6.7",
     "winston": "^3.11.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
-    "@types/morgan": "^1.9.9",
     "@types/node": "^20.11.19",
     "@types/supertest": "^6.0.2",
     "@types/web-push": "^3.6.4",
@@ -63,6 +60,6 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22.x"
   }
 }

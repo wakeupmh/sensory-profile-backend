@@ -1,0 +1,12 @@
+.env*
+node_modules
+dist
+logs
+*.log
+.git
+.github
+coverage
+*.pdf
+**/__tests__
+**/*.test.ts
+docs

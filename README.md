@@ -40,7 +40,7 @@ sensory-profile-backend/
 │   ├── instruments/           # Definições dos instrumentos clínicos suportados
 │   └── index.ts               # Configuração e bootstrap do Express
 ├── migrations/                # Migrações SQL numeradas, aplicadas via `npm run migrate`
-├── scripts/migrate.ts         # Runner de migrações (ver seção Migrações abaixo)
+├── src/migrate.ts             # Runner de migrações (ver seção Migrações abaixo)
 ├── .github/workflows/         # CI (typecheck + migrações + testes) e jobs agendados
 ├── Dockerfile
 ├── package.json
@@ -88,10 +88,12 @@ sensory-profile-backend/
 
 ## Migrações
 
-As migrações são arquivos SQL simples e numerados em `migrations/`, aplicados via `npm run migrate` (`scripts/migrate.ts`). O runner:
+As migrações são arquivos SQL simples e numerados em `migrations/`, aplicados via `npm run migrate` (`src/migrate.ts`). O runner:
 - aplica cada arquivo pendente em sua própria transação, na ordem do nome do arquivo;
 - registra os arquivos já aplicados em uma tabela `schema_migrations`, então rodar novamente é um no-op quando tudo já está em dia;
-- interrompe e reverte (rollback) no primeiro erro, sem marcar aquele arquivo como aplicado — os arquivos seguintes não são executados.
+- interrompe e reverte (rollback) no primeiro erro, sem marcar aquele arquivo como aplicado — os arquivos seguintes não são executados;
+- segura um advisory lock do Postgres durante a execução, então instâncias que sobem juntas rodam uma de cada vez;
+- roda sozinho antes do servidor em produção (`npm start` e o `CMD` do Dockerfile chamam `dist/migrate.js`).
 
 Para criar uma nova migração, adicione um novo arquivo `NNN_descricao.sql` em `migrations/` (número sequencial, três dígitos) e rode `npm run migrate` localmente antes de subir a alteração.
 
@@ -156,7 +158,7 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock), armazenamento de documentos e áudio (S3) e transcrição do relato falado (Transcribe)
    - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
    - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: entrega ativa de lembretes por Web Push
-   - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
+   - As migrations rodam sozinhas a cada deploy: `npm start` (e o `CMD` do Dockerfile) executa `dist/migrate.js` antes do servidor. Um advisory lock do Postgres impede que duas instâncias subindo juntas apliquem a mesma migration, e as já aplicadas são puladas
 
 3. Configure o build command
    ```
@@ -168,7 +170,9 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    npm start
    ```
 
-5. Clique em "Create Web Service"
+5. Em "Health Check Path", use `/ready`: ele responde 503 quando o banco está fora, enquanto `/health` só diz que o processo está de pé
+
+6. Clique em "Create Web Service"
 
 ## API Endpoints
 
@@ -284,7 +288,9 @@ Profissionais nunca alteram os registros do dono — uma nota é uma anotação 
 ### Portabilidade e eliminação de dados (LGPD Art. 18)
 - `GET /api/children/:childId/export` - Exporta todos os dados ligados a uma criança (avaliações, registros diários, terapia, saúde, desenvolvimento, educação, metas, documentos, resumos de IA, notas profissionais, trilha de auditoria) como um arquivo JSON. Retorna `{ downloadUrl, expiresAt }` — uma URL pré-assinada do S3 válida por 15 minutos, não os bytes do arquivo diretamente
 - `GET /api/account/export` - Exporta **tudo** que a conta possui: todas as crianças (cada uma com o mesmo conteúdo do endpoint acima), anamneses, profissionais cadastrados, rascunhos de formulário e histórico de notificações de lembrete. Anamneses guardam um retrato (JSONB) da criança no momento do preenchimento em vez de uma referência a `children.id`, então não têm como ser vinculadas com segurança a uma criança específica — por isso só aparecem na exportação de conta inteira, não na de uma criança
-- `DELETE /api/account` - Apaga permanentemente tudo que a conta possui: todas as crianças (mesmo as que têm avaliações — ver nota abaixo), anamneses, profissionais, rascunhos, histórico de notificações, contatos cadastrados (terapeutas, examinadores, cuidadores), inscrições de push e o registro em `user_profiles`, incluindo os objetos correspondentes no S3. Tudo em **uma única transação** — uma eliminação parcial deixaria a conta num estado que nenhum código modela, e ainda assim reportaria sucesso. **Não é reversível.** Nenhum dos dois endpoints acima (`export`/`erase`) funciona através de acesso delegado por um cuidador — apenas o dono autenticado da conta pode chamá-los, mesmo que um `X-Delegate-Child-Id` válido esteja presente na requisição
+- `DELETE /api/account` - Apaga permanentemente tudo que a conta possui: todas as crianças (mesmo as que têm avaliações — ver nota abaixo), anamneses, profissionais, rascunhos, histórico de notificações, contatos cadastrados (terapeutas, examinadores, cuidadores), inscrições de push, os consentimentos registrados e o registro em `user_profiles`, incluindo os objetos correspondentes no S3. Tudo em **uma única transação** — uma eliminação parcial deixaria a conta num estado que nenhum código modela, e ainda assim reportaria sucesso. **Não é reversível.** Nenhum dos dois endpoints acima (`export`/`erase`) funciona através de acesso delegado por um cuidador — apenas o dono autenticado da conta pode chamá-los, mesmo que um `X-Delegate-Child-Id` válido esteja presente na requisição
+- `GET /api/account/consent` - Estado do consentimento para tratamento de dados de saúde da criança (LGPD Art. 11 e 14): `{ currentVersion, acceptedVersion, acceptedAt }`. `acceptedVersion` é a última versão do termo que a conta aceitou, ou `null`
+- `POST /api/account/consent` - Registra o aceite. Corpo `{ version }`; devolve 201 com o mesmo formato do GET, ou 400 se `version` não for a versão atual. Aceitar de novo a mesma versão devolve o registro original. A versão atual é `CURRENT_CONSENT_VERSION` em `src/domain/entities/Consent.ts`
 
 **Por que `DELETE /api/children/:id` não é suficiente para eliminação completa**: esse endpoint recusa deliberadamente apagar uma criança que já tem avaliações associadas (proteção contra perda acidental de dados durante o uso normal do app) e não teria como remover os objetos S3 de documentos/fotos, já que essas linhas somem via `ON DELETE CASCADE` antes de qualquer código da aplicação rodar. `DELETE /api/account` contorna as duas coisas de propósito: uma solicitação de eliminação precisa funcionar independente do que a conta contém.
 
