@@ -20,4 +20,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+# Migrations run before the server on every start; an advisory lock keeps
+# concurrent instances from racing. exec hands PID 1 to node for signals.
+CMD ["sh", "-c", "node dist/migrate.js && exec node dist/index.js"]

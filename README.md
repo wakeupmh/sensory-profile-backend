@@ -40,7 +40,7 @@ sensory-profile-backend/
 │   ├── instruments/           # Definições dos instrumentos clínicos suportados
 │   └── index.ts               # Configuração e bootstrap do Express
 ├── migrations/                # Migrações SQL numeradas, aplicadas via `npm run migrate`
-├── scripts/migrate.ts         # Runner de migrações (ver seção Migrações abaixo)
+├── src/migrate.ts             # Runner de migrações (ver seção Migrações abaixo)
 ├── .github/workflows/         # CI (typecheck + migrações + testes) e jobs agendados
 ├── Dockerfile
 ├── package.json
@@ -88,10 +88,12 @@ sensory-profile-backend/
 
 ## Migrações
 
-As migrações são arquivos SQL simples e numerados em `migrations/`, aplicados via `npm run migrate` (`scripts/migrate.ts`). O runner:
+As migrações são arquivos SQL simples e numerados em `migrations/`, aplicados via `npm run migrate` (`src/migrate.ts`). O runner:
 - aplica cada arquivo pendente em sua própria transação, na ordem do nome do arquivo;
 - registra os arquivos já aplicados em uma tabela `schema_migrations`, então rodar novamente é um no-op quando tudo já está em dia;
-- interrompe e reverte (rollback) no primeiro erro, sem marcar aquele arquivo como aplicado — os arquivos seguintes não são executados.
+- interrompe e reverte (rollback) no primeiro erro, sem marcar aquele arquivo como aplicado — os arquivos seguintes não são executados;
+- segura um advisory lock do Postgres durante a execução, então instâncias que sobem juntas rodam uma de cada vez;
+- roda sozinho antes do servidor em produção (`npm start` e o `CMD` do Dockerfile chamam `dist/migrate.js`).
 
 Para criar uma nova migração, adicione um novo arquivo `NNN_descricao.sql` em `migrations/` (número sequencial, três dígitos) e rode `npm run migrate` localmente antes de subir a alteração.
 
@@ -156,7 +158,7 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    - AWS_REGION, AWS_S3_BUCKET: resumos por IA (Bedrock), armazenamento de documentos e áudio (S3) e transcrição do relato falado (Transcribe)
    - EMAIL_FROM_ADDRESS, CRON_SECRET: entrega ativa de lembretes por e-mail (SES)
    - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT: entrega ativa de lembretes por Web Push
-   - Rode `npm run migrate` (manualmente ou via job de deploy) após provisionar o banco
+   - As migrations rodam sozinhas a cada deploy: `npm start` (e o `CMD` do Dockerfile) executa `dist/migrate.js` antes do servidor. Um advisory lock do Postgres impede que duas instâncias subindo juntas apliquem a mesma migration, e as já aplicadas são puladas
 
 3. Configure o build command
    ```
