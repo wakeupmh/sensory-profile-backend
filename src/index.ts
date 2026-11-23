@@ -42,6 +42,8 @@ import {
   requestLogger
 } from './infrastructure/utils/errors/ErrorHandler';
 import logger from './infrastructure/utils/logger';
+import pool from './infrastructure/database/connection';
+import { readinessHandler } from './interfaces/http/readiness';
 import { initSentry } from './infrastructure/observability/sentry';
 
 dotenv.config();
@@ -114,7 +116,7 @@ const limiter = rateLimit({
     // Health check sempre; e em desenvolvimento/teste, onde o HMR e o
     // StrictMode inflam a contagem. Um NODE_ENV ausente ou errado NÃO
     // desliga mais o limitador.
-    return req.path === '/health' || isRelaxedEnvironment();
+    return req.path === '/health' || req.path === '/ready' || isRelaxedEnvironment();
   }
 });
 app.use(limiter);
@@ -126,6 +128,9 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Readiness: the instance can serve traffic only while the database answers.
+app.get('/ready', readinessHandler(pool));
 
 // API routes
 app.use('/api/professionals', professionalRoutes);
@@ -174,7 +179,7 @@ const server = app.listen(PORT, () => {
   });
 });
 
-setupGracefulShutdown(server);
+setupGracefulShutdown(server, () => pool.end());
 
 // Handle server startup errors
 server.on('error', (error: NodeJS.ErrnoException) => {

@@ -170,7 +170,9 @@ O workflow do digest não considera sucesso apenas o HTTP 200: falhas de envio s
    npm start
    ```
 
-5. Clique em "Create Web Service"
+5. Em "Health Check Path", use `/ready`: ele responde 503 quando o banco está fora, enquanto `/health` só diz que o processo está de pé
+
+6. Clique em "Create Web Service"
 
 ## API Endpoints
 
