@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { captureException } from '@sentry/node';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import {
@@ -104,6 +105,12 @@ export const errorHandler = (
     logger.warn('Operational error occurred', logContext);
   } else {
     logger.error('System error occurred', logContext);
+  }
+
+  // A no-op until initSentry runs with a DSN. 4xx are the client's mistakes,
+  // not ours to page on.
+  if (customError.statusCode >= 500) {
+    captureException(error, { tags: { requestId: String(logContext.requestId) } });
   }
 
   // Prepare response

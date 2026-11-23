@@ -42,8 +42,10 @@ import {
   requestLogger
 } from './infrastructure/utils/errors/ErrorHandler';
 import logger from './infrastructure/utils/logger';
+import { initSentry } from './infrastructure/observability/sentry';
 
 dotenv.config();
+initSentry();
 
 function validateEnv() {
   const required: string[] = [];

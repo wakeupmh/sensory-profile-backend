@@ -26,6 +26,7 @@
     "@aws-sdk/client-sesv2": "^3.1079.0",
     "@aws-sdk/client-transcribe": "^3.1116.0",
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
+    "@sentry/node": "^10.78.0",
     "@types/pg": "^8.11.12",
     "compression": "^1.8.2",
     "cors": "^2.8.5",
